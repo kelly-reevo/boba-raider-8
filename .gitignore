@@ -1,0 +1,11 @@
+/build/
+/packages/*/build/
+*.beam
+*.ez
+erl_crash.dump
+.gleam
+_build/
+deps/
+node_modules/
+.DS_Store
+*.log

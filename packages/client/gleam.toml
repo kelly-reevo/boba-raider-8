@@ -1,0 +1,14 @@
+name = "client"
+version = "1.0.0"
+target = "javascript"
+description = "raid! - Frontend"
+
+[dependencies]
+gleam_stdlib = ">= 0.34.0 and < 2.0.0"
+gleam_json = ">= 3.0.0 and < 4.0.0"
+lustre = ">= 5.0.0 and < 6.0.0"
+shared = { path = "../shared" }
+
+[dev-dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"
+lustre_dev_tools = ">= 1.0.0 and < 2.0.0"

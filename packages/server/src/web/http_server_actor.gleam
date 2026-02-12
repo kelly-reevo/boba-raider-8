@@ -26,16 +26,18 @@ pub fn start(
 ) -> Result(HttpServer, String) {
   case start_http_server(port, handler) {
     Ok(handle) -> {
-      let assert Ok(actor) =
-        actor.start(handle, fn(msg, state) {
+      let assert Ok(started) =
+        actor.new(handle)
+        |> actor.on_message(fn(state, msg) {
           case msg {
             Shutdown -> {
               stop_http_server(state)
-              actor.Stop(process.Normal)
+              actor.stop()
             }
           }
         })
-      Ok(actor)
+        |> actor.start()
+      Ok(started.data)
     }
     Error(err) -> Error(err)
   }

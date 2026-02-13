@@ -1,3 +1,4 @@
+import gleam/int
 import frontend/model.{type Model}
 import frontend/msg.{type Msg}
 import lustre/attribute
@@ -11,7 +12,7 @@ pub fn view(model: Model) -> Element(Msg) {
     html.div([attribute.class("counter")], [
       html.button([event.on_click(msg.Decrement)], [element.text("-")]),
       html.span([attribute.class("count")], [
-        element.text("Count: " <> int_to_string(model.count)),
+        element.text("Count: " <> int.to_string(model.count)),
       ]),
       html.button([event.on_click(msg.Increment)], [element.text("+")]),
     ]),
@@ -20,6 +21,3 @@ pub fn view(model: Model) -> Element(Msg) {
     ]),
   ])
 }
-
-@external(javascript, "../ffi.mjs", "intToString")
-fn int_to_string(n: Int) -> String

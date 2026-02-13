@@ -20,7 +20,7 @@ build-server: build-shared
 # Build frontend bundle for production
 build-frontend: build-client
 	@echo "Building frontend bundle..."
-	cd packages/client && gleam run -m lustre/dev build app --outdir=../server/priv/static/js
+	cd packages/client && gleam run -m lustre/dev build frontend/app --outdir=../server/priv/static/js
 
 # Full release build
 release: clean build-shared build-frontend build-server

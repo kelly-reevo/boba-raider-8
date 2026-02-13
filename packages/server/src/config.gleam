@@ -9,7 +9,7 @@ pub type Config {
 pub fn load() -> Config {
   let port =
     envoy.get("PORT")
-    |> result.then(int.parse)
+    |> result.try(int.parse)
     |> result.unwrap(3000)
 
   Config(port: port)

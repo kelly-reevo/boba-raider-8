@@ -18,7 +18,8 @@ pub fn start(cfg: Config) -> Result(Nil, String) {
       io.println("HTTP server actor started")
 
       // Link to the actor so we crash if it crashes
-      process.link(process.subject_owner(actor))
+      let assert Ok(pid) = process.subject_owner(actor)
+      process.link(pid)
 
       Ok(Nil)
     }

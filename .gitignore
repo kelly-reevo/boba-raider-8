@@ -9,3 +9,10 @@ deps/
 node_modules/
 .DS_Store
 *.log
+.context/
+
+# Generated frontend bundle
+packages/server/priv/static/js/
+
+# Lustre dev tools cache
+packages/client/.lustre/

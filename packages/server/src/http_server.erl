@@ -2,14 +2,18 @@
 -export([start/2, stop/1]).
 
 start(Port, Handler) ->
-    {ok, Socket} = gen_tcp:listen(Port, [
+    case gen_tcp:listen(Port, [
         binary,
         {active, false},
         {reuseaddr, true},
         {packet, http_bin}
-    ]),
-    Pid = spawn(fun() -> accept_loop(Socket, Handler) end),
-    {ok, Pid, Socket}.
+    ]) of
+        {ok, Socket} ->
+            Pid = spawn(fun() -> accept_loop(Socket, Handler) end),
+            {ok, Pid, Socket};
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 stop(Socket) ->
     gen_tcp:close(Socket).

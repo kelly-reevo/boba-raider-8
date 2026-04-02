@@ -52,7 +52,7 @@ dev:
 # Clean all build artifacts
 clean:
 	rm -rf packages/*/build
-	rm -rf packages/server/priv/static/js/*.mjs
+	rm -f packages/server/priv/static/js/app.js
 
 # Format all code
 format:

@@ -3,7 +3,7 @@ import gleam/int
 import gleam/result
 
 pub type Config {
-  Config(port: Int)
+  Config(port: Int, database_path: String)
 }
 
 pub fn load() -> Config {
@@ -12,7 +12,11 @@ pub fn load() -> Config {
     |> result.try(int.parse)
     |> result.unwrap(3000)
 
-  Config(port: port)
+  let database_path =
+    envoy.get("DATABASE_PATH")
+    |> result.unwrap("boba_raider.db")
+
+  Config(port: port, database_path: database_path)
 }
 
 pub fn port_to_string(cfg: Config) -> String {

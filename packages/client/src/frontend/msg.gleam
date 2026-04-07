@@ -1,7 +1,6 @@
-/// Application messages
+import shared.{type Store}
 
 pub type Msg {
-  Increment
-  Decrement
-  Reset
+  UserUpdatedSearch(query: String)
+  ApiReturnedStores(Result(List(Store), String))
 }

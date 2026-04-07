@@ -8,6 +8,10 @@ pub fn main() {
 
 pub fn default_model_test() {
   let m = model.default()
-  m.count
-  |> should.equal(0)
+  m.search_query
+  |> should.equal("")
+  m.stores
+  |> should.equal([])
+  m.load_state
+  |> should.equal(model.Loading)
 }

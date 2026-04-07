@@ -1,9 +1,15 @@
-/// Application state
+import shared.{type Store}
+
+pub type LoadState {
+  Loading
+  Loaded
+  Failed(String)
+}
 
 pub type Model {
-  Model(count: Int, error: String)
+  Model(stores: List(Store), search_query: String, load_state: LoadState)
 }
 
 pub fn default() -> Model {
-  Model(count: 0, error: "")
+  Model(stores: [], search_query: "", load_state: Loading)
 }

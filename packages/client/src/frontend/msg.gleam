@@ -1,7 +1,10 @@
 /// Application messages
 
+import frontend/model
+import shared
+
 pub type Msg {
-  Increment
-  Decrement
-  Reset
+  OnRouteChange(model.Page)
+  GotStore(Result(shared.Store, String))
+  GotDrinks(Result(List(shared.Drink), String))
 }

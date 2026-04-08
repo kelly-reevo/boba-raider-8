@@ -1,12 +1,16 @@
-/// Application messages
+import frontend/model.{type AuthUser}
+import shared.{type Store}
 
-import shared
+pub type AuthResult {
+  AuthResult(token: String, user: AuthUser)
+}
 
 pub type Msg {
   // Navigation
   GoToLogin
   GoToRegister
   GoToProfile
+  GoToStoreList
   // Form inputs
   SetEmail(String)
   SetPassword(String)
@@ -15,9 +19,12 @@ pub type Msg {
   SubmitLogin
   SubmitRegister
   Logout
-  // API responses
-  GotAuth(Result(shared.AuthResponse, String))
-  GotProfile(Result(shared.User, String))
+  // Auth API responses
+  GotAuth(Result(AuthResult, String))
+  GotProfile(Result(AuthUser, String))
   // Init: restore session from localStorage
   GotSavedToken(String)
+  // Store listing
+  UserUpdatedSearch(query: String)
+  ApiReturnedStores(Result(List(Store), String))
 }

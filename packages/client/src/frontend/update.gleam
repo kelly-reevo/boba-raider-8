@@ -1,5 +1,8 @@
 import frontend/effects
-import frontend/model.{type Model, Model, LoginPage, RegisterPage, ProfilePage}
+import frontend/model.{
+  type Model, Failed, Loaded, LoginPage, Model, ProfilePage, RegisterPage,
+  StoreListPage,
+}
 import frontend/msg.{type Msg}
 import gleam/option.{None, Some}
 import lustre/effect.{type Effect}
@@ -16,6 +19,10 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       effect.none(),
     )
     msg.GoToProfile -> #(Model(..model, page: ProfilePage), effect.none())
+    msg.GoToStoreList -> #(
+      Model(..model, page: StoreListPage),
+      effects.fetch_stores(),
+    )
 
     // Form inputs
     msg.SetEmail(value) -> #(Model(..model, email: value), effect.none())
@@ -66,6 +73,20 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     msg.GotSavedToken(token) -> #(
       Model(..model, token: Some(token), loading: True, page: ProfilePage),
       effects.fetch_profile(token),
+    )
+
+    // Store listing
+    msg.UserUpdatedSearch(query) -> #(
+      Model(..model, search_query: query),
+      effect.none(),
+    )
+    msg.ApiReturnedStores(Ok(stores)) -> #(
+      Model(..model, stores: stores, store_load_state: Loaded),
+      effect.none(),
+    )
+    msg.ApiReturnedStores(Error(err)) -> #(
+      Model(..model, store_load_state: Failed(err)),
+      effect.none(),
     )
   }
 }

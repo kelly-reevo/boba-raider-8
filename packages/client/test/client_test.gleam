@@ -17,4 +17,10 @@ pub fn default_model_test() {
   |> should.equal(False)
   m.error
   |> should.equal("")
+  m.search_query
+  |> should.equal("")
+  m.stores
+  |> should.equal([])
+  m.store_load_state
+  |> should.equal(model.Loading)
 }

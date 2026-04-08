@@ -1,5 +1,7 @@
 /// Shared types and functions for boba-raider-8
 
+import gleam/dynamic/decode
+
 pub type AppError {
   NotFound(String)
   InvalidInput(String)
@@ -66,4 +68,38 @@ pub const empty_aggregation = RatingAggregation(
 /// Response from login/register endpoints
 pub type AuthResponse {
   AuthResponse(token: String, user_id: String, username: String, email: String)
+}
+
+/// A boba store with aggregated rating data
+pub type Store {
+  Store(
+    id: String,
+    name: String,
+    address: String,
+    description: String,
+    average_rating: Float,
+    rating_count: Int,
+  )
+}
+
+pub fn store_decoder() -> decode.Decoder(Store) {
+  use id <- decode.field("id", decode.string)
+  use name <- decode.field("name", decode.string)
+  use address <- decode.field("address", decode.string)
+  use description <- decode.field("description", decode.string)
+  use average_rating <- decode.field("average_rating", decode.float)
+  use rating_count <- decode.field("rating_count", decode.int)
+  decode.success(Store(
+    id: id,
+    name: name,
+    address: address,
+    description: description,
+    average_rating: average_rating,
+    rating_count: rating_count,
+  ))
+}
+
+pub fn stores_response_decoder() -> decode.Decoder(List(Store)) {
+  use stores <- decode.field("stores", decode.list(store_decoder()))
+  decode.success(stores)
 }

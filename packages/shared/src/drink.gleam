@@ -1,13 +1,13 @@
 /// Drink domain type with store association
 
 import gleam/dynamic/decode
-import gleam/json.{type Json}
+import gleam/json
 
 pub type Drink {
   Drink(id: String, name: String, description: String, store_id: String)
 }
 
-pub fn to_json(drink: Drink) -> Json {
+pub fn encoder(drink: Drink) -> json.Json {
   json.object([
     #("id", json.string(drink.id)),
     #("name", json.string(drink.name)),

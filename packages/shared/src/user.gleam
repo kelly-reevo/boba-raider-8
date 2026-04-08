@@ -1,5 +1,5 @@
 import gleam/dynamic/decode
-import gleam/json.{type Json}
+import gleam/json
 import gleam/option.{type Option, None}
 
 pub type User {
@@ -12,7 +12,7 @@ pub type User {
   )
 }
 
-pub fn to_json(user: User) -> Json {
+pub fn encoder(user: User) -> json.Json {
   json.object([
     #("id", json.string(user.id)),
     #("username", json.string(user.username)),

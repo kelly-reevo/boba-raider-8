@@ -5,6 +5,8 @@ import gleam/string
 import store_repo.{type StoreRepo}
 import web/auth_handlers
 import web/drinks
+import web/rating_store.{type RatingStore}
+import web/ratings
 import web/server.{type Request, type Response}
 import web/static
 import web/store_handler
@@ -13,10 +15,11 @@ pub fn make_handler(
   user_store: UserStore,
   drink_store: DrinkStore,
   store_repo: StoreRepo,
+  rating_store: RatingStore,
   jwt_secret: String,
 ) -> fn(Request) -> Response {
   fn(request: Request) {
-    route(request, user_store, drink_store, store_repo, jwt_secret)
+    route(request, user_store, drink_store, store_repo, rating_store, jwt_secret)
   }
 }
 
@@ -25,6 +28,7 @@ fn route(
   user_store: UserStore,
   drink_store: DrinkStore,
   store_repo: StoreRepo,
+  rating_store: RatingStore,
   jwt_secret: String,
 ) -> Response {
   let segments = string.split(request.path, "/")
@@ -66,6 +70,14 @@ fn route(
       drinks.update_drink(request, drink_store, store_id, drink_id)
     "DELETE", ["", "api", "stores", _, "drinks", drink_id] ->
       drinks.delete_drink(request, drink_store, drink_id)
+
+    // Rating endpoints: /api/drinks/:drink_id/ratings
+    "POST", ["", "api", "drinks", drink_id, "ratings"] ->
+      ratings.submit(request, drink_id, rating_store)
+    "GET", ["", "api", "drinks", drink_id, "ratings"] ->
+      ratings.get_for_drink(drink_id, rating_store)
+    "GET", ["", "api", "drinks", drink_id, "ratings", "aggregated"] ->
+      ratings.get_aggregated(drink_id, rating_store)
 
     "GET", _ ->
       case string.starts_with(request.path, "/static/") {

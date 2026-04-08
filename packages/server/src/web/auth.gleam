@@ -1,22 +1,23 @@
 import gleam/dict
 import gleam/string
+import shared
 import web/server.{type Request}
 
-/// Extract user ID from Authorization header (Bearer token).
-/// Returns Error(Nil) if header is missing or malformed.
-pub fn get_user_id(request: Request) -> Result(String, Nil) {
-  case dict.get(request.headers, "Authorization") {
-    Ok(header) ->
-      case string.starts_with(header, "Bearer ") {
+/// Extract user_id from Authorization header (Bearer token).
+/// Returns the user_id or an Unauthorized error.
+pub fn get_user_id(request: Request) -> Result(String, shared.AppError) {
+  case dict.get(request.headers, "authorization") {
+    Ok(value) ->
+      case string.starts_with(value, "Bearer ") {
         True -> {
-          let token = string.drop_start(header, 7) |> string.trim
+          let token = string.drop_start(value, 7) |> string.trim
           case token {
-            "" -> Error(Nil)
+            "" -> Error(shared.Unauthorized("Missing token"))
             uid -> Ok(uid)
           }
         }
-        False -> Error(Nil)
+        False -> Error(shared.Unauthorized("Invalid authorization format"))
       }
-    Error(_) -> Error(Nil)
+    Error(_) -> Error(shared.Unauthorized("Missing authorization header"))
   }
 }

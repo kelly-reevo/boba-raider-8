@@ -17,6 +17,28 @@ pub fn error_message(error: AppError) -> String {
   }
 }
 
-pub type User {
-  User(id: String, email: String, name: String)
+/// A rating for a boba drink with boba-specific scoring dimensions
+pub type Rating {
+  Rating(
+    id: String,
+    drink_id: String,
+    user_id: String,
+    sweetness: Int,
+    texture: Int,
+    flavor: Int,
+    overall: Int,
+    review: String,
+  )
+}
+
+/// Aggregated ratings for a drink
+pub type AggregatedRating {
+  AggregatedRating(
+    drink_id: String,
+    avg_sweetness: Float,
+    avg_texture: Float,
+    avg_flavor: Float,
+    avg_overall: Float,
+    count: Int,
+  )
 }

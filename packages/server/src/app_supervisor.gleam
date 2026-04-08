@@ -6,6 +6,7 @@ import gleam/erlang/process
 import gleam/io
 import store_repo
 import web/http_server_actor
+import web/rating_store
 import web/router
 
 pub fn start(cfg: Config) -> Result(Nil, String) {
@@ -32,30 +33,45 @@ pub fn start(cfg: Config) -> Result(Nil, String) {
         Ok(stores) -> {
           io.println("Store repository started")
 
-          // Start user store actor
-          case user_store.start() {
-            Error(err) -> Error("Failed to start user store: " <> err)
-            Ok(users) -> {
-              io.println("User store started")
+          // Start rating store actor
+          case rating_store.start() {
+            Error(err) -> Error("Failed to start rating store: " <> err)
+            Ok(ratings) -> {
+              io.println("Rating store started")
 
-              // Create the HTTP handler with all dependencies
-              let handler =
-                router.make_handler(users, drinks, stores, cfg.jwt_secret)
+              // Start user store actor
+              case user_store.start() {
+                Error(err) -> Error("Failed to start user store: " <> err)
+                Ok(users) -> {
+                  io.println("User store started")
 
-              // Start HTTP server actor
-              case http_server_actor.start(cfg.port, handler) {
-                Ok(actor) -> {
-                  // Set up trap for clean shutdown
-                  process.trap_exits(True)
-                  io.println("HTTP server actor started")
+                  // Create the HTTP handler with all dependencies
+                  let handler =
+                    router.make_handler(
+                      users,
+                      drinks,
+                      stores,
+                      ratings,
+                      cfg.jwt_secret,
+                    )
 
-                  // Link to the actor so we crash if it crashes
-                  let assert Ok(pid) = process.subject_owner(actor)
-                  process.link(pid)
+                  // Start HTTP server actor
+                  case http_server_actor.start(cfg.port, handler) {
+                    Ok(actor) -> {
+                      // Set up trap for clean shutdown
+                      process.trap_exits(True)
+                      io.println("HTTP server actor started")
 
-                  Ok(Nil)
+                      // Link to the actor so we crash if it crashes
+                      let assert Ok(pid) = process.subject_owner(actor)
+                      process.link(pid)
+
+                      Ok(Nil)
+                    }
+                    Error(err) ->
+                      Error("Failed to start HTTP server: " <> err)
+                  }
                 }
-                Error(err) -> Error("Failed to start HTTP server: " <> err)
               }
             }
           }

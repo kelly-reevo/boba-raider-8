@@ -45,14 +45,12 @@ pub fn list_by_store(store: DrinkStore, store_id: String) -> List(Drink) {
 pub fn update(
   store: DrinkStore,
   id: String,
-  name: String,
-  description: String,
-  store_id: String,
+  drink: Drink,
 ) -> Result(#(DrinkStore, Drink), AppError) {
   case dict.get(store, id) {
     Error(_) -> Error(NotFound("drink not found: " <> id))
     Ok(_) -> {
-      let updated = Drink(id: id, name: name, description: description, store_id: store_id)
+      let updated = Drink(..drink, id: id)
       Ok(#(dict.insert(store, id, updated), updated))
     }
   }

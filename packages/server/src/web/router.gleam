@@ -1,41 +1,60 @@
 import auth/user_store.{type UserStore}
+import drink_store.{type DrinkStore}
 import gleam/json
 import gleam/string
 import web/auth_handlers
+import web/drinks
 import web/server.{type Request, type Response}
 import web/static
 
 pub fn make_handler(
-  store: UserStore,
+  user_store: UserStore,
+  drink_store: DrinkStore,
   jwt_secret: String,
 ) -> fn(Request) -> Response {
-  fn(request: Request) { route(request, store, jwt_secret) }
+  fn(request: Request) { route(request, user_store, drink_store, jwt_secret) }
 }
 
 fn route(
   request: Request,
-  store: UserStore,
+  user_store: UserStore,
+  drink_store: DrinkStore,
   jwt_secret: String,
 ) -> Response {
-  case request.method, request.path {
-    "GET", "/" -> static.serve_index()
-    "GET", "/health" -> health_handler()
-    "GET", "/api/health" -> health_handler()
-    "POST", "/api/auth/register" ->
-      auth_handlers.handle_register(request, store, jwt_secret)
-    "POST", "/api/auth/login" ->
-      auth_handlers.handle_login(request, store, jwt_secret)
-    "GET", "/api/auth/me" ->
-      auth_handlers.handle_me(request, store, jwt_secret)
-    "GET", path -> route_get(path)
-    _, _ -> not_found()
-  }
-}
+  let segments = string.split(request.path, "/")
+  case request.method, segments {
+    "GET", ["", ""] | "GET", [""] -> static.serve_index()
+    "GET", ["", "health"] -> health_handler()
+    "GET", ["", "api", "health"] -> health_handler()
 
-fn route_get(path: String) -> Response {
-  case string.starts_with(path, "/static/") {
-    True -> static.serve(path)
-    False -> not_found()
+    // Auth endpoints
+    "POST", ["", "api", "auth", "register"] ->
+      auth_handlers.handle_register(request, user_store, jwt_secret)
+    "POST", ["", "api", "auth", "login"] ->
+      auth_handlers.handle_login(request, user_store, jwt_secret)
+    "GET", ["", "api", "auth", "me"] ->
+      auth_handlers.handle_me(request, user_store, jwt_secret)
+
+    // Drink endpoints: /api/stores/:store_id/drinks
+    "GET", ["", "api", "stores", store_id, "drinks"] ->
+      drinks.list_drinks(request, drink_store, store_id)
+    "POST", ["", "api", "stores", store_id, "drinks"] ->
+      drinks.create_drink(request, drink_store, store_id)
+
+    // Drink endpoints: /api/stores/:store_id/drinks/:drink_id
+    "GET", ["", "api", "stores", _, "drinks", drink_id] ->
+      drinks.get_drink(request, drink_store, drink_id)
+    "PUT", ["", "api", "stores", store_id, "drinks", drink_id] ->
+      drinks.update_drink(request, drink_store, store_id, drink_id)
+    "DELETE", ["", "api", "stores", _, "drinks", drink_id] ->
+      drinks.delete_drink(request, drink_store, drink_id)
+
+    "GET", _ ->
+      case string.starts_with(request.path, "/static/") {
+        True -> static.serve(request.path)
+        False -> not_found()
+      }
+    _, _ -> not_found()
   }
 }
 
@@ -43,7 +62,7 @@ fn health_handler() -> Response {
   server.json_response(
     200,
     json.object([#("status", json.string("ok"))])
-    |> json.to_string,
+      |> json.to_string,
   )
 }
 
@@ -51,6 +70,6 @@ fn not_found() -> Response {
   server.json_response(
     404,
     json.object([#("error", json.string("Not found"))])
-    |> json.to_string,
+      |> json.to_string,
   )
 }

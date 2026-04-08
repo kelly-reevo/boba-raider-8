@@ -77,6 +77,7 @@ status_text(200) -> "OK";
 status_text(201) -> "Created";
 status_text(204) -> "No Content";
 status_text(400) -> "Bad Request";
+status_text(401) -> "Unauthorized";
 status_text(404) -> "Not Found";
 status_text(500) -> "Internal Server Error";
 status_text(_) -> "Unknown".

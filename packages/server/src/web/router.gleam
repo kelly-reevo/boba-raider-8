@@ -2,23 +2,29 @@ import auth/user_store.{type UserStore}
 import drink_store.{type DrinkStore}
 import gleam/json
 import gleam/string
+import store_repo.{type StoreRepo}
 import web/auth_handlers
 import web/drinks
 import web/server.{type Request, type Response}
 import web/static
+import web/store_handler
 
 pub fn make_handler(
   user_store: UserStore,
   drink_store: DrinkStore,
+  store_repo: StoreRepo,
   jwt_secret: String,
 ) -> fn(Request) -> Response {
-  fn(request: Request) { route(request, user_store, drink_store, jwt_secret) }
+  fn(request: Request) {
+    route(request, user_store, drink_store, store_repo, jwt_secret)
+  }
 }
 
 fn route(
   request: Request,
   user_store: UserStore,
   drink_store: DrinkStore,
+  store_repo: StoreRepo,
   jwt_secret: String,
 ) -> Response {
   let segments = string.split(request.path, "/")
@@ -34,6 +40,18 @@ fn route(
       auth_handlers.handle_login(request, user_store, jwt_secret)
     "GET", ["", "api", "auth", "me"] ->
       auth_handlers.handle_me(request, user_store, jwt_secret)
+
+    // Store endpoints
+    "POST", ["", "api", "stores"] ->
+      store_handler.handle_create(request, store_repo)
+    "GET", ["", "api", "stores"] ->
+      store_handler.handle_list(request, store_repo)
+    "GET", ["", "api", "stores", store_id] ->
+      store_handler.handle_get(request, store_repo, store_id)
+    "PUT", ["", "api", "stores", store_id] ->
+      store_handler.handle_update(request, store_repo, store_id)
+    "DELETE", ["", "api", "stores", store_id] ->
+      store_handler.handle_delete(request, store_repo, store_id)
 
     // Drink endpoints: /api/stores/:store_id/drinks
     "GET", ["", "api", "stores", store_id, "drinks"] ->

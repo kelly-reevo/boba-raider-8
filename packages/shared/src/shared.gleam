@@ -42,3 +42,23 @@ pub type AggregatedRating {
     count: Int,
   )
 }
+
+/// Aggregated rating statistics for a drink or store (per-dimension scores)
+pub type RatingAggregation {
+  RatingAggregation(
+    count: Int,
+    avg_sweetness: Float,
+    avg_flavor: Float,
+    avg_value: Float,
+    overall: Float,
+  )
+}
+
+/// Empty aggregation for entities with no ratings
+pub const empty_aggregation = RatingAggregation(
+  count: 0,
+  avg_sweetness: 0.0,
+  avg_flavor: 0.0,
+  avg_value: 0.0,
+  overall: 0.0,
+)

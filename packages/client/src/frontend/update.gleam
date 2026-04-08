@@ -1,8 +1,8 @@
 import frontend/effects
 import frontend/model.{
   type Model, Failed, FormReady, Loaded, LoginPage, Model, ProfilePage,
-  RatingPage, RegisterPage, StoreDetailPage, StoreListPage, SubmitError,
-  SubmitSuccess, Submitting,
+  RatingPage, RatingsDisplayPage, RatingsError, RatingsLoaded, RegisterPage,
+  StoreDetailPage, StoreListPage, SubmitError, SubmitSuccess, Submitting,
 }
 import frontend/msg.{type Msg}
 import gleam/option.{None, Some}
@@ -39,6 +39,10 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     msg.GoToRating -> #(
       Model(..model, page: RatingPage),
       effect.none(),
+    )
+    msg.GoToRatingsDisplay -> #(
+      Model(..model, page: RatingsDisplayPage),
+      effects.fetch_ratings_effect(),
     )
 
     // Form inputs
@@ -165,6 +169,16 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
     msg.ResetRating -> #(
       Model(..model, rating: shared.empty_rating(), rating_page: FormReady),
+      effect.none(),
+    )
+
+    // Rating display
+    msg.RatingsLoaded(summary) -> #(
+      Model(..model, ratings: RatingsLoaded(summary)),
+      effect.none(),
+    )
+    msg.RatingsFetchError(message) -> #(
+      Model(..model, ratings: RatingsError(message)),
       effect.none(),
     )
   }

@@ -3,8 +3,9 @@ import gleam/int
 import gleam/list
 import gleam/string
 import frontend/model.{
-  type Model, Failed, FormReady, Loaded, Loading, LoginPage, ProfilePage,
-  RatingPage, RegisterPage, StoreDetailPage, StoreListPage, SubmitError,
+  type Model, type RatingsState, Failed, FormReady, Loaded, Loading, LoginPage,
+  ProfilePage, RatingPage, RatingsDisplayPage, RatingsError, RatingsLoaded,
+  RatingsLoading, RegisterPage, StoreDetailPage, StoreListPage, SubmitError,
   SubmitSuccess, Submitting,
 }
 import frontend/msg.{type Msg}
@@ -13,7 +14,10 @@ import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
-import shared.{type FrontendDrink, type Store}
+import shared.{
+  type FrontendDrink, type RatingDistribution, type RatingsSummary,
+  type Review, type Store,
+}
 
 pub fn view(model: Model) -> Element(Msg) {
   html.div([attribute.class("app")], [
@@ -33,6 +37,7 @@ pub fn view(model: Model) -> Element(Msg) {
             ])
           StoreDetailPage(_) -> view_store_detail(model)
           RatingPage -> rating_form(model)
+          RatingsDisplayPage -> view_ratings(model.ratings)
         }
     },
   ])
@@ -65,6 +70,10 @@ fn nav_bar(model: Model) -> Element(Msg) {
       html.button(
         [event.on_click(msg.GoToRating), attribute.class("nav-link")],
         [element.text("Rate")],
+      ),
+      html.button(
+        [event.on_click(msg.GoToRatingsDisplay), attribute.class("nav-link")],
+        [element.text("Reviews")],
       ),
       html.button([event.on_click(msg.Logout), attribute.class("nav-link")], [
         element.text("Logout"),
@@ -386,14 +395,14 @@ fn format_price(cents: Int) -> String {
 
 fn rating_form(model: Model) -> Element(Msg) {
   case model.rating_page {
-    Submitting -> rating_loading_view()
+    Submitting -> rating_submitting_view()
     SubmitSuccess -> success_view()
     FormReady -> form_view(model, "")
     SubmitError(err) -> form_view(model, err)
   }
 }
 
-fn rating_loading_view() -> Element(Msg) {
+fn rating_submitting_view() -> Element(Msg) {
   html.div([attribute.class("rating-form rating-loading")], [
     html.p([], [element.text("Submitting your rating...")]),
   ])
@@ -452,4 +461,153 @@ fn rating_scale(
       }),
     ),
   ])
+}
+
+// Rating display views
+
+fn view_ratings(state: RatingsState) -> Element(Msg) {
+  html.section([attribute.class("ratings")], [
+    html.h2([], [element.text("Ratings & Reviews")]),
+    case state {
+      RatingsLoading -> view_ratings_loading()
+      RatingsError(message) -> view_ratings_error(message)
+      RatingsLoaded(summary) -> view_ratings_loaded(summary)
+    },
+  ])
+}
+
+fn view_ratings_loading() -> Element(Msg) {
+  html.div([attribute.class("ratings-loading")], [
+    html.p([], [element.text("Loading ratings...")]),
+  ])
+}
+
+fn view_ratings_error(message: String) -> Element(Msg) {
+  html.div([attribute.class("ratings-error")], [
+    html.p([attribute.class("error-message")], [
+      element.text("Failed to load ratings: " <> message),
+    ]),
+  ])
+}
+
+fn view_ratings_loaded(summary: RatingsSummary) -> Element(Msg) {
+  case summary.total_count {
+    0 -> view_ratings_empty()
+    _ -> view_ratings_populated(summary)
+  }
+}
+
+fn view_ratings_empty() -> Element(Msg) {
+  html.div([attribute.class("ratings-empty")], [
+    html.p([], [element.text("No ratings yet. Be the first to leave a review!")]),
+  ])
+}
+
+fn view_ratings_populated(summary: RatingsSummary) -> Element(Msg) {
+  html.div([attribute.class("ratings-content")], [
+    view_rating_overview(summary.average, summary.total_count),
+    view_star_breakdown(summary.distribution, summary.total_count),
+    view_reviews_list(summary.reviews),
+  ])
+}
+
+fn view_rating_overview(average: Float, total_count: Int) -> Element(Msg) {
+  html.div([attribute.class("rating-overview")], [
+    html.span([attribute.class("rating-average")], [
+      element.text(format_rating(average)),
+    ]),
+    html.span([attribute.class("rating-stars")], [
+      element.text(stars_display(average)),
+    ]),
+    html.span([attribute.class("rating-count")], [
+      element.text(int.to_string(total_count) <> " reviews"),
+    ]),
+  ])
+}
+
+fn view_star_breakdown(
+  dist: RatingDistribution,
+  total: Int,
+) -> Element(Msg) {
+  html.div([attribute.class("star-breakdown")], [
+    view_star_bar(5, dist.five, total),
+    view_star_bar(4, dist.four, total),
+    view_star_bar(3, dist.three, total),
+    view_star_bar(2, dist.two, total),
+    view_star_bar(1, dist.one, total),
+  ])
+}
+
+fn view_star_bar(star: Int, count: Int, total: Int) -> Element(Msg) {
+  let pct = case total {
+    0 -> 0
+    _ -> { count * 100 } / total
+  }
+  html.div([attribute.class("star-bar")], [
+    html.span([attribute.class("star-label")], [
+      element.text(int.to_string(star) <> " star"),
+    ]),
+    html.div([attribute.class("star-bar-track")], [
+      html.div(
+        [
+          attribute.class("star-bar-fill"),
+          attribute.style("width", int.to_string(pct) <> "%"),
+        ],
+        [],
+      ),
+    ]),
+    html.span([attribute.class("star-bar-count")], [
+      element.text(int.to_string(count)),
+    ]),
+  ])
+}
+
+fn view_reviews_list(reviews: List(Review)) -> Element(Msg) {
+  html.div([attribute.class("reviews-list")], [
+    html.h3([], [element.text("Reviews")]),
+    html.div(
+      [],
+      list.map(reviews, view_review),
+    ),
+  ])
+}
+
+fn view_review(review: Review) -> Element(Msg) {
+  html.div([attribute.class("review")], [
+    html.div([attribute.class("review-header")], [
+      html.span([attribute.class("review-author")], [
+        element.text(review.author),
+      ]),
+      html.span([attribute.class("review-rating")], [
+        element.text(stars_display(int.to_float(review.rating))),
+      ]),
+      html.span([attribute.class("review-date")], [
+        element.text(review.created_at),
+      ]),
+    ]),
+    html.p([attribute.class("review-text")], [element.text(review.text)]),
+  ])
+}
+
+fn stars_display(rating: Float) -> String {
+  let full = float.truncate(rating)
+  let has_half = { rating -. int.to_float(full) } >=. 0.5
+  let full_stars = string_repeat("★", full)
+  let half_star = case has_half {
+    True -> "½"
+    False -> ""
+  }
+  let empty_count = case has_half {
+    True -> 5 - full - 1
+    False -> 5 - full
+  }
+  let empty_stars = string_repeat("☆", empty_count)
+  full_stars <> half_star <> empty_stars
+}
+
+fn string_repeat(s: String, n: Int) -> String {
+  case n <= 0 {
+    True -> ""
+    False -> s <> string_repeat(s, n - 1)
+  }
 }

@@ -1,5 +1,5 @@
 import frontend/model.{type AuthUser}
-import shared.{type FrontendDrink, type Store}
+import shared.{type FrontendDrink, type RatingsSummary, type Store}
 
 pub type AuthResult {
   AuthResult(token: String, user: AuthUser)
@@ -20,6 +20,7 @@ pub type Msg {
   GoToStoreList
   GoToStoreDetail(store_id: String)
   GoToRating
+  GoToRatingsDisplay
   // Form inputs
   SetEmail(String)
   SetPassword(String)
@@ -44,4 +45,7 @@ pub type Msg {
   SubmitRating
   RatingSubmitted(Result(Nil, String))
   ResetRating
+  // Rating display
+  RatingsLoaded(summary: RatingsSummary)
+  RatingsFetchError(message: String)
 }

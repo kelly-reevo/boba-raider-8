@@ -1,5 +1,5 @@
 import gleam/option.{type Option, None}
-import shared.{type FrontendDrink, type RatingSubmission, type Store}
+import shared.{type FrontendDrink, type RatingSubmission, type RatingsSummary, type Store}
 
 pub type LoadState {
   Loading
@@ -14,6 +14,7 @@ pub type Page {
   StoreListPage
   StoreDetailPage(store_id: String)
   RatingPage
+  RatingsDisplayPage
 }
 
 pub type AuthUser {
@@ -25,6 +26,12 @@ pub type RatingFormState {
   Submitting
   SubmitSuccess
   SubmitError(String)
+}
+
+pub type RatingsState {
+  RatingsLoading
+  RatingsLoaded(summary: RatingsSummary)
+  RatingsError(message: String)
 }
 
 pub type Model {
@@ -44,6 +51,7 @@ pub type Model {
     drinks: List(FrontendDrink),
     rating: RatingSubmission,
     rating_page: RatingFormState,
+    ratings: RatingsState,
   )
 }
 
@@ -64,5 +72,6 @@ pub fn default() -> Model {
     drinks: [],
     rating: shared.empty_rating(),
     rating_page: FormReady,
+    ratings: RatingsLoading,
   )
 }

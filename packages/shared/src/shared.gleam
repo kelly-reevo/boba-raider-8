@@ -62,3 +62,8 @@ pub const empty_aggregation = RatingAggregation(
   avg_value: 0.0,
   overall: 0.0,
 )
+
+/// Response from login/register endpoints
+pub type AuthResponse {
+  AuthResponse(token: String, user_id: String, username: String, email: String)
+}

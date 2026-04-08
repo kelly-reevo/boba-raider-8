@@ -70,13 +70,26 @@ pub type AuthResponse {
   AuthResponse(token: String, user_id: String, username: String, email: String)
 }
 
-/// A boba store with aggregated rating data
+/// A boba store with aggregated rating data (frontend view)
 pub type Store {
   Store(
     id: String,
     name: String,
     address: String,
     description: String,
+    average_rating: Float,
+    rating_count: Int,
+  )
+}
+
+/// A drink with aggregated rating data (frontend view)
+pub type FrontendDrink {
+  FrontendDrink(
+    id: String,
+    store_id: String,
+    name: String,
+    description: String,
+    price_cents: Int,
     average_rating: Float,
     rating_count: Int,
   )
@@ -102,4 +115,27 @@ pub fn store_decoder() -> decode.Decoder(Store) {
 pub fn stores_response_decoder() -> decode.Decoder(List(Store)) {
   use stores <- decode.field("stores", decode.list(store_decoder()))
   decode.success(stores)
+}
+
+pub fn drink_decoder() -> decode.Decoder(FrontendDrink) {
+  use id <- decode.field("id", decode.string)
+  use store_id <- decode.field("store_id", decode.string)
+  use name <- decode.field("name", decode.string)
+  use description <- decode.field("description", decode.string)
+  use price_cents <- decode.field("price_cents", decode.int)
+  use average_rating <- decode.field("average_rating", decode.float)
+  use rating_count <- decode.field("rating_count", decode.int)
+  decode.success(FrontendDrink(
+    id: id,
+    store_id: store_id,
+    name: name,
+    description: description,
+    price_cents: price_cents,
+    average_rating: average_rating,
+    rating_count: rating_count,
+  ))
+}
+
+pub fn drinks_decoder() -> decode.Decoder(List(FrontendDrink)) {
+  decode.list(drink_decoder())
 }

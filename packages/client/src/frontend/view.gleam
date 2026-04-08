@@ -4,7 +4,7 @@ import gleam/list
 import gleam/string
 import frontend/model.{
   type Model, Failed, Loaded, Loading, LoginPage, ProfilePage, RegisterPage,
-  StoreListPage,
+  StoreDetailPage, StoreListPage,
 }
 import frontend/msg.{type Msg}
 import gleam/option.{None, Some}
@@ -12,7 +12,7 @@ import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
-import shared.{type Store}
+import shared.{type FrontendDrink, type Store}
 
 pub fn view(model: Model) -> Element(Msg) {
   html.div([attribute.class("app")], [
@@ -30,6 +30,7 @@ pub fn view(model: Model) -> Element(Msg) {
               search_bar(model.search_query),
               store_content(model),
             ])
+          StoreDetailPage(_) -> view_store_detail(model)
         }
     },
   ])
@@ -76,6 +77,8 @@ fn error_banner(error: String) -> Element(Msg) {
 fn loading_spinner() -> Element(Msg) {
   html.div([attribute.class("loading")], [element.text("Loading...")])
 }
+
+// Auth views
 
 fn login_view(model: Model) -> Element(Msg) {
   html.div([attribute.class("auth-form")], [
@@ -209,7 +212,7 @@ fn search_bar(query: String) -> Element(Msg) {
 fn store_content(model: Model) -> Element(Msg) {
   case model.store_load_state {
     Loading -> store_loading_view()
-    Failed(err) -> error_view(err)
+    Failed(err) -> store_error_view(err)
     Loaded -> {
       let filtered = filter_stores(model.stores, model.search_query)
       case filtered {
@@ -226,7 +229,7 @@ fn store_loading_view() -> Element(Msg) {
   ])
 }
 
-fn error_view(message: String) -> Element(Msg) {
+fn store_error_view(message: String) -> Element(Msg) {
   html.div([attribute.class("error")], [
     html.p([], [element.text("Failed to load stores: " <> message)]),
   ])
@@ -288,5 +291,87 @@ fn filter_stores(stores: List(Store), query: String) -> List(Store) {
         || string.contains(string.lowercase(store.description), lower_q)
       })
     }
+  }
+}
+
+// Store detail views
+
+fn view_store_detail(model: Model) -> Element(Msg) {
+  html.div([attribute.class("store-detail")], [
+    case model.error {
+      "" -> view_store_detail_content(model)
+      err -> html.div([attribute.class("error")], [
+        html.p([attribute.class("error-message")], [element.text(err)]),
+      ])
+    },
+  ])
+}
+
+fn view_store_detail_content(model: Model) -> Element(Msg) {
+  case model.store {
+    None ->
+      html.div([attribute.class("not-found")], [
+        html.p([], [element.text("Store not found.")]),
+      ])
+    Some(store) ->
+      html.div([], [
+        view_store_info(store),
+        view_drink_list(model.drinks),
+      ])
+  }
+}
+
+fn view_store_info(store: Store) -> Element(Msg) {
+  html.section([attribute.class("store-info")], [
+    html.h2([], [element.text(store.name)]),
+    html.p([attribute.class("store-address")], [element.text(store.address)]),
+    html.p([attribute.class("store-description")], [
+      element.text(store.description),
+    ]),
+    rating_badge(store.average_rating, store.rating_count),
+  ])
+}
+
+fn view_drink_list(drinks: List(FrontendDrink)) -> Element(Msg) {
+  html.section([attribute.class("drink-menu")], [
+    html.h3([], [element.text("Menu")]),
+    case list.is_empty(drinks) {
+      True ->
+        html.p([attribute.class("empty-state")], [
+          element.text("No drinks available at this store."),
+        ])
+      False ->
+        html.ul(
+          [attribute.class("drink-list")],
+          list.map(drinks, view_drink_item),
+        )
+    },
+  ])
+}
+
+fn view_drink_item(drink: FrontendDrink) -> Element(Msg) {
+  html.li([attribute.class("drink-item")], [
+    html.div([attribute.class("drink-header")], [
+      html.span([attribute.class("drink-name")], [element.text(drink.name)]),
+      html.span([attribute.class("drink-price")], [
+        element.text(format_price(drink.price_cents)),
+      ]),
+    ]),
+    html.p([attribute.class("drink-description")], [
+      element.text(drink.description),
+    ]),
+    rating_badge(drink.average_rating, drink.rating_count),
+  ])
+}
+
+fn format_price(cents: Int) -> String {
+  let dollars = cents / 100
+  let remainder = cents % 100
+  "$"
+  <> int.to_string(dollars)
+  <> "."
+  <> case remainder < 10 {
+    True -> "0" <> int.to_string(remainder)
+    False -> int.to_string(remainder)
   }
 }

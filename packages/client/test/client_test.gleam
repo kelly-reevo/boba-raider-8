@@ -23,4 +23,8 @@ pub fn default_model_test() {
   |> should.equal([])
   m.store_load_state
   |> should.equal(model.Loading)
+  m.store
+  |> should.equal(option.None)
+  m.drinks
+  |> should.equal([])
 }

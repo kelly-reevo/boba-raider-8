@@ -1,5 +1,5 @@
 import frontend/model.{type AuthUser}
-import shared.{type Store}
+import shared.{type FrontendDrink, type Store}
 
 pub type AuthResult {
   AuthResult(token: String, user: AuthUser)
@@ -11,6 +11,7 @@ pub type Msg {
   GoToRegister
   GoToProfile
   GoToStoreList
+  GoToStoreDetail(store_id: String)
   // Form inputs
   SetEmail(String)
   SetPassword(String)
@@ -27,4 +28,7 @@ pub type Msg {
   // Store listing
   UserUpdatedSearch(query: String)
   ApiReturnedStores(Result(List(Store), String))
+  // Store detail
+  GotStore(Result(Store, String))
+  GotDrinks(Result(List(FrontendDrink), String))
 }

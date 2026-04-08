@@ -1,5 +1,5 @@
 import gleam/option.{type Option, None}
-import shared.{type Store}
+import shared.{type FrontendDrink, type Store}
 
 pub type LoadState {
   Loading
@@ -12,6 +12,7 @@ pub type Page {
   RegisterPage
   ProfilePage
   StoreListPage
+  StoreDetailPage(store_id: String)
 }
 
 pub type AuthUser {
@@ -31,6 +32,8 @@ pub type Model {
     stores: List(Store),
     search_query: String,
     store_load_state: LoadState,
+    store: Option(Store),
+    drinks: List(FrontendDrink),
   )
 }
 
@@ -47,5 +50,7 @@ pub fn default() -> Model {
     stores: [],
     search_query: "",
     store_load_state: Loading,
+    store: None,
+    drinks: [],
   )
 }

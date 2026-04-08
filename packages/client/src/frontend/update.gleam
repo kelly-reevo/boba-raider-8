@@ -1,7 +1,7 @@
 import frontend/effects
 import frontend/model.{
   type Model, Failed, Loaded, LoginPage, Model, ProfilePage, RegisterPage,
-  StoreListPage,
+  StoreDetailPage, StoreListPage,
 }
 import frontend/msg.{type Msg}
 import gleam/option.{None, Some}
@@ -23,6 +23,17 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       Model(..model, page: StoreListPage),
       effects.fetch_stores(),
     )
+    msg.GoToStoreDetail(store_id) -> #(
+      Model(
+        ..model,
+        page: StoreDetailPage(store_id),
+        store: None,
+        drinks: [],
+        loading: True,
+        error: "",
+      ),
+      effects.fetch_store_detail(store_id),
+    )
 
     // Form inputs
     msg.SetEmail(value) -> #(Model(..model, email: value), effect.none())
@@ -43,7 +54,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       effects.clear_token(),
     )
 
-    // API responses
+    // Auth API responses
     msg.GotAuth(Ok(auth_response)) -> #(
       Model(
         ..model,
@@ -86,6 +97,24 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     )
     msg.ApiReturnedStores(Error(err)) -> #(
       Model(..model, store_load_state: Failed(err)),
+      effect.none(),
+    )
+
+    // Store detail
+    msg.GotStore(Ok(store)) -> {
+      let loading = model.drinks == []
+      #(Model(..model, store: Some(store), loading: loading), effect.none())
+    }
+    msg.GotStore(Error(_)) -> #(
+      Model(..model, loading: False, error: "Failed to load store details"),
+      effect.none(),
+    )
+    msg.GotDrinks(Ok(drinks)) -> {
+      let loading = model.store == None
+      #(Model(..model, drinks: drinks, loading: loading), effect.none())
+    }
+    msg.GotDrinks(Error(_)) -> #(
+      Model(..model, loading: False, error: "Failed to load drink menu"),
       effect.none(),
     )
   }

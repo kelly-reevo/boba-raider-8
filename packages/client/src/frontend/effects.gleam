@@ -1,9 +1,11 @@
 import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode
+import gleam/int
+import gleam/json
 import frontend/model.{AuthUser}
 import frontend/msg.{type Msg}
 import lustre/effect.{type Effect}
-import shared
+import shared.{type RatingSubmission}
 
 @external(javascript, "./auth_ffi.mjs", "get_saved_token")
 fn do_get_saved_token() -> String
@@ -44,6 +46,9 @@ fn do_fetch(
   on_ok: fn(Dynamic) -> Nil,
   on_err: fn(String) -> Nil,
 ) -> Nil
+
+@external(javascript, "../rating_ffi.mjs", "submitRating")
+fn do_submit_rating(body: String, callback: fn(Int) -> Nil) -> Nil
 
 pub fn check_saved_token() -> Effect(Msg) {
   effect.from(fn(dispatch) {
@@ -163,4 +168,29 @@ pub fn fetch_drinks(store_id: String) -> Effect(msg.Msg) {
 
 pub fn fetch_store_detail(store_id: String) -> Effect(msg.Msg) {
   effect.batch([fetch_store(store_id), fetch_drinks(store_id)])
+}
+
+pub fn submit_rating(rating: RatingSubmission) -> Effect(msg.Msg) {
+  let body =
+    json.object([
+      #("sweetness", json.int(rating.sweetness)),
+      #("boba_texture", json.int(rating.boba_texture)),
+      #("tea_strength", json.int(rating.tea_strength)),
+      #("overall", json.int(rating.overall)),
+    ])
+    |> json.to_string
+
+  effect.from(fn(dispatch) {
+    do_submit_rating(body, fn(status) {
+      case status >= 200 && status < 300 {
+        True -> dispatch(msg.RatingSubmitted(Ok(Nil)))
+        False ->
+          dispatch(
+            msg.RatingSubmitted(Error(
+              "Submission failed (status " <> int.to_string(status) <> ")",
+            )),
+          )
+      }
+    })
+  })
 }

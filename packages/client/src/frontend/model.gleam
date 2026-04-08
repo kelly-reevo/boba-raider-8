@@ -1,5 +1,5 @@
 import gleam/option.{type Option, None}
-import shared.{type FrontendDrink, type Store}
+import shared.{type FrontendDrink, type RatingSubmission, type Store}
 
 pub type LoadState {
   Loading
@@ -13,10 +13,18 @@ pub type Page {
   ProfilePage
   StoreListPage
   StoreDetailPage(store_id: String)
+  RatingPage
 }
 
 pub type AuthUser {
   AuthUser(id: String, username: String, email: String)
+}
+
+pub type RatingFormState {
+  FormReady
+  Submitting
+  SubmitSuccess
+  SubmitError(String)
 }
 
 pub type Model {
@@ -34,6 +42,8 @@ pub type Model {
     store_load_state: LoadState,
     store: Option(Store),
     drinks: List(FrontendDrink),
+    rating: RatingSubmission,
+    rating_page: RatingFormState,
   )
 }
 
@@ -52,5 +62,7 @@ pub fn default() -> Model {
     store_load_state: Loading,
     store: None,
     drinks: [],
+    rating: shared.empty_rating(),
+    rating_page: FormReady,
   )
 }

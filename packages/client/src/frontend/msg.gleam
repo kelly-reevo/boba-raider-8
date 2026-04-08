@@ -5,6 +5,13 @@ pub type AuthResult {
   AuthResult(token: String, user: AuthUser)
 }
 
+pub type RatingCategory {
+  Sweetness
+  BobaTexture
+  TeaStrength
+  Overall
+}
+
 pub type Msg {
   // Navigation
   GoToLogin
@@ -12,6 +19,7 @@ pub type Msg {
   GoToProfile
   GoToStoreList
   GoToStoreDetail(store_id: String)
+  GoToRating
   // Form inputs
   SetEmail(String)
   SetPassword(String)
@@ -31,4 +39,9 @@ pub type Msg {
   // Store detail
   GotStore(Result(Store, String))
   GotDrinks(Result(List(FrontendDrink), String))
+  // Rating submission
+  SetRating(category: RatingCategory, value: Int)
+  SubmitRating
+  RatingSubmitted(Result(Nil, String))
+  ResetRating
 }

@@ -95,6 +95,27 @@ pub type FrontendDrink {
   )
 }
 
+/// Rating values use 1-5 integer scale, 0 means unset
+pub type RatingSubmission {
+  RatingSubmission(
+    sweetness: Int,
+    boba_texture: Int,
+    tea_strength: Int,
+    overall: Int,
+  )
+}
+
+pub fn empty_rating() -> RatingSubmission {
+  RatingSubmission(sweetness: 0, boba_texture: 0, tea_strength: 0, overall: 0)
+}
+
+pub fn is_rating_complete(rating: RatingSubmission) -> Bool {
+  rating.sweetness > 0
+  && rating.boba_texture > 0
+  && rating.tea_strength > 0
+  && rating.overall > 0
+}
+
 pub fn store_decoder() -> decode.Decoder(Store) {
   use id <- decode.field("id", decode.string)
   use name <- decode.field("name", decode.string)

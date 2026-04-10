@@ -1,9 +1,11 @@
-import frontend/model.{type Model}
-import frontend/msg.{type Msg}
+import frontend/model
+import frontend/msg.{type Msg, StoreList, LoadStores}
 import frontend/update
 import frontend/view
+import frontend/effects
 import lustre
 import lustre/effect.{type Effect}
+import shared
 
 pub fn main() {
   let app = lustre.application(init, update.update, view.view)
@@ -11,6 +13,6 @@ pub fn main() {
   Nil
 }
 
-fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
-  #(model.default(), effect.none())
+fn init(_flags: Nil) -> #(model.Model, Effect(Msg)) {
+  #(model.with_store_list_loading(), effects.fetch_stores(shared.default_filters()))
 }

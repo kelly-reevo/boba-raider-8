@@ -1,9 +1,10 @@
 import envoy
 import gleam/int
 import gleam/result
+import infrastructure/storage_config
 
 pub type Config {
-  Config(port: Int)
+  Config(port: Int, storage: storage_config.StorageConfig)
 }
 
 pub fn load() -> Config {
@@ -12,7 +13,9 @@ pub fn load() -> Config {
     |> result.try(int.parse)
     |> result.unwrap(3000)
 
-  Config(port: port)
+  let storage = storage_config.load()
+
+  Config(port: port, storage: storage)
 }
 
 pub fn port_to_string(cfg: Config) -> String {

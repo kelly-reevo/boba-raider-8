@@ -1,13 +1,24 @@
 import gleam/json
+import gleam/option.{None, Some}
 import gleam/string
+import store.{type Store}
+import web/handlers/ratings
 import web/server.{type Request, type Response}
 import web/static
 
-pub fn make_handler() -> fn(Request) -> Response {
-  fn(request: Request) { route(request) }
+pub fn make_handler(store: Store) -> fn(Request) -> Response {
+  fn(request: Request) { route(request, store) }
 }
 
-fn route(request: Request) -> Response {
+fn route(request: Request, store: Store) -> Response {
+  // First check API routes that need the store
+  case ratings.handle(request.method, request.path, request, store) {
+    Some(response) -> response
+    None -> route_static(request)
+  }
+}
+
+fn route_static(request: Request) -> Response {
   case request.method, request.path {
     "GET", "/" -> static.serve_index()
     "GET", "/health" -> health_handler()

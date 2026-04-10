@@ -1,32 +1,26 @@
 /// Application messages for routing, auth, and form handling
 
-import shared.{type Store, type SortOption, type StoreFilters}
+import shared.{type AppError}
+import frontend/model.{type Store, type Drink, type Rating}
 
-/// Messages for counter feature (legacy)
-pub type CounterMsg {
-  Increment
-  Decrement
-  Reset
-
-  // Auth messages
-  Logout
-  StorageCleared
-  RedirectComplete
-}
-
-/// Messages for store list page
-pub type StoreListMsg {
-  LoadStores
-  StoresLoaded(Result(List(Store), String))
-  SearchChanged(String)
-  LocationChanged(String)
-  SortChanged(SortOption)
-  PageChanged(Int)
-  RetryLoad
-}
-
-/// Main application message type
+/// Application messages
 pub type Msg {
-  Counter(CounterMsg)
-  StoreList(StoreListMsg)
+  // Navigation
+  NavigateToHome
+  NavigateToStoreDetail(store_id: String)
+
+  // Store detail page messages
+  StoreDetailMsg(StoreDetailMsg)
+}
+
+/// Messages specific to the store detail page
+pub type StoreDetailMsg {
+  // API responses
+  ReceivedStore(Result(Store, AppError))
+  ReceivedDrinks(Result(List(Drink), AppError))
+  ReceivedRatings(Result(List(Rating), AppError))
+
+  // User actions
+  ClickedAddDrink
+  ClickedBack
 }

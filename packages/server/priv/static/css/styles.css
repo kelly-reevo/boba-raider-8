@@ -62,3 +62,295 @@ button:hover {
 .reset:hover {
   background: #616161;
 }
+
+/* --- Store Detail Page Styles --- */
+
+.store-detail-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem;
+  background: white;
+  min-height: 100vh;
+}
+
+/* Back button */
+.back-button {
+  background: transparent;
+  color: #5e35b1;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid #5e35b1;
+}
+
+.back-button:hover {
+  background: #f3e5f5;
+}
+
+/* Loading state */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #e1bee7;
+  border-top-color: #5e35b1;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  margin-top: 1rem;
+  color: #666;
+  font-size: 1.1rem;
+}
+
+/* Error state */
+.error-container {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+
+.error-icon {
+  font-size: 4rem;
+  color: #d32f2f;
+  margin-bottom: 1rem;
+}
+
+.error-title {
+  color: #d32f2f;
+  margin-bottom: 1rem;
+}
+
+.error-message {
+  color: #666;
+  margin-bottom: 2rem;
+}
+
+.retry-button {
+  background: #5e35b1;
+}
+
+/* Store header */
+.store-header {
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.store-name {
+  font-size: 2rem;
+  color: #333;
+  margin-bottom: 0.5rem;
+}
+
+.store-category {
+  display: inline-block;
+  background: #e1bee7;
+  color: #5e35b1;
+  padding: 0.25rem 0.75rem;
+  border-radius: 16px;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.store-contact {
+  color: #666;
+  line-height: 1.6;
+}
+
+.store-contact .label {
+  font-weight: 500;
+  color: #333;
+}
+
+.store-website {
+  display: inline-block;
+  color: #5e35b1;
+  text-decoration: none;
+  margin-top: 0.5rem;
+}
+
+.store-website:hover {
+  text-decoration: underline;
+}
+
+/* Map section */
+.map-section {
+  margin-bottom: 2rem;
+}
+
+.map-section h2 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  color: #333;
+}
+
+.map-container {
+  background: #f5f5f5;
+  border-radius: 8px;
+  overflow: hidden;
+  height: 300px;
+}
+
+.map-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #666;
+  font-size: 1.1rem;
+  text-align: center;
+  padding: 1rem;
+}
+
+/* Add drink button */
+.add-drink-section {
+  margin-bottom: 2rem;
+}
+
+.add-drink-button {
+  background: #4caf50;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+}
+
+.add-drink-button:hover {
+  background: #388e3c;
+}
+
+/* Drinks section */
+.drinks-section {
+  margin-bottom: 2rem;
+}
+
+.drinks-section h2 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  color: #333;
+}
+
+.drinks-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.drink-card {
+  background: #fafafa;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e0e0e0;
+  transition: box-shadow 0.2s;
+}
+
+.drink-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.drink-image img {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+}
+
+.drink-info {
+  padding: 1rem;
+}
+
+.drink-name {
+  font-size: 1.125rem;
+  margin-bottom: 0.25rem;
+  color: #333;
+}
+
+.drink-category {
+  font-size: 0.875rem;
+  color: #5e35b1;
+  margin-bottom: 0.5rem;
+}
+
+.drink-description {
+  font-size: 0.875rem;
+  color: #666;
+  margin-bottom: 0.75rem;
+  line-height: 1.4;
+}
+
+.drink-price {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #333;
+}
+
+/* Ratings section */
+.ratings-section {
+  margin-bottom: 2rem;
+}
+
+.ratings-section h2 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  color: #333;
+}
+
+.ratings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.rating-card {
+  background: #fafafa;
+  border-radius: 8px;
+  padding: 1rem;
+  border: 1px solid #e0e0e0;
+}
+
+.rating-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.rating-username {
+  font-weight: 600;
+  color: #333;
+}
+
+.rating-date {
+  font-size: 0.875rem;
+  color: #999;
+}
+
+.rating-stars {
+  color: #ffc107;
+  font-size: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.rating-review {
+  color: #666;
+  line-height: 1.5;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 2rem;
+  color: #999;
+  font-style: italic;
+}

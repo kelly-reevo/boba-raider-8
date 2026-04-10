@@ -1,63 +1,107 @@
 /// Application state with routing and authentication support
 
-import gleam/option.{type Option, None, Some}
-import shared.{type User}
+import shared.{type AppError}
 
-import shared.{type Store, type StoreFilters, type SortOption}
-
-/// Remote data pattern for async data loading
-pub type RemoteData(data, error) {
-  NotAsked
-  Loading
-  Success(data)
-  Failure(error)
+/// Authentication state for the user
+pub type AuthState {
+  Authenticated(user_id: String, username: String)
+  Anonymous
 }
 
-/// Store list page state
-pub type StoreListState {
-  StoreListState(
-    stores: RemoteData(List(Store), String),
-    filters: StoreFilters,
-    has_more: Bool,
+/// Data for a single store
+pub type Store {
+  Store(
+    id: String,
+    name: String,
+    address: String,
+    city: String,
+    state: String,
+    zip: String,
+    phone: String,
+    latitude: Float,
+    longitude: Float,
+    description: String,
+    website: String,
   )
 }
 
-/// Main application model
+/// Data for a drink available at a store
+pub type Drink {
+  Drink(
+    id: String,
+    name: String,
+    description: String,
+    price: Float,
+    currency: String,
+    category: String,
+    image_url: String,
+  )
+}
+
+/// Rating/review for a store
+pub type Rating {
+  Rating(
+    id: String,
+    user_id: String,
+    username: String,
+    rating: Int,
+    review: String,
+    created_at: String,
+  )
+}
+
+/// Loading state for async data
+pub type LoadState(a) {
+  Loading
+  Error(AppError)
+  Loaded(a)
+}
+
+/// Combined data for the store detail page
+pub type StoreData {
+  StoreData(
+    store: Store,
+    drinks: List(Drink),
+    ratings: List(Rating),
+  )
+}
+
+/// Page-specific model for store detail
+pub type StoreDetailModel {
+  StoreDetailModel(
+    store_id: String,
+    data: LoadState(StoreData),
+    auth: AuthState,
+  )
+}
+
+/// Global application model
 pub type Model {
   Model(
-    count: Int,
-    error: String,
-    store_list: StoreListState,
+    current_page: Page,
+    auth: AuthState,
   )
 }
 
-/// Default filters for store list
-fn default_store_list_state() -> StoreListState {
-  StoreListState(
-    stores: NotAsked,
-    filters: shared.default_filters(),
-    has_more: False,
-  )
+/// Application pages
+pub type Page {
+  Home
+  StoreDetail(String)
 }
 
-/// Initial model state
+/// Default model state
 pub fn default() -> Model {
   Model(
-    count: 0,
-    error: "",
-    store_list: default_store_list_state(),
+    current_page: Home,
+    auth: Anonymous,
   )
 }
 
-/// Initialize model with store list loading
-pub fn with_store_list_loading() -> Model {
-  Model(
-    count: 0,
-    error: "",
-    store_list: StoreListState(
-      stores: Loading,
-      filters: shared.default_filters(),
-      has_more: False,
-    ),
+/// Create a store detail model with loading state
+pub fn init_store_detail(store_id: String, auth: AuthState) -> StoreDetailModel {
+  StoreDetailModel(
+    store_id: store_id,
+    data: Loading,
+    auth: auth,
   )
 }

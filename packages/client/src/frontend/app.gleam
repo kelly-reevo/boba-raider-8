@@ -1,5 +1,5 @@
-import frontend/model
-import frontend/msg.{type Msg, StoreList, LoadStores}
+import frontend/model.{type Model, default}
+import frontend/msg.{type Msg}
 import frontend/update
 import frontend/view
 import frontend/effects
@@ -13,6 +13,6 @@ pub fn main() {
   Nil
 }
 
-fn init(_flags: Nil) -> #(model.Model, Effect(Msg)) {
-  #(model.with_store_list_loading(), effects.fetch_stores(shared.default_filters()))
+fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
+  #(default(), effect.none())
 }

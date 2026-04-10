@@ -1,83 +1,113 @@
-/// Application update logic
+/// State update functions
 
-import gleam/list
-import frontend/model.{
-  type Model, type StoreListState, type RemoteData, Model, StoreListState,
-  NotAsked, Loading, Success, Failure,
-}
-import frontend/msg.{type Msg, type StoreListMsg, Counter, StoreList, LoadStores, StoresLoaded, SearchChanged, LocationChanged, SortChanged, PageChanged, RetryLoad}
 import frontend/effects
+import frontend/model.{
+  type Model, type StoreDetailModel,
+  Model, StoreDetailModel, StoreData, Loading, Loaded, Error as LoadError,
+  StoreDetail, Home,
+}
+import frontend/msg.{type Msg, type StoreDetailMsg, NavigateToHome,
+  NavigateToStoreDetail, StoreDetailMsg, ReceivedStore, ReceivedDrinks,
+  ReceivedRatings, ClickedAddDrink, ClickedBack}
 import lustre/effect.{type Effect}
-import shared.{type Store, type StoreFilters, type SortOption}
+import shared
 
 /// Main update function
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
-    Counter(counter_msg) -> update_counter(model, counter_msg)
-    StoreList(store_msg) -> update_store_list(model, store_msg)
-  }
-}
-
-/// Handle counter messages (legacy)
-fn update_counter(model: Model, msg) -> #(Model, Effect(Msg)) {
-  case msg {
-    msg.Increment -> #(Model(..model, count: model.count + 1), effect.none())
-    msg.Decrement -> #(Model(..model, count: model.count - 1), effect.none())
-    msg.Reset -> #(Model(..model, count: 0), effect.none())
-
-    // Auth messages: logout clears storage then redirects via StorageCleared
-    msg.Logout -> #(Model(..model, user: None), effects.logout())
-    msg.StorageCleared -> #(model, effect.none())
-    msg.RedirectComplete -> #(model, effect.none())
-  }
-}
-
-/// Handle store list messages
-fn update_store_list(model: Model, msg: StoreListMsg) -> #(Model, Effect(Msg)) {
-  let state = model.store_list
-
-  case msg {
-    LoadStores -> {
-      let new_state = StoreListState(..state, stores: Loading)
-      let new_model = Model(..model, store_list: new_state)
-      #(new_model, effects.fetch_stores(state.filters))
+    NavigateToHome -> {
+      #(Model(..model, current_page: Home), effect.none())
     }
 
-    StoresLoaded(result) -> {
-      let new_state = case result {
-        Ok(stores) -> StoreListState(..state, stores: Success(stores), has_more: list.length(stores) >= 20)
-        Error(err) -> StoreListState(..state, stores: Failure(err))
+    NavigateToStoreDetail(store_id) -> {
+      let new_model = Model(..model, current_page: StoreDetail(store_id))
+      #(new_model, effects.fetch_store_detail_data(store_id))
+    }
+
+    StoreDetailMsg(submsg) -> {
+      case model.current_page {
+        StoreDetail(_) -> {
+          // For now, store detail state is ephemeral - in a real app
+          // we'd track it in the Model. For simplicity, we just return effects
+          // and let the view handle the transient state via local handling.
+          #(model, handle_store_detail_effect(submsg))
+        }
+        _ -> #(model, effect.none())
       }
-      #(Model(..model, store_list: new_state), effect.none())
+    }
+  }
+}
+
+/// Handle effects for store detail messages
+fn handle_store_detail_effect(msg: StoreDetailMsg) -> Effect(Msg) {
+  case msg {
+    ClickedAddDrink -> {
+      // Navigate to add drink page (not implemented in this unit)
+      effect.none()
+    }
+    ClickedBack -> {
+      // Navigation handled by parent update
+      effect.none()
+    }
+    _ -> effect.none()
+  }
+}
+
+/// Update a StoreDetailModel with new data
+/// This is used by the component to maintain local state
+pub fn update_store_detail(
+  model: StoreDetailModel,
+  msg: StoreDetailMsg,
+) -> #(StoreDetailModel, Effect(Msg)) {
+  case msg {
+    ReceivedStore(result) -> {
+      case result {
+        Ok(store) -> {
+          let new_data = case model.data {
+            Loading -> Loaded(StoreData(store, [], []))
+            Loaded(existing) -> Loaded(StoreData(store, existing.drinks, existing.ratings))
+            LoadError(_) -> Loaded(StoreData(store, [], []))
+          }
+          #(StoreDetailModel(..model, data: new_data), effect.none())
+        }
+        Error(e) -> #(StoreDetailModel(..model, data: LoadError(e)), effect.none())
+      }
     }
 
-    SearchChanged(query) -> {
-      let new_filters = shared.StoreFilters(..state.filters, query: query, page: 1)
-      let new_state = StoreListState(..state, filters: new_filters, stores: Loading)
-      #(Model(..model, store_list: new_state), effects.fetch_stores(new_filters))
+    ReceivedDrinks(result) -> {
+      case result {
+        Ok(drinks) -> {
+          let new_data = case model.data {
+            Loading -> {
+              // Partial data case - shouldn't happen in normal flow
+              // but we handle it gracefully
+              LoadError(shared.InternalError("Store data not loaded yet"))
+            }
+            Loaded(existing) -> Loaded(StoreData(existing.store, drinks, existing.ratings))
+            LoadError(e) -> LoadError(e)
+          }
+          #(StoreDetailModel(..model, data: new_data), effect.none())
+        }
+        Error(e) -> #(StoreDetailModel(..model, data: LoadError(e)), effect.none())
+      }
     }
 
-    LocationChanged(location) -> {
-      let new_filters = shared.StoreFilters(..state.filters, location: location, page: 1)
-      let new_state = StoreListState(..state, filters: new_filters, stores: Loading)
-      #(Model(..model, store_list: new_state), effects.fetch_stores(new_filters))
+    ReceivedRatings(result) -> {
+      case result {
+        Ok(ratings) -> {
+          let new_data = case model.data {
+            Loading -> {
+              LoadError(shared.InternalError("Store data not loaded yet"))
+            }
+            Loaded(existing) -> Loaded(StoreData(existing.store, existing.drinks, ratings))
+            LoadError(e) -> LoadError(e)
+          }
+          #(StoreDetailModel(..model, data: new_data), effect.none())
+        }
+        Error(e) -> #(StoreDetailModel(..model, data: LoadError(e)), effect.none())
+      }
     }
 
-    SortChanged(sort) -> {
-      let new_filters = shared.StoreFilters(..state.filters, sort: sort, page: 1)
-      let new_state = StoreListState(..state, filters: new_filters, stores: Loading)
-      #(Model(..model, store_list: new_state), effects.fetch_stores(new_filters))
-    }
-
-    PageChanged(page) -> {
-      let new_filters = shared.StoreFilters(..state.filters, page: page)
-      let new_state = StoreListState(..state, filters: new_filters, stores: Loading)
-      #(Model(..model, store_list: new_state), effects.fetch_stores(new_filters))
-    }
-
-    RetryLoad -> {
-      let new_state = StoreListState(..state, stores: Loading)
-      #(Model(..model, store_list: new_state), effects.fetch_stores(state.filters))
-    }
+    _ -> #(model, effect.none())
   }
 }

@@ -12,9 +12,8 @@ import web/user
 pub fn start(cfg: Config) -> Result(Nil, String) {
   io.println("Starting supervisor...")
 
-  // Start domain actors first (dependencies must be ready before HTTP)
-  io.println("Starting store actor...")
-  let assert Ok(store_actor) = store.start()
+  // Create the HTTP handler with store access
+  let handler = router.make_handler()
 
   io.println("Starting user actor...")
   let assert Ok(user_actor) = user.start()

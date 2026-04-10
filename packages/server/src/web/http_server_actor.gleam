@@ -1,3 +1,4 @@
+import data.{type Store, new_store}
 import gleam/erlang/process.{type Subject}
 import gleam/otp/actor
 import web/server.{type Request, type Response}
@@ -9,7 +10,7 @@ pub type HttpServerMsg {
 pub type HttpServer =
   Subject(HttpServerMsg)
 
-@external(erlang, "server_ffi", "start")
+@external(erlang, "server_ffi", "start_stateful")
 fn start_http_server(
   port: Int,
   handler: fn(Request) -> Response,
@@ -22,11 +23,18 @@ pub type ServerHandle
 
 pub fn start(
   port: Int,
-  handler: fn(Request) -> Response,
+  handler: fn(Request, Store) -> Response,
 ) -> Result(HttpServer, String) {
-  case start_http_server(port, handler) {
+  // Create a fresh store for this server instance
+  let store = new_store()
+
+  // Create handler that closes over the store
+  let http_handler = fn(req: Request) { handler(req, store) }
+
+  case start_http_server(port, http_handler) {
     Ok(handle) -> {
-      let assert Ok(started) =
+      // Create actor to manage the server lifecycle
+      case
         actor.new(handle)
         |> actor.on_message(fn(state, msg) {
           case msg {
@@ -37,7 +45,13 @@ pub fn start(
           }
         })
         |> actor.start()
-      Ok(started.data)
+      {
+        Ok(started) -> Ok(started.data)
+        Error(_) -> {
+          stop_http_server(handle)
+          Error("Failed to start actor")
+        }
+      }
     }
     Error(err) -> Error(err)
   }

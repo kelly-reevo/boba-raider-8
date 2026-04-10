@@ -1,5 +1,5 @@
 -module(server_ffi).
--export([start/2, stop/1]).
+-export([start/2, start_stateful/2, stop/1]).
 
 start(Port, Handler) ->
     ErlHandler = fun(ErlRequest) ->
@@ -13,6 +13,11 @@ start(Port, Handler) ->
         {error, Reason} ->
             {error, list_to_binary(io_lib:format("~p", [Reason]))}
     end.
+
+start_stateful(Port, Handler) ->
+    % Same as start/2 - the statefulness is handled at the Gleam layer
+    % The handler closure captures the state
+    start(Port, Handler).
 
 stop({server, _Pid, Socket}) ->
     http_server:stop(Socket),

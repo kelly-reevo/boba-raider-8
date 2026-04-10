@@ -1,186 +1,116 @@
-/// Drink ratings handlers
-/// PATCH /api/ratings/drink/:rating_id - Update existing rating
+/// Drink ratings API handlers
 
 import gleam/dict
-import gleam/dynamic/decode
 import gleam/json
-import gleam/option.{type Option, None, Some}
+import gleam/list
+import gleam/result
 import gleam/string
-import shared.{
-  type Rating, type UpdateRatingRequest, UpdateRatingRequest,
-  rating_to_json, validate_update_request,
-}
-import store.{type Store}
+import shared.{type Rating, type User, type PaginationMeta, parse_pagination}
+import store/ratings_store.{type RatingsStore, type PaginatedRatings}
 import web/server.{type Request, type Response, json_response}
 
-/// Build a decoder for UpdateRatingRequest using the field/success pattern
-fn update_rating_request_decoder() {
-  // Use the use-based decoder pattern
-  use overall_score <- decode.field(
-    "overall_score",
-    decode.optional(decode.int),
-  )
-  use sweetness <- decode.field("sweetness", decode.optional(decode.int))
-  use boba_texture <- decode.field("boba_texture", decode.optional(decode.int))
-  use tea_strength <- decode.field("tea_strength", decode.optional(decode.int))
-  use review_text <- decode.field("review_text", decode.optional(decode.string))
-
-  decode.success(UpdateRatingRequest(
-    overall_score: overall_score,
-    sweetness: sweetness,
-    boba_texture: boba_texture,
-    tea_strength: tea_strength,
-    review_text: review_text,
-  ))
-}
-
-/// Parse update rating request from JSON body
-fn parse_update_request(body: String) -> Result(UpdateRatingRequest, String) {
-  // json.parse now takes both the string and the decoder
-  case json.parse(body, using: update_rating_request_decoder()) {
-    Ok(req) -> Ok(req)
-    Error(_) -> Error("Invalid JSON or field types")
-  }
-}
-
-/// Extract current user ID from request (simplified - from header)
-fn get_current_user_id(request: Request) -> Option(String) {
-  case dict.get(request.headers, "x-user-id") {
-    Ok(user_id) if user_id != "" -> Some(user_id)
-    _ -> None
-  }
-}
-
-/// Extract rating ID from path /api/ratings/drink/:rating_id
-fn extract_rating_id(path: String) -> Option(String) {
-  case string.split(path, "/") {
-    ["", "api", "ratings", "drink", rating_id] -> Some(rating_id)
-    _ -> None
-  }
-}
-
-/// Apply updates to existing rating
-fn apply_updates(rating: Rating, req: UpdateRatingRequest) -> Rating {
-  shared.Rating(
-    id: rating.id,
-    user_id: rating.user_id,
-    drink_id: rating.drink_id,
-    overall_score: option.unwrap(req.overall_score, rating.overall_score),
-    sweetness: option.unwrap(req.sweetness, rating.sweetness),
-    boba_texture: option.unwrap(req.boba_texture, rating.boba_texture),
-    tea_strength: option.unwrap(req.tea_strength, rating.tea_strength),
-    review_text: option.unwrap(req.review_text, rating.review_text),
-    created_at: rating.created_at,
-    updated_at: "2026-04-10T00:00:00Z",
-  )
-}
-
-/// PATCH /api/ratings/drink/:rating_id
-/// User can modify any rating axis or review text for their own rating
-pub fn update_rating(
+/// Handle GET /api/drinks/:drink_id/ratings
+pub fn list_by_drink(
+  store: RatingsStore,
   request: Request,
-  store: Store,
+  drink_id: String,
 ) -> Response {
-  // Extract rating ID from path
-  let rating_id_result = extract_rating_id(request.path)
+  // Parse query parameters
+  let query_params = parse_query_string(request.path)
+  let page_raw =
+    dict.get(query_params, "page")
+    |> result.unwrap("1")
+  let limit_raw =
+    dict.get(query_params, "limit")
+    |> result.unwrap("20")
 
-  case rating_id_result {
-    None ->
+  // Validate and apply defaults
+  let #(page, limit) = case parse_pagination(page_raw, limit_raw) {
+    Ok(params) -> params
+    Error(_) -> #(1, 20)
+  }
+
+  // Fetch ratings from store
+  case ratings_store.get_by_drink(store, drink_id, page, limit) {
+    Ok(result) -> {
+      // Check if drink exists (has ratings or we need to verify separately)
+      // For simplicity: empty result means either no ratings or non-existent drink
+      // Return 200 with empty list for both cases per REST conventions
+      let body = encode_paginated_response(result)
+      json_response(200, json.to_string(body))
+    }
+
+    Error(_) -> {
       json_response(
-        404,
-        json.object([#("error", json.string("Rating not found"))])
-        |> json.to_string,
+        500,
+        json.to_string(json.object([#("error", json.string("Internal error"))])),
       )
-    Some(rating_id) -> {
-      // Get current user
-      case get_current_user_id(request) {
-        None ->
-          json_response(
-            403,
-            json.object([#("error", json.string("Authentication required"))])
-            |> json.to_string,
-          )
-        Some(current_user) -> {
-          // Look up existing rating
-          case store.get_rating(store, rating_id) {
-            None ->
-              json_response(
-                404,
-                json.object([#("error", json.string("Rating not found"))])
-                |> json.to_string,
-              )
-            Some(existing_rating) -> {
-              // Check ownership - user can only update their own ratings
-              case existing_rating.user_id == current_user {
-                False ->
-                  json_response(
-                    403,
-                    json.object([#("error", json.string("Cannot modify another user's rating"))])
-                    |> json.to_string,
-                  )
-                True -> {
-                  // Parse request body
-                  case parse_update_request(request.body) {
-                    Error(msg) ->
-                      json_response(
-                        422,
-                        json.object([#("error", json.string("Invalid request: " <> msg))])
-                        |> json.to_string,
-                      )
-                    Ok(update_req) -> {
-                      // Validate request
-                      case validate_update_request(update_req) {
-                        Error(msg) ->
-                          json_response(
-                            422,
-                            json.object([#("error", json.string(msg))])
-                            |> json.to_string,
-                          )
-                        Ok(_) -> {
-                          // Apply updates and save
-                          let updated_rating = apply_updates(existing_rating, update_req)
-
-                          case store.save_rating(store, updated_rating) {
-                            Ok(_) -> {
-                              json_response(
-                                200,
-                                json.object([
-                                  #("data", rating_to_json(updated_rating)),
-                                ])
-                                |> json.to_string,
-                              )
-                            }
-                            Error(err) -> {
-                              json_response(
-                                500,
-                                json.object([#("error", json.string(shared.error_message(err)))])
-                                |> json.to_string,
-                              )
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
     }
   }
 }
 
-/// Handle rating-related requests
-pub fn handle(
-  method: String,
-  path: String,
-  request: Request,
-  store: Store,
-) -> Option(Response) {
-  case method, string.starts_with(path, "/api/ratings/drink/") {
-    "PATCH", True -> Some(update_rating(request, store))
-    _, _ -> None
+/// Encode paginated ratings to JSON
+fn encode_paginated_response(result: PaginatedRatings) -> json.Json {
+  json.object([
+    #("data", json.array(result.ratings, encode_rating)),
+    #("meta", encode_meta(result.meta)),
+  ])
+}
+
+/// Encode a single rating to JSON
+fn encode_rating(rating: Rating) -> json.Json {
+  json.object([
+    #("id", json.string(rating.id)),
+    #("user", encode_user(rating.user)),
+    #("overall_score", json.int(rating.overall_score)),
+    #("sweetness", json.int(rating.sweetness)),
+    #("boba_texture", json.int(rating.boba_texture)),
+    #("tea_strength", json.int(rating.tea_strength)),
+    #(
+      "review_text",
+      case string.is_empty(rating.review_text) {
+        True -> json.null()
+        False -> json.string(rating.review_text)
+      },
+    ),
+    #("created_at", json.string(rating.created_at)),
+    #("updated_at", json.string(rating.updated_at)),
+  ])
+}
+
+/// Encode user to JSON
+fn encode_user(user: User) -> json.Json {
+  json.object([
+    #("id", json.string(user.id)),
+    #("username", json.string(user.username)),
+  ])
+}
+
+/// Encode pagination metadata to JSON
+fn encode_meta(meta: PaginationMeta) -> json.Json {
+  json.object([
+    #("total", json.int(meta.total)),
+    #("page", json.int(meta.page)),
+    #("limit", json.int(meta.limit)),
+    #("total_pages", json.int(meta.total_pages)),
+  ])
+}
+
+/// Simple query string parser
+fn parse_query_string(path: String) -> dict.Dict(String, String) {
+  case string.split(path, "?") {
+    [_, query] -> {
+      query
+      |> string.split("&")
+      |> list.filter(fn(s) { !string.is_empty(s) })
+      |> list.fold(dict.new(), fn(acc, pair) {
+        case string.split(pair, "=") {
+          [key, value] -> dict.insert(acc, key, value)
+          [key] -> dict.insert(acc, key, "")
+          _ -> acc
+        }
+      })
+    }
+    _ -> dict.new()
   }
 }

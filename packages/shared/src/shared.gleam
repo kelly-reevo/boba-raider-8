@@ -22,68 +22,77 @@ pub fn error_message(error: AppError) -> String {
   }
 }
 
-/// Tea types available for drinks
-pub type TeaType {
-  Black
-  Green
-  Oolong
-  White
-  Herbal
-  Matcha
+// User types
+
+pub type User {
+  User(
+    id: String,
+    username: String,
+    email: String,
+    avatar_url: String,
+    created_at: String,
+  )
 }
 
-/// Convert TeaType to display string
-pub fn tea_type_to_string(tea_type: TeaType) -> String {
-  case tea_type {
-    Black -> "Black"
-    Green -> "Green"
-    Oolong -> "Oolong"
-    White -> "White"
-    Herbal -> "Herbal"
-    Matcha -> "Matcha"
-  }
+pub type UserStats {
+  UserStats(
+    total_store_ratings: Int,
+    total_drink_ratings: Int,
+    average_store_rating: Float,
+    average_drink_rating: Float,
+  )
 }
 
-/// Get all available tea types
-pub fn all_tea_types() -> List(TeaType) {
-  [Black, Green, Oolong, White, Herbal, Matcha]
+pub type UserProfile {
+  UserProfile(user: User, stats: UserStats)
 }
 
-/// Parse tea type from string
-pub fn parse_tea_type(s: String) -> Result(TeaType, String) {
-  case s {
-    "Black" -> Ok(Black)
-    "Green" -> Ok(Green)
-    "Oolong" -> Ok(Oolong)
-    "White" -> Ok(White)
-    "Herbal" -> Ok(Herbal)
-    "Matcha" -> Ok(Matcha)
-    _ -> Error("Invalid tea type: " <> s)
-  }
-}
+// Rating types
 
-/// Drink representation
-pub type Drink {
-  Drink(
+pub type StoreRating {
+  StoreRating(
     id: String,
     store_id: String,
-    name: String,
-    tea_type: TeaType,
-    price: Float,
-    description: String,
-    image_url: String,
-    is_signature: Bool,
+    store_name: String,
+    rating: Int,
+    review: String,
+    created_at: String,
   )
 }
 
-/// Input for creating a new drink
-pub type CreateDrinkInput {
-  CreateDrinkInput(
-    name: String,
-    tea_type: TeaType,
-    price: Float,
-    description: String,
-    image_url: String,
-    is_signature: Bool,
+pub type DrinkRating {
+  DrinkRating(
+    id: String,
+    drink_id: String,
+    drink_name: String,
+    store_name: String,
+    rating: Int,
+    review: String,
+    created_at: String,
   )
+}
+
+// Paginated response
+
+pub type PaginatedResponse(a) {
+  PaginatedResponse(
+    items: List(a),
+    total: Int,
+    page: Int,
+    per_page: Int,
+  )
+}
+
+// Profile page types
+
+pub type ProfileTab {
+  StoreRatingsTab
+  DrinkRatingsTab
+}
+
+pub type LoadState(a) {
+  Loading
+  Empty
+  Error(String)
+  Populated(a)
 }

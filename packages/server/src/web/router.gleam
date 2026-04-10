@@ -1,5 +1,6 @@
 import gleam/json
 import gleam/string
+import user/user_handler
 import web/server.{type Request, type Response}
 import web/static
 
@@ -12,6 +13,7 @@ fn route(request: Request) -> Response {
     "GET", "/" -> static.serve_index()
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
+    "GET", "/api/users/me" -> user_handler.get_current_user(request)
     "GET", path -> route_get(path)
     _, _ -> not_found()
   }

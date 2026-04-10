@@ -1,268 +1,134 @@
-/// Store and drink domain types and data access
+/// Store module (unit-4)
+/// Simple in-memory store storage using actor state
 
-import gleam/list
-import gleam/option.{type Option, None, Some}
-import gleam/order.{type Order}
-import gleam/string
-import shared.{type AppError, InvalidInput, NotFound}
+import gleam/dict.{type Dict}
+import gleam/erlang/process
+import gleam/otp/actor
+import gleam/result
+import shared.{type AppError, type Store, NotFound, InternalError}
 
-// ============== Domain Types ==============
-
-pub type TeaType {
-  Black
-  Green
-  Oolong
-  White
-  Herbal
-  Matcha
-  Other
+/// Store actor message types
+pub type StoreMsg {
+  GetStore(id: String, reply: process.Subject(Result(Store, AppError)))
+  StoreExists(id: String, reply: process.Subject(Bool))
+  CreateStore(name: String, reply: process.Subject(Result(Store, AppError)))
+  Shutdown
 }
 
-pub type Rating {
-  Rating(
-    overall: Float,
-    sweetness: Float,
-    texture: Float,
-    tea_strength: Float,
+pub type StoreActor =
+  process.Subject(StoreMsg)
+
+/// In-memory state for stores
+pub type StoreState {
+  StoreState(stores: Dict(String, Store), next_id: Int)
+}
+
+/// Initialize store actor with some seed data
+fn initial_state() -> StoreState {
+  // Seed with a default store for testing
+  let default_store = shared.Store(
+    id: "store_1",
+    name: "Test Store",
+    created_at: "2024-01-01T00:00:00Z",
+    updated_at: "2024-01-01T00:00:00Z",
+  )
+
+  StoreState(
+    stores: dict.from_list([#("store_1", default_store)]),
+    next_id: 2,
   )
 }
 
-pub type Drink {
-  Drink(
-    id: String,
-    name: String,
-    tea_type: TeaType,
-    price: Option(Float),
-    image_url: Option(String),
-    store_id: String,
-    average_rating: Option(Rating),
-  )
-}
-
-pub type Store {
-  Store(
-    id: String,
-    name: String,
-    address: Option(String),
-  )
-}
-
-pub type SortOption {
-  RatingDesc
-  RatingAsc
-  Name
-}
-
-pub type PaginationMeta {
-  PaginationMeta(
-    total: Int,
-    page: Int,
-    limit: Int,
-    total_pages: Int,
-  )
-}
-
-// ============== Static Data Store ==============
-
-fn stores() -> List(Store) {
-  [
-    Store(id: "store-1", name: "Boba Paradise", address: Some("123 Main St")),
-    Store(id: "store-2", name: "Tea Haven", address: Some("456 Oak Ave")),
-    Store(id: "store-3", name: "Milk Tea Lab", address: None),
-  ]
-}
-
-fn drinks() -> List(Drink) {
-  [
-    Drink(
-      id: "drink-1",
-      name: "Classic Milk Tea",
-      tea_type: Black,
-      price: Some(5.50),
-      image_url: Some("/images/classic.jpg"),
-      store_id: "store-1",
-      average_rating: Some(Rating(4.5, 4.0, 4.5, 4.0)),
-    ),
-    Drink(
-      id: "drink-2",
-      name: "Jasmine Green Tea",
-      tea_type: Green,
-      price: Some(4.75),
-      image_url: None,
-      store_id: "store-1",
-      average_rating: Some(Rating(4.2, 4.5, 3.8, 3.9)),
-    ),
-    Drink(
-      id: "drink-3",
-      name: "Oolong Milk Tea",
-      tea_type: Oolong,
-      price: Some(6.00),
-      image_url: Some("/images/oolong.jpg"),
-      store_id: "store-1",
-      average_rating: None,
-    ),
-    Drink(
-      id: "drink-4",
-      name: "Matcha Latte",
-      tea_type: Matcha,
-      price: Some(6.50),
-      image_url: Some("/images/matcha.jpg"),
-      store_id: "store-2",
-      average_rating: Some(Rating(4.8, 4.2, 4.9, 4.5)),
-    ),
-    Drink(
-      id: "drink-5",
-      name: "Honey Black Tea",
-      tea_type: Black,
-      price: Some(5.25),
-      image_url: None,
-      store_id: "store-2",
-      average_rating: Some(Rating(4.0, 5.0, 3.5, 4.0)),
-    ),
-    Drink(
-      id: "drink-6",
-      name: "Herbal Mint Tea",
-      tea_type: Herbal,
-      price: Some(4.50),
-      image_url: Some("/images/herbal.jpg"),
-      store_id: "store-3",
-      average_rating: Some(Rating(3.8, 3.5, 4.0, 2.5)),
-    ),
-  ]
-}
-
-// ============== Helper Functions ==============
-
-pub fn tea_type_from_string(s: String) -> Result(TeaType, AppError) {
-  case string.lowercase(s) {
-    "black" -> Ok(Black)
-    "green" -> Ok(Green)
-    "oolong" -> Ok(Oolong)
-    "white" -> Ok(White)
-    "herbal" -> Ok(Herbal)
-    "matcha" -> Ok(Matcha)
-    "other" -> Ok(Other)
-    _ -> Error(InvalidInput("Invalid tea_type: " <> s))
-  }
-}
-
-pub fn sort_option_from_string(s: String) -> Result(SortOption, AppError) {
-  case s {
-    "rating_desc" -> Ok(RatingDesc)
-    "rating_asc" -> Ok(RatingAsc)
-    "name" -> Ok(Name)
-    _ -> Error(InvalidInput("Invalid sort: " <> s))
-  }
-}
-
-pub fn default_sort() -> SortOption {
-  RatingDesc
-}
-
-// ============== Data Access ==============
-
-pub fn get_store(store_id: String) -> Result(Store, AppError) {
-  case list.find(stores(), fn(s) { s.id == store_id }) {
-    Ok(store) -> Ok(store)
-    Error(_) -> Error(NotFound("Store not found"))
-  }
-}
-
-pub fn list_drinks(
-  store_id: String,
-  tea_type_filter: Option(TeaType),
-  sort: SortOption,
-  page: Int,
-  limit: Int,
-) -> Result(#(List(Drink), PaginationMeta), AppError) {
-  // Verify store exists
-  case get_store(store_id) {
-    Error(e) -> Error(e)
-    Ok(_) -> {
-      let all_drinks = drinks()
-        |> list.filter(fn(d) { d.store_id == store_id })
-        |> apply_tea_type_filter(tea_type_filter)
-        |> apply_sort(sort)
-
-      let total = list.length(all_drinks)
-      let total_pages = case total {
-        0 -> 0
-        n -> { n + limit - 1 } / limit
+/// Start the store actor
+pub fn start() -> Result(StoreActor, String) {
+  let handler = fn(state: StoreState, msg: StoreMsg) {
+    case msg {
+      GetStore(id, reply) -> {
+        let result = case dict.get(state.stores, id) {
+          Ok(store) -> Ok(store)
+          Error(_) -> Error(NotFound("store"))
+        }
+        process.send(reply, result)
+        actor.continue(state)
       }
 
-      let paginated = all_drinks
-        |> list.drop({ page - 1 } * limit)
-        |> list.take(limit)
+      StoreExists(id, reply) -> {
+        let exists = dict.has_key(state.stores, id)
+        process.send(reply, exists)
+        actor.continue(state)
+      }
 
-      let meta = PaginationMeta(
-        total: total,
-        page: page,
-        limit: limit,
-        total_pages: total_pages,
-      )
+      CreateStore(name, reply) -> {
+        let id = "store_" <> int_to_string(state.next_id)
+        let now = "2024-01-01T00:00:00Z"
+        let store = shared.Store(
+          id: id,
+          name: name,
+          created_at: now,
+          updated_at: now,
+        )
+        let new_stores = dict.insert(state.stores, id, store)
+        let new_state = StoreState(stores: new_stores, next_id: state.next_id + 1)
+        process.send(reply, Ok(store))
+        actor.continue(new_state)
+      }
 
-      Ok(#(paginated, meta))
+      Shutdown -> actor.stop()
+    }
+  }
+
+  actor.new(initial_state())
+  |> actor.on_message(handler)
+  |> actor.start()
+  |> result.map(fn(started) { started.data })
+  |> result.map_error(fn(_) { "Failed to start store actor" })
+}
+
+fn int_to_string(n: Int) -> String {
+  case n {
+    0 -> "0"
+    n if n < 0 -> "-" <> int_to_string(-n)
+    _ -> do_int_to_string(n, "")
+  }
+}
+
+fn do_int_to_string(n: Int, acc: String) -> String {
+  case n {
+    0 -> acc
+    _ -> {
+      let digit = case n % 10 {
+        0 -> "0"
+        1 -> "1"
+        2 -> "2"
+        3 -> "3"
+        4 -> "4"
+        5 -> "5"
+        6 -> "6"
+        7 -> "7"
+        8 -> "8"
+        _ -> "9"
+      }
+      do_int_to_string(n / 10, digit <> acc)
     }
   }
 }
 
-fn apply_tea_type_filter(
-  drinks: List(Drink),
-  filter: Option(TeaType),
-) -> List(Drink) {
-  case filter {
-    None -> drinks
-    Some(tea_type) -> list.filter(drinks, fn(d) { d.tea_type == tea_type })
-  }
+/// Public API functions
+
+pub fn get_store(actor: StoreActor, id: String) -> Result(Store, AppError) {
+  let reply_subject = process.new_subject()
+  process.send(actor, GetStore(id, reply_subject))
+  process.receive(reply_subject, 5000)
+  |> result.unwrap(Error(InternalError("Timeout")))
 }
 
-fn apply_sort(drinks: List(Drink), sort: SortOption) -> List(Drink) {
-  let compare_fn = case sort {
-    RatingDesc -> compare_by_rating_desc
-    RatingAsc -> compare_by_rating_asc
-    Name -> compare_by_name
-  }
-  list.sort(drinks, compare_fn)
+pub fn store_exists(actor: StoreActor, id: String) -> Bool {
+  let reply_subject = process.new_subject()
+  process.send(actor, StoreExists(id, reply_subject))
+  process.receive(reply_subject, 5000)
+  |> result.unwrap(False)
 }
 
-fn compare_by_rating_desc(a: Drink, b: Drink) -> Order {
-  let a_rating = option.map(a.average_rating, fn(r) { r.overall }) |> option.unwrap(0.0)
-  let b_rating = option.map(b.average_rating, fn(r) { r.overall }) |> option.unwrap(0.0)
-  case a_rating >. b_rating {
-    True -> order.Lt
-    False -> case a_rating <. b_rating {
-      True -> order.Gt
-      False -> order.Eq
-    }
-  }
-}
-
-fn compare_by_rating_asc(a: Drink, b: Drink) -> Order {
-  let a_rating = option.map(a.average_rating, fn(r) { r.overall }) |> option.unwrap(0.0)
-  let b_rating = option.map(b.average_rating, fn(r) { r.overall }) |> option.unwrap(0.0)
-  case a_rating <. b_rating {
-    True -> order.Lt
-    False -> case a_rating >. b_rating {
-      True -> order.Gt
-      False -> order.Eq
-    }
-  }
-}
-
-fn compare_by_name(a: Drink, b: Drink) -> Order {
-  string.compare(a.name, b.name)
-}
-
-// ============== JSON Serialization ==============
-
-pub fn tea_type_to_string(tea_type: TeaType) -> String {
-  case tea_type {
-    Black -> "black"
-    Green -> "green"
-    Oolong -> "oolong"
-    White -> "white"
-    Herbal -> "herbal"
-    Matcha -> "matcha"
-    Other -> "other"
-  }
+pub fn stop(actor: StoreActor) -> Nil {
+  process.send(actor, Shutdown)
 }

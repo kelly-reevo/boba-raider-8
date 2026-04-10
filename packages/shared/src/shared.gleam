@@ -1,14 +1,11 @@
 /// Shared types and functions for boba-raider-8
 
-import gleam/dynamic/decode
-import gleam/json
-
 pub type AppError {
   NotFound(String)
   InvalidInput(String)
   Unauthorized(String)
   InternalError(String)
-  Unauthorized(String)
+  Conflict(String)
 }
 
 /// Convert an error to a human-readable message
@@ -18,7 +15,7 @@ pub fn error_message(error: AppError) -> String {
     InvalidInput(msg) -> "Invalid input: " <> msg
     Unauthorized(msg) -> "Unauthorized: " <> msg
     InternalError(msg) -> "Internal error: " <> msg
-    Unauthorized(msg) -> "Unauthorized: " <> msg
+    Conflict(msg) -> "Conflict: " <> msg
   }
 }
 

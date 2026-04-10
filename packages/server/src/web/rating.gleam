@@ -7,7 +7,7 @@ import gleam/erlang/process
 import gleam/option.{type Option}
 import gleam/otp/actor
 import gleam/result
-import shared.{type AppError, type Rating, type RatingWithUser, NotFound, InternalError}
+import shared.{type AppError, type StoreRating, NotFound, InternalError}
 
 import web/user.{type UserActor}
 
@@ -16,18 +16,18 @@ pub type RatingMsg {
   CreateRating(
     store_id: String,
     user_id: String,
-    overall_score: Int,
-    review_text: Option(String),
-    reply: process.Subject(Result(Rating, AppError)),
+    rating: Int,
+    review: String,
+    reply: process.Subject(Result(StoreRating, AppError)),
   )
   GetRatingForUserAndStore(
     store_id: String,
     user_id: String,
-    reply: process.Subject(Result(Rating, AppError)),
+    reply: process.Subject(Result(StoreRating, AppError)),
   )
   GetRatingsForStore(
     store_id: String,
-    reply: process.Subject(List(Rating)),
+    reply: process.Subject(List(StoreRating)),
   )
   Shutdown
 }
@@ -43,7 +43,7 @@ fn make_key(store_id: String, user_id: String) -> String {
 /// In-memory state for ratings
 pub type RatingState {
   RatingState(
-    ratings: Dict(String, Rating),  // keyed by rating id
+    ratings: Dict(String, StoreRating),  // keyed by rating id
     user_store_index: Dict(String, String),  // keyed by store_id:user_id, value is rating id
     next_id: Int,
   )
@@ -67,7 +67,7 @@ fn now() -> String {
 pub fn start() -> Result(RatingActor, String) {
   let handler = fn(state: RatingState, msg: RatingMsg) {
     case msg {
-      CreateRating(store_id, user_id, overall_score, review_text, reply) -> {
+      CreateRating(store_id, user_id, rating, review, reply) -> {
         let key = make_key(store_id, user_id)
         let current_time = now()
 
@@ -77,14 +77,13 @@ pub fn start() -> Result(RatingActor, String) {
             // Update existing rating
             case dict.get(state.ratings, existing_id) {
               Ok(existing) -> {
-                let updated = shared.Rating(
+                let updated = shared.StoreRating(
                   id: existing.id,
                   store_id: existing.store_id,
-                  user_id: existing.user_id,
-                  overall_score: overall_score,
-                  review_text: review_text,
+                  store_name: existing.store_name,
+                  rating: rating,
+                  review: review,
                   created_at: existing.created_at,
-                  updated_at: current_time,
                 )
                 let new_ratings = dict.insert(state.ratings, existing.id, updated)
                 Ok(#(updated, RatingState(..state, ratings: new_ratings)))
@@ -95,14 +94,13 @@ pub fn start() -> Result(RatingActor, String) {
           Error(_) -> {
             // Create new rating
             let id = "rating_" <> int_to_string(state.next_id)
-            let new_rating = shared.Rating(
+            let new_rating = shared.StoreRating(
               id: id,
               store_id: store_id,
-              user_id: user_id,
-              overall_score: overall_score,
-              review_text: review_text,
+              store_name: "",  // Will be filled by caller
+              rating: rating,
+              review: review,
               created_at: current_time,
-              updated_at: current_time,
             )
             let new_ratings = dict.insert(state.ratings, id, new_rating)
             let new_index = dict.insert(state.user_store_index, key, id)
@@ -160,7 +158,7 @@ pub fn start() -> Result(RatingActor, String) {
   |> result.map_error(fn(_) { "Failed to start rating actor" })
 }
 
-fn filter_ratings_by_store(ratings: List(Rating), store_id: String, acc: List(Rating)) -> List(Rating) {
+fn filter_ratings_by_store(ratings: List(StoreRating), store_id: String, acc: List(StoreRating)) -> List(StoreRating) {
   case ratings {
     [] -> acc
     [rating, ..rest] -> {
@@ -208,47 +206,35 @@ pub fn create_rating(
   actor: RatingActor,
   store_id: String,
   user_id: String,
-  overall_score: Int,
-  review_text: Option(String),
-) -> Result(Rating, AppError) {
+  rating: Int,
+  review: String,
+) -> Result(StoreRating, AppError) {
   let reply_subject = process.new_subject()
-  process.send(actor, CreateRating(store_id, user_id, overall_score, review_text, reply_subject))
+  process.send(actor, CreateRating(store_id, user_id, rating, review, reply_subject))
   process.receive(reply_subject, 5000)
   |> result.unwrap(Error(InternalError("Timeout")))
 }
 
-pub fn get_rating_with_user(
-  rating_actor: RatingActor,
-  user_actor: UserActor,
+pub fn get_rating_for_user_and_store(
+  actor: RatingActor,
   store_id: String,
   user_id: String,
-) -> Result(RatingWithUser, AppError) {
-  // Get rating
+) -> Result(StoreRating, AppError) {
   let reply_subject = process.new_subject()
-  process.send(rating_actor, GetRatingForUserAndStore(store_id, user_id, reply_subject))
-  let rating_result = process.receive(reply_subject, 5000)
-    |> result.unwrap(Error(InternalError("Timeout")))
+  process.send(actor, GetRatingForUserAndStore(store_id, user_id, reply_subject))
+  process.receive(reply_subject, 5000)
+  |> result.unwrap(Error(InternalError("Timeout")))
+}
 
-  case rating_result {
-    Error(err) -> Error(err)
-    Ok(rating) -> {
-      // Get user info
-      case user.get_user(user_actor, rating.user_id) {
-        Error(err) -> Error(err)
-        Ok(user) -> {
-          Ok(shared.RatingWithUser(
-            id: rating.id,
-            store_id: rating.store_id,
-            user_id: rating.user_id,
-            user: user,
-            overall_score: rating.overall_score,
-            review_text: rating.review_text,
-            created_at: rating.created_at,
-            updated_at: rating.updated_at,
-          ))
-        }
-      }
-    }
+pub fn get_ratings_for_store(
+  actor: RatingActor,
+  store_id: String,
+) -> List(StoreRating) {
+  let reply_subject = process.new_subject()
+  process.send(actor, GetRatingsForStore(store_id, reply_subject))
+  case process.receive(reply_subject, 5000) {
+    Ok(ratings) -> ratings
+    Error(_) -> []
   }
 }
 

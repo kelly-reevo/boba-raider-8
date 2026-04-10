@@ -29,8 +29,9 @@ fn initial_state() -> UserState {
   let default_user = shared.User(
     id: "user_1",
     username: "testuser",
+    email: "test@example.com",
+    avatar_url: "",
     created_at: "2024-01-01T00:00:00Z",
-    updated_at: "2024-01-01T00:00:00Z",
   )
 
   UserState(
@@ -65,8 +66,9 @@ pub fn start() -> Result(UserActor, String) {
         let user = shared.User(
           id: id,
           username: username,
+          email: "",
+          avatar_url: "",
           created_at: now,
-          updated_at: now,
         )
         let new_users = dict.insert(state.users, id, user)
         let new_state = UserState(users: new_users, next_id: state.next_id + 1)

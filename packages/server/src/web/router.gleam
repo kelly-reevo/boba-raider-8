@@ -2,96 +2,48 @@ import gleam/erlang/process.{type Subject}
 import gleam/json
 import gleam/option.{type Option, None, Some}
 import gleam/string
-import store/store_data.{type StoreMsg}
-import store/store_handler
+import store/store_actor.{type StoreMessage}
+import web/handlers/store_handler
 import web/server.{type Request, type Response}
 import web/static
 import web/user_store.{type UserStore}
 
-pub fn make_handler(store_actor: Subject(StoreMsg)) -> fn(Request) -> Response {
+pub fn make_handler(
+  store_actor: Subject(StoreMessage),
+) -> fn(Request) -> Response {
   fn(request: Request) { route(request, store_actor) }
 }
 
-fn route(request: Request, store_actor: Subject(StoreMsg)) -> Response {
+fn route(request: Request, store_actor: Subject(StoreMessage)) -> Response {
   case request.method, request.path {
     "GET", "/" -> static.serve_index()
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
-    "PATCH", path -> route_patch(path, request, store_actor)
+
+    // Store API routes
+    "DELETE", path -> {
+      case is_store_path(path) {
+        True -> store_handler.delete_store_handler(request, store_actor)
+        False -> not_found()
+      }
+    }
+
     "GET", path -> route_get(path)
     _, _ -> not_found()
   }
 }
 
-fn route_get(request: Request, path: String, store_actor: Subject(StoreMsg)) -> Response {
-  // Check for store ID route
-  case extract_store_id(path) {
-    Some(store_id) -> store_handler.get_store(request, store_actor, store_id)
-    None -> {
-      // Static file serving
-      case string.starts_with(path, "/static/") {
-        True -> static.serve(path)
-        False -> not_found()
-      }
-    }
+// Check if path matches /api/stores/:id pattern
+fn is_store_path(path: String) -> Bool {
+  case string.split(path, "/") {
+    ["", "api", "stores", _] -> True
+    _ -> False
   }
 }
 
-/// Extract store ID from /api/stores/:id pattern
-fn extract_store_id(path: String) -> Option(String) {
-  case string.starts_with(path, "/api/stores/") {
-    True -> {
-      // Extract ID by slicing after "/api/stores/" (12 characters)
-      let prefix_length = 12
-      let id = case string.length(path) > prefix_length {
-        True -> string.slice(path, prefix_length, string.length(path) - prefix_length)
-        False -> ""
-      }
-      // Ensure ID is not empty and doesn't contain additional path segments
-      case id, string.contains(id, "/") {
-        "", _ -> None
-        _, True -> None
-        _, False -> Some(id)
-      }
-    }
-    False -> None
-  }
-}
-
-/// Handle GET /api/stores - List stores with filtering
-fn list_stores_handler(path: String) -> Response {
-  // Extract query string from path (everything after ?)
-  let query = case string.split(path, "?") {
-    [_, q] -> q
-    _ -> ""
-  }
-
-  case store.parse_params(query) {
-    Ok(params) -> {
-      let result = store.list_stores(params)
-      server.json_response(
-        200,
-        store.encode_result(result)
-          |> json.to_string,
-      )
-    }
-    Error(error) -> {
-      server.json_response(
-        400,
-        json.object([#("error", json.string(shared.error_message(error)))])
-          |> json.to_string,
-      )
-    }
-  }
-}
-
-fn route_patch(
-  path: String,
-  request: Request,
-  store_actor: Subject(StoreMsg),
-) -> Response {
-  case string.starts_with(path, "/api/stores/") {
-    True -> store_handler.update_store(request, store_actor)
+fn route_get(path: String) -> Response {
+  case string.starts_with(path, "/static/") {
+    True -> static.serve(path)
     False -> not_found()
   }
 }

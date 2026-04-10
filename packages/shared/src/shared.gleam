@@ -22,51 +22,68 @@ pub fn error_message(error: AppError) -> String {
   }
 }
 
-/// Boba drink with full details
+/// Tea types available for drinks
+pub type TeaType {
+  Black
+  Green
+  Oolong
+  White
+  Herbal
+  Matcha
+}
+
+/// Convert TeaType to display string
+pub fn tea_type_to_string(tea_type: TeaType) -> String {
+  case tea_type {
+    Black -> "Black"
+    Green -> "Green"
+    Oolong -> "Oolong"
+    White -> "White"
+    Herbal -> "Herbal"
+    Matcha -> "Matcha"
+  }
+}
+
+/// Get all available tea types
+pub fn all_tea_types() -> List(TeaType) {
+  [Black, Green, Oolong, White, Herbal, Matcha]
+}
+
+/// Parse tea type from string
+pub fn parse_tea_type(s: String) -> Result(TeaType, String) {
+  case s {
+    "Black" -> Ok(Black)
+    "Green" -> Ok(Green)
+    "Oolong" -> Ok(Oolong)
+    "White" -> Ok(White)
+    "Herbal" -> Ok(Herbal)
+    "Matcha" -> Ok(Matcha)
+    _ -> Error("Invalid tea type: " <> s)
+  }
+}
+
+/// Drink representation
 pub type Drink {
   Drink(
     id: String,
+    store_id: String,
     name: String,
-    shop_name: String,
-    description: String,
+    tea_type: TeaType,
     price: Float,
+    description: String,
     image_url: String,
-    average_ratings: RatingBreakdown,
+    is_signature: Bool,
   )
 }
 
-/// 4-axis boba-specific rating breakdown (1-5 scale)
-pub type RatingBreakdown {
-  RatingBreakdown(
-    taste: Float,
-    texture: Float,
-    sweetness: Float,
-    presentation: Float,
+/// Input for creating a new drink
+pub type CreateDrinkInput {
+  CreateDrinkInput(
+    name: String,
+    tea_type: TeaType,
+    price: Float,
+    description: String,
+    image_url: String,
+    is_signature: Bool,
   )
-}
-
-/// User's rating with breakdown
-pub type Rating {
-  Rating(
-    id: String,
-    drink_id: String,
-    user_id: String,
-    user_name: String,
-    breakdown: RatingBreakdown,
-    comment: String,
-    created_at: String,
-  )
-}
-
-/// User's existing rating for a drink (optional)
-pub type UserRating {
-  UserRating(
-    rating: Rating,
-  )
-}
-
-/// Calculate average rating from breakdown
-pub fn average_from_breakdown(breakdown: RatingBreakdown) -> Float {
-  let sum = breakdown.taste +. breakdown.texture +. breakdown.sweetness +. breakdown.presentation
-  sum /. 4.0
 }

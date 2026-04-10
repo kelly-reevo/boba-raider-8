@@ -1,284 +1,167 @@
+/// State updates
+
 import frontend/effects
-import frontend/model.{type Model, Model, DrinkDetailLoading, DrinkDetailError, DrinkDetailPopulated}
-import frontend/msg.{type Msg}
-import gleam/option.{None}
-import lustre/effect.{type Effect}
-
-import frontend/effects as fx
 import frontend/model.{
-  type Model, Model, type EditStoreState, EditStoreState,
-  CounterPage, EditStorePage, update_edit_store_state, can_edit_store,
+  type DrinkFormData, type Model, DrinkFormData, Model, ImageUploadError,
+  SubmitError, Submitting, Success, UploadingImage, close_form, open_form,
+  reset_form,
 }
-import frontend/msg.{
-  type Msg, type EditStoreMsg, EditStoreMsg, Increment, Decrement, Reset,
-  Navigate, RouteChanged, SubmitForm, UpdateName, UpdateDescription,
-  UpdateAddress, UpdatePhone, UpdateEmail, StoreLoaded, StoreUpdated,
-  CurrentUserLoaded, CancelEdit, ResetForm,
-}
+import frontend/msg.{type Msg}
+import gleam/float
 import lustre/effect.{type Effect}
-import shared.{
-  type Store, type StoreInput, StoreInput, type AppError, type Option, Some, None,
-  validate_store_input, has_validation_errors, store_to_input, default_store_input,
-}
+import shared.{type CreateDrinkInput, CreateDrinkInput}
 
-/// Main application update function
+/// Main update function
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
-    // Counter messages (legacy)
-    msg.Increment -> #(Model(..model, count: model.count + 1), effect.none())
-    msg.Decrement -> #(Model(..model, count: model.count - 1), effect.none())
-    msg.Reset -> #(Model(..model, count: 0), effect.none())
-
-    // Drink detail messages
-    msg.LoadDrinkDetail(drink_id) -> #(
-      Model(..model, drink_detail: DrinkDetailLoading),
-      effects.load_drink_detail(drink_id),
-    )
-
-    msg.DrinkDetailLoaded(drink, ratings) -> #(
-      Model(..model, drink_detail: DrinkDetailPopulated(drink, None, ratings)),
-      effect.none(),
-    )
-
-    msg.UserRatingLoaded(user_rating) -> {
-      case model.drink_detail {
-        DrinkDetailPopulated(drink, _, other_ratings) -> #(
-          Model(..model, drink_detail: DrinkDetailPopulated(drink, user_rating, other_ratings)),
-          effect.none(),
-        )
-        _ -> #(model, effect.none())
-      }
+    // Counter messages (original)
+    msg.Increment -> {
+      let new_model = Model(..model, count: model.count + 1)
+      #(new_model, effect.none())
     }
-
-    msg.DrinkDetailError(error_msg) -> #(
-      Model(..model, drink_detail: DrinkDetailError(error_msg)),
-      effect.none(),
-    )
-  }
-}
-
-fn handle_edit_store_msg(model: Model, msg: EditStoreMsg) -> #(Model, Effect(Msg)) {
-  case msg {
-    // Form field updates - pattern match on the EditStoreMsg variant directly
-    UpdateName(value) -> {
-      let new_model = update_edit_store_state(model, fn(state) {
-        EditStoreState(
-          ..state,
-          input: StoreInput(..state.input, name: value),
-          validation_errors: validate_store_input(state.input),
-        )
-      })
+    msg.Decrement -> {
+      let new_model = Model(..model, count: model.count - 1)
+      #(new_model, effect.none())
+    }
+    msg.Reset -> {
+      let new_model = Model(..model, count: 0)
       #(new_model, effect.none())
     }
 
-    UpdateDescription(value) -> {
-      let new_model = update_edit_store_state(model, fn(state) {
-        EditStoreState(
-          ..state,
-          input: StoreInput(..state.input, description: value),
-          validation_errors: validate_store_input(state.input),
-        )
-      })
-      #(new_model, effect.none())
+    // Form visibility
+    msg.OpenCreateDrinkForm(store_id) -> {
+      #(open_form(model, store_id), effect.none())
     }
 
-    UpdateAddress(value) -> {
-      let new_model = update_edit_store_state(model, fn(state) {
-        EditStoreState(
-          ..state,
-          input: StoreInput(..state.input, address: value),
-          validation_errors: validate_store_input(state.input),
-        )
-      })
-      #(new_model, effect.none())
+    msg.CloseCreateDrinkForm -> {
+      #(close_form(model), effect.none())
     }
 
-    UpdatePhone(value) -> {
-      let new_model = update_edit_store_state(model, fn(state) {
-        EditStoreState(
-          ..state,
-          input: StoreInput(..state.input, phone: value),
-          validation_errors: validate_store_input(state.input),
-        )
-      })
-      #(new_model, effect.none())
+    // Form field updates
+    msg.UpdateDrinkName(name) -> {
+      let form_data = model.form_data
+      let new_form_data = DrinkFormData(..form_data, name: name)
+      #(Model(..model, form_data: new_form_data), effect.none())
     }
 
-    UpdateEmail(value) -> {
-      let new_model = update_edit_store_state(model, fn(state) {
-        EditStoreState(
-          ..state,
-          input: StoreInput(..state.input, email: value),
-          validation_errors: validate_store_input(state.input),
-        )
-      })
-      #(new_model, effect.none())
+    msg.UpdateTeaType(tea_type) -> {
+      let form_data = model.form_data
+      let new_form_data = DrinkFormData(..form_data, tea_type: tea_type)
+      #(Model(..model, form_data: new_form_data), effect.none())
     }
 
-    // Form submission
-    SubmitForm -> {
-      case model.page {
-        EditStorePage(state) -> {
-          // Validate before submitting
-          let errors = validate_store_input(state.input)
-          case has_validation_errors(errors) {
-            True -> {
-              // Show validation errors, don't submit
-              let new_model = update_edit_store_state(model, fn(s) {
-                EditStoreState(..s, validation_errors: errors)
-              })
-              #(new_model, effect.none())
+    msg.UpdatePrice(price) -> {
+      let form_data = model.form_data
+      let new_form_data = DrinkFormData(..form_data, price: price)
+      #(Model(..model, form_data: new_form_data), effect.none())
+    }
+
+    msg.UpdateDescription(description) -> {
+      let form_data = model.form_data
+      let new_form_data = DrinkFormData(..form_data, description: description)
+      #(Model(..model, form_data: new_form_data), effect.none())
+    }
+
+    msg.UpdateImageFile(file_data) -> {
+      let form_data = model.form_data
+      let new_form_data = DrinkFormData(..form_data, image_file: file_data)
+      #(Model(..model, form_data: new_form_data), effect.none())
+    }
+
+    msg.ToggleIsSignature -> {
+      let form_data = model.form_data
+      let new_form_data = DrinkFormData(
+        ..form_data,
+        is_signature: !form_data.is_signature,
+      )
+      #(Model(..model, form_data: new_form_data), effect.none())
+    }
+
+    // Form submission flow
+    msg.SubmitDrinkForm -> {
+      // Validate required fields
+      case validate_form(model.form_data) {
+        Ok(_) -> {
+          // Start with image upload if present, otherwise submit directly
+          case model.form_data.image_file {
+            "" -> {
+              // No image, submit directly with empty URL
+              let new_model = Model(..model, form_state: Submitting)
+              let input = form_to_input(model.form_data, "")
+              #(new_model, effects.create_drink(model.store_id, input))
             }
-            False -> {
-              // Valid form - submit
-              let new_model = update_edit_store_state(model, fn(s) {
-                EditStoreState(..s, saving: True, save_error: None)
-              })
-              let fx = fx.update_store(state.store_id, state.input)
-              #(new_model, fx)
+            _ -> {
+              // Upload image first
+              let new_model = Model(..model, form_state: UploadingImage)
+              #(new_model, effects.upload_image(model.form_data.image_file))
             }
           }
         }
-        _ -> #(model, effect.none())
+        Error(validation_error) -> {
+          let new_model = Model(..model, form_state: SubmitError(validation_error))
+          #(new_model, effect.none())
+        }
       }
     }
 
-    // API response handlers
-    StoreLoaded(result) -> {
-      case result, model.page {
-        Ok(store), EditStorePage(_) -> {
-          let new_model = update_edit_store_state(model, fn(s) {
-            EditStoreState(
-              ..s,
-              original_store: Some(store),
-              input: store_to_input(store),
-              loading: False,
-              load_error: None,
-            )
-          })
-          #(new_model, effect.none())
-        }
-        Error(error), EditStorePage(_) -> {
-          let error_msg = shared.error_message(error)
-          let new_model = update_edit_store_state(model, fn(s) {
-            EditStoreState(
-              ..s,
-              loading: False,
-              load_error: Some(error_msg),
-            )
-          })
-          #(new_model, effect.none())
-        }
-        _, _ -> #(model, effect.none())
-      }
-    }
-
-    StoreUpdated(result) -> {
-      case result, model.page {
-        Ok(store), EditStorePage(_) -> {
-          // Success - set redirect to store detail page
-          let new_model = update_edit_store_state(model, fn(s) {
-            EditStoreState(
-              ..s,
-              saving: False,
-              redirect_to: Some("/stores/" <> store.id),
-            )
-          })
-          #(new_model, effect.none())
-        }
-        Error(error), EditStorePage(_) -> {
-          let error_msg = shared.error_message(error)
-          let new_model = update_edit_store_state(model, fn(s) {
-            EditStoreState(
-              ..s,
-              saving: False,
-              save_error: Some(error_msg),
-            )
-          })
-          #(new_model, effect.none())
-        }
-        _, _ -> #(model, effect.none())
-      }
-    }
-
-    CurrentUserLoaded(result) -> {
+    msg.ImageUploaded(result) -> {
       case result {
-        Ok(user) -> {
-          #(Model(..model, current_user: Some(user)), effect.none())
+        Ok(image_url) -> {
+          // Image uploaded, now create the drink
+          let new_model = Model(..model, form_state: Submitting)
+          let input = form_to_input(model.form_data, image_url)
+          #(new_model, effects.create_drink(model.store_id, input))
         }
-        Error(_) -> {
-          // User not logged in - will show unauthorized
-          #(model, effect.none())
+        Error(error) -> {
+          let new_model = Model(..model, form_state: ImageUploadError(error))
+          #(new_model, effect.none())
         }
       }
     }
 
-    // Cancel/reset handlers
-    CancelEdit -> {
-      case model.page {
-        EditStorePage(state) -> {
-          case state.original_store {
-            Some(store) -> {
-              // Navigate back to store detail
-              let new_model = update_edit_store_state(model, fn(s) {
-                EditStoreState(..s, redirect_to: Some("/stores/" <> store.id))
-              })
-              #(new_model, effect.none())
-            }
-            None -> {
-              // No original store - navigate to store list
-              let new_model = update_edit_store_state(model, fn(s) {
-                EditStoreState(..s, redirect_to: Some("/stores"))
-              })
-              #(new_model, effect.none())
-            }
-          }
+    msg.DrinkCreated(result) -> {
+      case result {
+        Ok(_) -> {
+          let new_model = Model(..model, form_state: Success)
+          #(new_model, effect.none())
         }
-        _ -> #(model, effect.none())
+        Error(error) -> {
+          let new_model = Model(..model, form_state: SubmitError(error))
+          #(new_model, effect.none())
+        }
       }
     }
 
-    ResetForm -> {
-      case model.page {
-        EditStorePage(state) -> {
-          case state.original_store {
-            Some(store) -> {
-              // Reset to original values
-              let new_model = update_edit_store_state(model, fn(s) {
-                EditStoreState(
-                  ..s,
-                  input: store_to_input(store),
-                  validation_errors: shared.default_validation_errors(),
-                  save_error: None,
-                )
-              })
-              #(new_model, effect.none())
-            }
-            None -> {
-              // No original - clear to defaults
-              let new_model = update_edit_store_state(model, fn(s) {
-                EditStoreState(
-                  ..s,
-                  input: default_store_input(),
-                  validation_errors: shared.default_validation_errors(),
-                  save_error: None,
-                )
-              })
-              #(new_model, effect.none())
-            }
-          }
-        }
-        _ -> #(model, effect.none())
-      }
+    msg.ResetForm -> {
+      #(reset_form(model), effect.none())
     }
   }
 }
 
-/// Initialize effects when entering edit store page
-pub fn init_edit_store(store_id: String) -> Effect(Msg) {
-  // Load store data and current user in parallel
-  effect.batch([
-    fx.fetch_store(store_id),
-    fx.fetch_current_user(),
-  ])
+/// Validate form data
+fn validate_form(form_data: DrinkFormData) -> Result(Nil, String) {
+  case form_data.name {
+    "" -> Error("Name is required")
+    _ -> Ok(Nil)
+  }
+}
+
+/// Convert form data to API input
+fn form_to_input(
+  form_data: DrinkFormData,
+  image_url: String,
+) -> CreateDrinkInput {
+  let price = case float.parse(form_data.price) {
+    Ok(p) -> p
+    Error(_) -> 0.0
+  }
+
+  CreateDrinkInput(
+    name: form_data.name,
+    tea_type: form_data.tea_type,
+    price: price,
+    description: form_data.description,
+    image_url: image_url,
+    is_signature: form_data.is_signature,
+  )
 }

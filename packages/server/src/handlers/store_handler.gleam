@@ -1,15 +1,24 @@
-/// Store HTTP handlers
+/// Store HTTP handlers - merged from unit-4 and unit-5
 
-import gleam/json
-import gleam/string
 import gleam/erlang/process.{type Subject}
+import gleam/int
+import gleam/json
+import gleam/option.{type Option, None, Some}
+import gleam/string
 import services/auth.{extract_user, user_id}
 import services/geocoding.{geocode_address}
-import services/store_service.{type StoreMsg, create_store}
+import services/store_service.{
+  type StoreMsg,
+  create_store,
+  get_store as get_store_from_service,
+}
 import shared.{
   store_to_json,
   decode_create_store_request,
-  InvalidInput, Conflict, InternalError, Unauthorized,
+  InvalidInput,
+  Conflict,
+  InternalError,
+  Unauthorized,
   error_to_json,
 }
 import web/server.{type Request, type Response, json_response}
@@ -44,7 +53,8 @@ pub fn create(
             Error(msg) -> {
               json_response(
                 422,
-                error_to_json(InvalidInput("Failed to geocode address: " <> msg)) |> json.to_string,
+                error_to_json(InvalidInput("Failed to geocode address: " <> msg))
+                  |> json.to_string,
               )
             }
             Ok(coords) -> {
@@ -81,6 +91,27 @@ pub fn create(
           }
         }
       }
+    }
+  }
+}
+
+/// Handle GET /api/stores/:id - Get store by ID
+pub fn get_store(
+  _request: Request,
+  store_actor: Subject(StoreMsg),
+  store_id: String,
+) -> Response {
+  case get_store_from_service(store_actor, store_id) {
+    Ok(store) -> {
+      // Return the store data
+      let body = store_to_json(store) |> json.to_string
+      json_response(200, body)
+    }
+    Error(_) -> {
+      let body =
+        json.object([#("error", json.string("Store not found"))])
+        |> json.to_string
+      json_response(404, body)
     }
   }
 }

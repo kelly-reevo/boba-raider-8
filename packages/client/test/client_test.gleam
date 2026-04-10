@@ -8,6 +8,9 @@ pub fn main() {
 
 pub fn default_model_test() {
   let m = model.default()
-  m.count
-  |> should.equal(0)
+  case m.current_page {
+    model.HomePage -> True
+    _ -> False
+  }
+  |> should.equal(True)
 }

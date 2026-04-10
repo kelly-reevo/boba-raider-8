@@ -1,8 +1,11 @@
 import config.{type Config}
-import data/drink_store
+import db/database
+import db/migrations
 import gleam/erlang/process
 import gleam/io
-import store/ratings_store
+import gleam/list
+import gleam/int
+import gleam/string
 import web/http_server_actor
 import web/rating
 import web/router
@@ -12,18 +15,32 @@ import web/user
 pub fn start(cfg: Config) -> Result(Nil, String) {
   io.println("Starting Supervisor...")
 
-  // Initialize ratings store
-  let ratings_table = ratings_store.init()
-  io.println("Ratings store initialized")
+  // Connect to database
+  io.println("Connecting to database...")
+  let db_result = database.connect(cfg.database_url)
 
-  // Create the HTTP handler with ratings table
-  let handler = router.make_handler(ratings_table)
+  case db_result {
+    Ok(conn) -> {
+      io.println("Database connected")
 
-  // Create the HTTP handler with store access
-  let handler = router.make_handler(store)
+      // Run migrations
+      case migrations.run_migrations(conn, "priv/migrations") {
+        Ok(versions) -> {
+          case versions {
+            [] -> io.println("No pending migrations")
+            _ -> {
+              let applied = versions |> list.map(int.to_string) |> string.join(", ")
+              io.println("Applied migrations: " <> applied)
+            }
+          }
+        }
+        Error(e) -> {
+          io.println("Migration error: " <> migrations.error_to_string(e))
+        }
+      }
 
-      // Create the HTTP handler with store access
-      let handler = router.make_handler(store)
+      // Create the HTTP handler
+      let handler = router.make_handler()
 
       // Start HTTP server actor
       case http_server_actor.start(cfg.port, handler) {
@@ -41,12 +58,9 @@ pub fn start(cfg: Config) -> Result(Nil, String) {
         Error(err) -> Error("Failed to start HTTP server: " <> err)
       }
     }
-  }
-}
-
-fn start_ratings_store() -> Result(RatingsStore, String) {
-  case ratings_store.start() {
-    Ok(store) -> Ok(store)
-    Error(err) -> Error("Failed to start ratings store: " <> err)
+    Error(err) -> {
+      io.println("Failed to connect to database: " <> err)
+      Error("Database connection failed")
+    }
   }
 }

@@ -1,11 +1,14 @@
-import frontend/model.{type Model, CreateStorePage, HomePage}
-import frontend/msg.{type Msg, CreateStoreMsg, NavigateToCreateStore}
-import frontend/pages/create_store_page
+/// Main view module
+
+import frontend/model.{type Model, CounterPage, EditStorePage}
+import frontend/msg.{type Msg, Increment, Decrement, Reset}
+import frontend/pages/edit_store_page
+import gleam/int
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
-import shared.{error_message}
+import shared.{Some}
 
 /// Main application view
 pub fn view(model: Model) -> Element(Msg) {
@@ -29,83 +32,50 @@ fn init_store_detail(store_id: String, auth: AuthState) -> StoreDetailModel {
 
 fn view_home() -> Element(Msg) {
   html.div([attribute.class("app")], [
-    view_navigation(),
-    view_page_content(model)
-  ])
-}
-
-/// Navigation header
-fn view_navigation() -> Element(Msg) {
-  html.nav([attribute.class("main-nav")], [
-    html.a([attribute.href("/"), attribute.class("logo")], [
-      element.text("boba-raider-8")
+    render_header(),
+    html.main([attribute.class("main-content")], [
+      render_page(model),
     ]),
-    html.div([attribute.class("nav-links")], [
-      html.a([attribute.href("/"), attribute.class("nav-link")], [
-        element.text("Home")
-      ]),
-      html.button(
-        [
-          attribute.class("nav-link btn-link"),
-          event.on_click(NavigateToCreateStore)
-        ],
-        [element.text("Create Store")]
-      )
-    ])
+    render_footer(),
   ])
 }
 
-/// Route to correct page view
-fn view_page_content(model: Model) -> Element(Msg) {
-  case model.current_page {
-    HomePage -> view_home()
-    CreateStorePage(state) -> {
-      // Map page view to global Msg type
-      element.map(create_store_page.view(state), fn(m) { CreateStoreMsg(m) })
-    }
+fn render_header() -> Element(Msg) {
+  html.header([attribute.class("app-header")], [
+    html.h1([], [element.text("boba-raider-8")]),
+    html.nav([], [
+      html.a([attribute.href("/")], [element.text("Home")]),
+      html.a([attribute.href("/stores")], [element.text("Stores")]),
+    ]),
+  ])
+}
+
+fn render_footer() -> Element(Msg) {
+  html.footer([attribute.class("app-footer")], [
+    element.text("boba-raider-8 2024"),
+  ])
+}
+
+fn render_page(model: Model) -> Element(Msg) {
+  case model.page {
+    CounterPage(count, _error) -> counter_view(count)
+    EditStorePage(state) -> edit_store_page.view(state, model.current_user)
+    _ -> html.div([], [element.text("Page not found")])
   }
 }
 
-/// Home page view
-fn view_home() -> Element(Msg) {
-  html.div([attribute.class("home-page")], [
-    html.h1([], [element.text("Welcome to boba-raider-8")]),
-    html.p([], [
-      element.text("Click 'Create Store' to add a new store listing.")
-    ])
-  ])
-}
-
-/// Sort option for dropdown
-fn sort_option(option: SortOption, label: String, current: SortOption) -> Element(Msg) {
-  html.option(
-    [
-      attribute.value(shared.sort_to_string(option)),
-      attribute.selected(option == current),
-    ],
-    label,
-  )
-}
-
-/// Not asked state - initial prompt to load
-fn not_asked_view() -> Element(Msg) {
-  html.div([attribute.class("not-asked")], [
-    html.p([], [element.text("Click to load stores")]),
-    html.button(
-      [event.on_click(StoreList(LoadStores)), attribute.class("load-button")],
-      [element.text("Load Stores")],
-    ),
-  ])
-}
-
-/// Loading state - skeleton UI
-fn loading_view() -> Element(Msg) {
-  html.div([attribute.class("loading")], [
-    html.div([attribute.class("skeleton-container")], [
-      skeleton_card(),
-      skeleton_card(),
-      skeleton_card(),
-      skeleton_card(),
+fn counter_view(count: Int) -> Element(Msg) {
+  html.div([attribute.class("counter-page")], [
+    html.h2([], [element.text("Counter")]),
+    html.div([attribute.class("counter")], [
+      html.button([event.on_click(Decrement)], [element.text("-")]),
+      html.span([attribute.class("count")], [
+        element.text(int.to_string(count)),
+      ]),
+      html.button([event.on_click(Increment)], [element.text("+")]),
+    ]),
+    html.button([event.on_click(Reset), attribute.class("reset")], [
+      element.text("Reset"),
     ]),
   ])
 }

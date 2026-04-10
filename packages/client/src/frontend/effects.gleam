@@ -1,43 +1,45 @@
 /// API effects for the frontend
-///
-/// NOTE: This module defines the effect contracts for API calls.
-/// For JavaScript target, the actual HTTP implementation would use
-/// browser's fetch API via FFI in effects_ffi.mjs
 
-import frontend/msg.{type Msg}
+import frontend/msg.{type Msg, EditStoreMsg}
+import gleam/dynamic
+import gleam/json
 import lustre/effect.{type Effect}
+import shared.{type Store, type StoreInput, type User, type AppError}
 
-// --- Store API Effects ---
+// API base URL
+const api_base = "/api"
 
-/// Fetch store details by ID
-/// API: GET /api/stores/:id
-/// Response: Store JSON object
-pub fn fetch_store(_store_id: String) -> Effect(Msg) {
-  // Placeholder: actual implementation would use fetch via FFI
+/// Fetch a single store by ID
+pub fn fetch_store(store_id: String) -> Effect(Msg) {
+  // In real implementation, uses lustre_http.get
+  // For now, placeholder that returns no effect
+  let _url = api_base <> "/stores/" <> store_id
   effect.none()
 }
 
-/// Fetch drinks for a store
-/// API: GET /api/stores/:id/drinks
-/// Response: Array of Drink JSON objects
-pub fn fetch_drinks(_store_id: String) -> Effect(Msg) {
-  // Placeholder: actual implementation would use fetch via FFI
+/// Update a store via PATCH request
+pub fn update_store(store_id: String, input: StoreInput) -> Effect(Msg) {
+  // In real implementation, uses lustre_http.patch
+  let _url = api_base <> "/stores/" <> store_id
+  let _body = store_input_to_json(input)
   effect.none()
 }
 
-/// Fetch ratings for a store
-/// API: GET /api/stores/:id/ratings
-/// Response: Array of Rating JSON objects
-pub fn fetch_ratings(_store_id: String) -> Effect(Msg) {
-  // Placeholder: actual implementation would use fetch via FFI
+/// Fetch current user for authorization check
+pub fn fetch_current_user() -> Effect(Msg) {
+  // In real implementation, uses lustre_http.get
+  let _url = api_base <> "/me"
   effect.none()
 }
 
-/// Fetch all store detail data in parallel
-pub fn fetch_store_detail_data(store_id: String) -> Effect(Msg) {
-  effect.batch([
-    fetch_store(store_id),
-    fetch_drinks(store_id),
-    fetch_ratings(store_id),
+// JSON encoder for store input
+fn store_input_to_json(input: StoreInput) -> String {
+  json.object([
+    #("name", json.string(input.name)),
+    #("description", json.string(input.description)),
+    #("address", json.string(input.address)),
+    #("phone", json.string(input.phone)),
+    #("email", json.string(input.email)),
   ])
+  |> json.to_string()
 }

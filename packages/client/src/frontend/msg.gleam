@@ -1,13 +1,32 @@
 /// Application messages for routing, auth, and form handling
 
-import frontend/pages/create_store_msg.{type Msg as CreateStoreMsg}
+import shared.{type Store, type StoreInput, type AppError, type User}
 
-/// Root application messages
 pub type Msg {
-  // Navigation
-  NavigateToCreateStore
-  NavigateToHome
+  // Original counter messages
+  Increment
+  Decrement
+  Reset
 
-  // Page-specific messages
-  CreateStoreMsg(CreateStoreMsg)
+  // Navigation
+  Navigate(String)
+  RouteChanged(String)
+
+  // Edit Store Page messages
+  EditStoreMsg(EditStoreMsg)
+}
+
+/// Messages specific to edit store form
+pub type EditStoreMsg {
+  UpdateName(String)
+  UpdateDescription(String)
+  UpdateAddress(String)
+  UpdatePhone(String)
+  UpdateEmail(String)
+  SubmitForm
+  StoreLoaded(Result(Store, AppError))
+  StoreUpdated(Result(Store, AppError))
+  CurrentUserLoaded(Result(User, AppError))
+  CancelEdit
+  ResetForm
 }

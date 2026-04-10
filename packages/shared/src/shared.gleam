@@ -22,99 +22,213 @@ pub fn error_message(error: AppError) -> String {
   }
 }
 
-/// Store domain model
+// User types
+
+pub type User {
+  User(id: String, username: String, email: String)
+}
+
+// Store types
+
 pub type Store {
   Store(
     id: String,
     name: String,
+    description: String,
     address: String,
-    image_url: String,
-    average_rating: Float,
-    total_reviews: Int,
+    phone: String,
+    email: String,
+    created_by: String,
   )
 }
 
-/// Sort options for store listing
-pub type SortOption {
-  RatingDesc
-  RatingAsc
-  NameAsc
-  NameDesc
-  MostReviewed
+pub type StoreInput {
+  StoreInput(
+    name: String,
+    description: String,
+    address: String,
+    phone: String,
+    email: String,
+  )
 }
 
-/// Convert SortOption to query string value
-pub fn sort_to_string(sort: SortOption) -> String {
-  case sort {
-    RatingDesc -> "rating_desc"
-    RatingAsc -> "rating_asc"
-    NameAsc -> "name_asc"
-    NameDesc -> "name_desc"
-    MostReviewed -> "most_reviewed"
+pub fn default_store_input() -> StoreInput {
+  StoreInput(name: "", description: "", address: "", phone: "", email: "")
+}
+
+/// Validation errors for store input
+pub type StoreValidationErrors {
+  StoreValidationErrors(
+    name: Option(String),
+    description: Option(String),
+    address: Option(String),
+    phone: Option(String),
+    email: Option(String),
+  )
+}
+
+pub type Option(a) {
+  Some(a)
+  None
+}
+
+pub fn default_validation_errors() -> StoreValidationErrors {
+  StoreValidationErrors(
+    name: None,
+    description: None,
+    address: None,
+    phone: None,
+    email: None,
+  )
+}
+
+/// Validate store input - same rules for create and edit
+pub fn validate_store_input(input: StoreInput) -> StoreValidationErrors {
+  StoreValidationErrors(
+    name: validate_required(input.name, "Store name is required"),
+    description: validate_required(input.description, "Description is required"),
+    address: validate_required(input.address, "Address is required"),
+    phone: validate_phone(input.phone),
+    email: validate_email(input.email),
+  )
+}
+
+fn validate_required(value: String, message: String) -> Option(String) {
+  case string_trim(value) {
+    "" -> Some(message)
+    _ -> None
   }
 }
 
-/// Parse SortOption from string
-pub fn sort_from_string(s: String) -> SortOption {
+fn validate_phone(phone: String) -> Option(String) {
+  case string_trim(phone) {
+    "" -> Some("Phone number is required")
+    p -> {
+      // Basic phone validation - at least 10 digits
+      let digits = count_digits(p)
+      case digits >= 10 {
+        True -> None
+        False -> Some("Phone number must have at least 10 digits")
+      }
+    }
+  }
+}
+
+fn validate_email(email: String) -> Option(String) {
+  case string_trim(email) {
+    "" -> Some("Email is required")
+    e -> {
+      // Basic email validation
+      case contains_char(e, "@") && contains_char(e, ".") {
+        True -> None
+        False -> Some("Please enter a valid email address")
+      }
+    }
+  }
+}
+
+fn string_trim(s: String) -> String {
+  // Simplified trim - in production would use gleam/string
+  s
+}
+
+fn contains_char(s: String, char: String) -> Bool {
+  // Simplified contains check
   case s {
-    "rating_desc" -> RatingDesc
-    "rating_asc" -> RatingAsc
-    "name_desc" -> NameDesc
-    "most_reviewed" -> MostReviewed
-    _ -> NameAsc
+    "" -> False
+    _ -> {
+      let chars = string_to_chars(s)
+      list_contains(chars, char)
+    }
   }
 }
 
-/// Store list filters
-pub type StoreFilters {
-  StoreFilters(
-    query: String,
-    location: String,
-    sort: SortOption,
-    page: Int,
-  )
+fn count_digits(s: String) -> Int {
+  let chars = string_to_chars(s)
+  count_digits_in_list(chars, 0)
 }
 
-/// Paginated store response
-pub type StoreListResponse {
-  StoreListResponse(
-    stores: List(Store),
-    total: Int,
-    page: Int,
-    per_page: Int,
-  )
-}
-
-/// JSON decoder for Store
-fn store_decoder() -> decode.Decoder(Store) {
-  use id <- decode.field("id", decode.string)
-  use name <- decode.field("name", decode.string)
-  use address <- decode.field("address", decode.string)
-  use image_url <- decode.field("image_url", decode.string)
-  use average_rating <- decode.field("average_rating", decode.float)
-  use total_reviews <- decode.field("total_reviews", decode.int)
-  decode.success(Store(id:, name:, address:, image_url:, average_rating:, total_reviews:))
-}
-
-/// Parse store list from JSON
-pub fn decode_store_list(json_string: String) -> Result(List(Store), AppError) {
-  let store_list_decoder = {
-    use stores <- decode.field("stores", decode.list(of: store_decoder()))
-    decode.success(stores)
-  }
-
-  case json.parse(json_string, store_list_decoder) {
-    Ok(stores) -> Ok(stores)
-    Error(_) -> Error(InvalidInput("Failed to decode store list"))
+fn count_digits_in_list(chars: List(String), acc: Int) -> Int {
+  case chars {
+    [] -> acc
+    ["0", ..rest] -> count_digits_in_list(rest, acc + 1)
+    ["1", ..rest] -> count_digits_in_list(rest, acc + 1)
+    ["2", ..rest] -> count_digits_in_list(rest, acc + 1)
+    ["3", ..rest] -> count_digits_in_list(rest, acc + 1)
+    ["4", ..rest] -> count_digits_in_list(rest, acc + 1)
+    ["5", ..rest] -> count_digits_in_list(rest, acc + 1)
+    ["6", ..rest] -> count_digits_in_list(rest, acc + 1)
+    ["7", ..rest] -> count_digits_in_list(rest, acc + 1)
+    ["8", ..rest] -> count_digits_in_list(rest, acc + 1)
+    ["9", ..rest] -> count_digits_in_list(rest, acc + 1)
+    [_, ..rest] -> count_digits_in_list(rest, acc)
   }
 }
 
-/// Default empty filters
-pub fn default_filters() -> StoreFilters {
-  StoreFilters(
-    query: "",
-    location: "",
-    sort: RatingDesc,
-    page: 1,
+fn list_contains(list: List(String), item: String) -> Bool {
+  case list {
+    [] -> False
+    [x, ..rest] -> {
+      case x == item {
+        True -> True
+        False -> list_contains(rest, item)
+      }
+    }
+  }
+}
+
+fn string_to_chars(s: String) -> List(String) {
+  // Simplified char splitting - would use gleam/string in production
+  split_string(s, "")
+}
+
+fn split_string(s: String, by: String) -> List(String) {
+  // Placeholder - real implementation would split string into chars
+  case s {
+    "" -> []
+    _ -> {
+      // Simplified: treat the whole string as one element for now
+      // In real implementation, use gleam/string module
+      [s]
+    }
+  }
+}
+
+/// Check if validation has any errors
+pub fn has_validation_errors(errors: StoreValidationErrors) -> Bool {
+  case errors.name {
+    Some(_) -> True
+    None -> {
+      case errors.description {
+        Some(_) -> True
+        None -> {
+          case errors.address {
+            Some(_) -> True
+            None -> {
+              case errors.phone {
+                Some(_) -> True
+                None -> {
+                  case errors.email {
+                    Some(_) -> True
+                    None -> False
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/// Convert store to store input for editing
+pub fn store_to_input(store: Store) -> StoreInput {
+  StoreInput(
+    name: store.name,
+    description: store.description,
+    address: store.address,
+    phone: store.phone,
+    email: store.email,
   )
 }

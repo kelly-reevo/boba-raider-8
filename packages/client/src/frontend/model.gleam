@@ -1,9 +1,17 @@
 /// Application state
 
+import frontend/components/store_rating_form.{type StoreRatingFormModel}
+import gleam/option.{type Option, None}
+
 pub type Model {
-  Model(count: Int, error: String)
+  Model(
+    count: Int,
+    error: String,
+    // Store rating form state
+    rating_form: Option(StoreRatingFormModel),
+  )
 }
 
 pub fn default() -> Model {
-  Model(count: 0, error: "")
+  Model(count: 0, error: "", rating_form: None)
 }

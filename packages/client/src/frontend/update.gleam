@@ -1,86 +1,59 @@
-/// State updates and route guards
-
-import frontend/effects
-import frontend/model.{
-  type Model, Model, AuthAuthenticated, AuthUnauthenticated, None, Some,
-  can_access_route, is_authenticated,
-}
+import frontend/model.{type Model, Error, Model, Toast}
 import frontend/msg.{type Msg}
-import frontend/route.{type Route, Login, login_redirect_path, to_path, is_protected}
+import gleam/int
+import gleam/list
+import gleam/option.{None, Some}
 import lustre/effect.{type Effect}
 
 /// Main update function
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
-    // Route changes with authentication guard
-    msg.RouteChanged(route) -> handle_route_change(model, route)
+    msg.Increment -> #(Model(..model, count: model.count + 1), effect.none())
+    msg.Decrement -> #(Model(..model, count: model.count - 1), effect.none())
+    msg.Reset -> #(Model(..model, count: 0), effect.none())
 
-    // Programmatic navigation with auth check
-    msg.NavigateTo(route) -> handle_navigate_to(model, route)
-
-    // Authentication state updates
-    msg.AuthStateChanged(auth_state) -> {
-      let new_model = Model(..model, auth_state: auth_state)
+    // Toast notifications
+    msg.ShowToast(message, toast_type, duration_ms) -> {
+      let toast_id = "toast-" <> int.to_string(model.next_toast_id)
+      let new_toast = Toast(toast_id, message, toast_type, duration_ms)
+      let new_model =
+        Model(
+          ..model,
+          toasts: list.append(model.toasts, [new_toast]),
+          next_toast_id: model.next_toast_id + 1,
+        )
       #(new_model, effect.none())
     }
 
-    // Login flow
-    msg.LoginRequested(username, password) -> {
-      #(model, effects.login(username, password))
+    msg.RemoveToast(toast_id) -> {
+      let filtered_toasts =
+        list.filter(model.toasts, fn(t) { t.id != toast_id })
+      #(Model(..model, toasts: filtered_toasts), effect.none())
     }
 
-    msg.LoginSucceeded(user_id, username) -> {
-      let auth_state = AuthAuthenticated(user_id, username)
-      let redirect = model.post_login_redirect
-      let new_model = Model(
-        ..model,
-        auth_state: auth_state,
-        post_login_redirect: None,
-      )
-      // Redirect to saved path or home after login
-      let effect = case redirect {
-        Some(path) -> effects.navigate_to(path)
-        None -> effects.navigate_to("/")
-      }
-      #(new_model, effect)
+    msg.ClearAllToasts -> #(Model(..model, toasts: []), effect.none())
+
+    // Global error handling
+    msg.SetGlobalError(error) -> {
+      #(Model(..model, global_error: Some(error)), effect.none())
     }
 
-    msg.LoginFailed(_error) -> {
-      // Keep model unchanged, error displayed via auth state
-      #(model, effect.none())
-    }
+    msg.ClearGlobalError -> #(Model(..model, global_error: None), effect.none())
 
-    // Logout flow
-    msg.LogoutRequested -> {
-      #(model, effects.logout())
-    }
-
-    msg.LogoutCompleted -> {
-      let new_model = Model(..model, auth_state: AuthUnauthenticated)
-      // Redirect to home after logout
-      #(new_model, effects.navigate_to("/"))
-    }
-
-    // Auth status check on init
-    msg.CheckAuthStatus -> {
-      #(model, effects.check_auth_status())
-    }
-
-    msg.AuthStatusReturned(result) -> {
-      let auth_state = case result {
-        Ok(state) -> state
-        Error(_) -> AuthUnauthenticated
-      }
-      #(Model(..model, auth_state: auth_state), effect.none())
-    }
-
-    // Redirect path management
-    msg.SetPostLoginRedirect(path) -> {
-      #(Model(..model, post_login_redirect: Some(path)), effect.none())
-    }
-
-    msg.ClearPostLoginRedirect -> {
-      #(Model(..model, post_login_redirect: None), effect.none())
+    // API error handling - creates both toast and global error
+    msg.ApiErrorOccurred(operation, details) -> {
+      let error_message = operation <> " failed: " <> details
+      let toast_id = "toast-" <> int.to_string(model.next_toast_id)
+      let error_toast =
+        Toast(toast_id, error_message, Error, 5000)
+      let new_model =
+        Model(
+          ..model,
+          global_error: Some(error_message),
+          toasts: list.append(model.toasts, [error_toast]),
+          next_toast_id: model.next_toast_id + 1,
+        )
+      #(new_model, effect.none())
     }
   }
 }

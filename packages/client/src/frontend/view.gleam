@@ -1,15 +1,8 @@
-/// View functions for all routes with loading/empty/error/populated states
-
-import frontend/model.{
-  type Model, type PageData, AuthAuthenticated, AuthLoading,
-  AuthUnauthenticated, PageEmpty, PageError, PageLoading, PagePopulated,
-  is_authenticated, Some, None,
-}
-import frontend/msg.{type Msg, LoginRequested, NavigateTo, LogoutRequested}
-import frontend/route.{
-  Home, Login, Profile, Register, StoreCreate, StoreDetail,
-  StoreEdit, StoreList, DrinkDetail, DrinkEdit, NotFound,
-}
+import gleam/int
+import frontend/components/error_boundary
+import frontend/components/toast
+import frontend/model.{type Model, Error, Info, Success, Warning}
+import frontend/msg.{type Msg, ApiErrorOccurred, ShowToast}
 import lustre/attribute
 import lustre/element.{type Element, text}
 import lustre/element/html
@@ -38,174 +31,56 @@ fn init_store_detail(store_id: String, auth: AuthState) -> StoreDetailModel {
 
 fn view_home() -> Element(Msg) {
   html.div([attribute.class("app")], [
-    view_navbar(model),
-    html.main([attribute.class("main-content")], [
-      view_current_route(model),
-    ]),
+    // Toast container - fixed position overlay for all notifications
+    toast.toast_container(model.toasts),
 
-    // Demo: Button to open rating form
-    html.div([attribute.class("demo-section")], [
-      html.h2([], [element.text("Store Rating Form Demo")]),
-      html.button(
-        [event.on_click(msg.RatingFormOpened("store-123", Modal))],
-        [element.text("Open Rating Form (Modal)")],
-      ),
-      html.button(
-        [event.on_click(msg.RatingFormOpened("store-123", Inline))],
-        [element.text("Show Rating Form (Inline)")],
-      ),
-    ]),
+    // Error boundary wraps main content
+    error_boundary.error_boundary(model, [
+      html.h1([], [element.text("boba-raider-8")]),
 
-    // Render rating form if active
-    case model.rating_form {
-      Some(form_model) -> store_rating_form.view(form_model)
-      None -> element.none()
-    },
-  ])
-}
+      // Demo controls for testing error handling
+      html.div([attribute.class("demo-controls")], [
+        html.h2([], [element.text("Error Handling Demo")]),
+        html.div([attribute.class("demo-buttons")], [
+          html.button(
+            [event.on_click(ShowToast("Operation successful!", Success, 3000))],
+            [element.text("Show Success")],
+          ),
+          html.button(
+            [event.on_click(ShowToast("Something went wrong", Error, 5000))],
+            [element.text("Show Error")],
+          ),
+          html.button(
+            [event.on_click(ShowToast("Please check your input", Warning, 4000))],
+            [element.text("Show Warning")],
+          ),
+          html.button(
+            [event.on_click(ShowToast("New data available", Info, 3000))],
+            [element.text("Show Info")],
+          ),
+          html.button(
+            [
+              event.on_click(ApiErrorOccurred(
+                "Save",
+                "Network connection failed",
+              )),
+            ],
+            [element.text("Trigger API Error")],
+          ),
+        ]),
+      ]),
 
-/// Truncate address to max length with ellipsis
-fn truncate_address(address: String, max_length: Int) -> String {
-  case string.length(address) > max_length {
-    True -> string.slice(address, 0, max_length) <> "..."
-    False -> address
-  }
-}
-
-/// Format rating to 1 decimal place
-fn format_rating(rating: Float) -> String {
-  let rounded = float.round(rating *. 10.0)
-  let whole = rounded / 10
-  let decimal = rounded % 10
-  int.to_string(whole) <> "." <> int.to_string(decimal)
-}
-
-/// Star rating display
-fn star_rating(rating: Float) -> Element(Msg) {
-  let full_stars = float.round(rating) / 2
-  let has_half_star = float.round(rating) % 2 == 1
-
-  // Build full stars
-  let full_star_elements = list.repeat(element.text("★"), full_stars)
-
-  // Add half star if needed
-  let with_half = case has_half_star {
-    True -> list.append(full_star_elements, [element.text("½")])
-    False -> full_star_elements
-  }
-
-  // Add empty stars
-  let empty_count = 5 - full_stars - case has_half_star { True -> 1 False -> 0 }
-  let empty_star_elements = list.repeat(element.text("☆"), empty_count)
-  let all_stars = list.append(with_half, empty_star_elements)
-
-  // Wrap each star in a span
-  let star_elements = list.map(all_stars, fn(star) {
-    html.span([attribute.class("star")], [star])
-  })
-
-  html.span([attribute.class("star-rating")], star_elements)
-}
-
-/// Pagination controls
-fn pagination(has_more: Bool, current_page: Int) -> Element(Msg) {
-  html.div([attribute.class("pagination")], [
-    case current_page > 1 {
-      True -> html.button(
-        [
-          event.on_click(StoreList(PageChanged(current_page - 1))),
-          attribute.class("page-button prev"),
-        ],
-        [element.text("← Previous")],
-      )
-      False -> html.button(
-        [
-          attribute.disabled(True),
-          attribute.class("page-button prev disabled"),
-        ],
-        [element.text("← Previous")],
-      )
-    },
-    html.span([attribute.class("page-info")], [
-      element.text("Page " <> int.to_string(current_page)),
-    ]),
-    case has_more {
-      True -> html.button(
-        [
-          event.on_click(StoreList(PageChanged(current_page + 1))),
-          attribute.class("page-button next"),
-        ],
-        [element.text("Next →")],
-      )
-      False -> html.button(
-        [
-          attribute.disabled(True),
-          attribute.class("page-button next disabled"),
-        ],
-        [element.text("Next →")],
-      )
-    },
-  ])
-}
-
-/// Render the appropriate page based on current route
-fn render_route(model: Model) -> Element(Msg) {
-  case model.route {
-    route if route == Home -> home_page(model)
-    route if route == Login -> login_page(model)
-    route if route == Register -> register_page(model)
-    _ -> home_page(model)
-  }
-}
-
-/// Navigation bar with auth-aware links
-fn navigation_bar(model: Model) -> Element(Msg) {
-  html.nav([attribute.class("navbar")], [
-    html.div([attribute.class("nav-brand")], [
-      html.a(
-        [attribute.href("#/"), event.on_click(NavigateTo(Home))],
-        [element.text("BobaRaider")],
-      ),
-    ]),
-    html.div([attribute.class("nav-links")], [
-      case model.auth {
-        LoggedIn(user, _) -> {
-          // Logged in: show user name and logout
-          html.div([attribute.class("auth-section")], [
-            html.span([attribute.class("user-name")], [
-              element.text(user.username),
-            ]),
-            html.button(
-              [
-                attribute.class("btn btn-secondary"),
-                event.on_click(LogoutRequested),
-              ],
-              [element.text("Logout")],
-            ),
-          ])
-        }
-        _ -> {
-          // Not logged in: show login/register links
-          html.div([attribute.class("auth-section")], [
-            html.a(
-              [
-                attribute.href("#/login"),
-                event.on_click(NavigateTo(Login)),
-                attribute.class("nav-link"),
-              ],
-              [element.text("Sign In")],
-            ),
-            html.a(
-              [
-                attribute.href("#/register"),
-                event.on_click(NavigateTo(Register)),
-                attribute.class("nav-link btn btn-primary"),
-              ],
-              [element.text("Sign Up")],
-            ),
-          ])
-        }
-      },
+      // Original counter
+      html.div([attribute.class("counter")], [
+        html.button([event.on_click(msg.Decrement)], [element.text("-")]),
+        html.span([attribute.class("count")], [
+          element.text("Count: " <> int.to_string(model.count)),
+        ]),
+        html.button([event.on_click(msg.Increment)], [element.text("+")]),
+      ]),
+      html.button([event.on_click(msg.Reset), attribute.class("reset")], [
+        element.text("Reset"),
+      ]),
     ]),
   ])
 }

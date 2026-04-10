@@ -1,5 +1,4 @@
-import gleam/option.{type Option}
-import shared.{type Drink, type Rating}
+import frontend/model.{type ToastType}
 
 /// Application messages
 
@@ -8,28 +7,19 @@ import frontend/route.{type Route}
 
 /// All possible messages in the application
 pub type Msg {
-  /// Route changed (from URL)
-  RouteChanged(route: Route)
-  /// Navigate to a route programmatically
-  NavigateTo(route: Route)
-  /// Authentication state changed
-  AuthStateChanged(auth_state: AuthState)
-  /// Login requested
-  LoginRequested(username: String, password: String)
-  /// Login succeeded
-  LoginSucceeded(user_id: String, username: String)
-  /// Login failed
-  LoginFailed(error: String)
-  /// Logout requested
-  LogoutRequested
-  /// Logout completed
-  LogoutCompleted
-  /// Check auth status on init
-  CheckAuthStatus
-  /// Auth status check returned
-  AuthStatusReturned(result: Result(AuthState, String))
-  /// Store redirect path for after login
-  SetPostLoginRedirect(path: String)
-  /// Clear redirect path
-  ClearPostLoginRedirect
+  Increment
+  Decrement
+  Reset
+
+  // Toast notifications
+  ShowToast(message: String, toast_type: ToastType, duration_ms: Int)
+  RemoveToast(toast_id: String)
+  ClearAllToasts
+
+  // Global error handling
+  SetGlobalError(error: String)
+  ClearGlobalError
+
+  // API error handling
+  ApiErrorOccurred(operation: String, details: String)
 }

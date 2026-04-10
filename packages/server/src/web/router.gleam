@@ -3,8 +3,7 @@ import gleam/int
 import gleam/json
 import gleam/option.{None, Some}
 import gleam/string
-import store/ratings_store.{type RatingsTable}
-import web/ratings_handler
+import user/user_handler
 import web/server.{type Request, type Response}
 import web/static
 
@@ -17,7 +16,7 @@ fn route(request: Request, table: RatingsTable) -> Response {
     "GET", "/" -> static_index()
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
-    "DELETE", path -> route_delete(path, request, table)
+    "GET", "/api/users/me" -> user_handler.get_current_user(request)
     "GET", path -> route_get(path)
     _, _ -> not_found()
   }

@@ -3,8 +3,10 @@ import data/drink_store
 import gleeunit
 import gleeunit/should
 import config
-import db/drink_store.{DrinkRecord, Rating, StoreRecord}
+import gleam/list
 import gleam/option.{None, Some}
+import shared
+import web/store
 
 pub fn main() {
   gleeunit.main()
@@ -16,143 +18,119 @@ pub fn config_load_test() {
   |> should.equal(3000)
 }
 
-pub fn get_drink_by_id_found_test() {
-  // Set up test data
-  let store = drink_store.new_store()
+// ============== Store Domain Tests ==============
 
-  let drink = DrinkRecord(
-    id: "drink-123",
-    store_id: "store-456",
-    name: "Classic Milk Tea",
-    tea_type: "Black",
-    price: Some(5.50),
-    description: Some("Traditional milk tea"),
-    image_url: None,
-    is_signature: True,
-    created_at: "2024-01-15T10:00:00Z",
-  )
+pub fn tea_type_from_string_test() {
+  store.tea_type_from_string("black")
+  |> should.equal(Ok(store.Black))
 
-  let store_record = StoreRecord(
-    id: "store-456",
-    name: "Boba Paradise",
-    address: "123 Tea Lane",
-  )
+  store.tea_type_from_string("BLACK")
+  |> should.equal(Ok(store.Black))
 
-  let rating1 = Rating(
-    id: "rating-1",
-    drink_id: "drink-123",
-    overall: Some(4.5),
-    sweetness: Some(3.0),
-    texture: Some(4.0),
-    tea_strength: Some(5.0),
-  )
+  store.tea_type_from_string("green")
+  |> should.equal(Ok(store.Green))
 
-  let rating2 = Rating(
-    id: "rating-2",
-    drink_id: "drink-123",
-    overall: Some(3.5),
-    sweetness: Some(2.0),
-    texture: Some(3.5),
-    tea_strength: Some(4.0),
-  )
+  store.tea_type_from_string("matcha")
+  |> should.equal(Ok(store.Matcha))
+}
 
-  // Populate store
-  let store = drink_store.insert_store(store, store_record)
-  let store = drink_store.insert_drink(store, drink)
-  let store = drink_store.insert_rating(store, rating1)
-  let store = drink_store.insert_rating(store, rating2)
-
-  // Retrieve drink
-  let result = drink_store.get_drink_by_id(store, "drink-123")
-
-  // Verify
+pub fn tea_type_from_string_invalid_test() {
+  let result = store.tea_type_from_string("invalid")
   case result {
-    Some(drink_details) -> {
-      drink_details.id |> should.equal("drink-123")
-      drink_details.name |> should.equal("Classic Milk Tea")
-      drink_details.store.name |> should.equal("Boba Paradise")
+    Error(shared.InvalidInput(_)) -> True
+    _ -> False
+  }
+  |> should.be_true()
+}
 
-      // Check averages: overall = (4.5 + 3.5) / 2 = 4.0
-      case drink_details.average_rating.overall {
-        Some(avg) -> avg |> should.equal(4.0)
-        None -> should.fail()
-      }
-
-      // Check averages: sweetness = (3.0 + 2.0) / 2 = 2.5
-      case drink_details.average_rating.sweetness {
-        Some(avg) -> avg |> should.equal(2.5)
-        None -> should.fail()
-      }
+pub fn get_store_existing_test() {
+  let result = store.get_store("store-1")
+  case result {
+    Ok(store) -> {
+      store.id |> should.equal("store-1")
+      store.name |> should.equal("Boba Paradise")
     }
-    None -> should.fail()
+    Error(_) -> should.fail()
   }
 }
 
-pub fn get_drink_by_id_not_found_test() {
-  let store = drink_store.new_store()
-
-  let result = drink_store.get_drink_by_id(store, "nonexistent")
-
-  result |> should.equal(None)
-}
-
-pub fn get_drink_by_id_missing_store_test() {
-  // Drink exists but store doesn't - should return None
-  let store = drink_store.new_store()
-
-  let drink = DrinkRecord(
-    id: "drink-123",
-    store_id: "store-missing",
-    name: "Classic Milk Tea",
-    tea_type: "Black",
-    price: None,
-    description: None,
-    image_url: None,
-    is_signature: False,
-    created_at: "2024-01-15T10:00:00Z",
-  )
-
-  let store = drink_store.insert_drink(store, drink)
-
-  let result = drink_store.get_drink_by_id(store, "drink-123")
-
-  result |> should.equal(None)
-}
-
-pub fn get_drink_no_ratings_test() {
-  // Drink exists with no ratings - averages should be null
-  let store = drink_store.new_store()
-
-  let drink = DrinkRecord(
-    id: "drink-789",
-    store_id: "store-456",
-    name: "Green Tea",
-    tea_type: "Green",
-    price: Some(4.00),
-    description: None,
-    image_url: None,
-    is_signature: False,
-    created_at: "2024-01-15T10:00:00Z",
-  )
-
-  let store_record = StoreRecord(
-    id: "store-456",
-    name: "Boba Paradise",
-    address: "123 Tea Lane",
-  )
-
-  let store = drink_store.insert_store(store, store_record)
-  let store = drink_store.insert_drink(store, drink)
-
-  let result = drink_store.get_drink_by_id(store, "drink-789")
-
+pub fn get_store_not_found_test() {
+  let result = store.get_store("non-existent")
   case result {
-    Some(drink_details) -> {
-      drink_details.average_rating.overall |> should.equal(None)
-      drink_details.average_rating.sweetness |> should.equal(None)
-      drink_details.average_rating.texture |> should.equal(None)
-      drink_details.average_rating.tea_strength |> should.equal(None)
+    Error(shared.NotFound(_)) -> True
+    _ -> False
+  }
+  |> should.be_true()
+}
+
+pub fn list_drinks_success_test() {
+  let result = store.list_drinks("store-1", None, store.RatingDesc, 1, 10)
+  case result {
+    Ok(#(drinks, meta)) -> {
+      // store-1 has 3 drinks
+      meta.total |> should.equal(3)
+      meta.page |> should.equal(1)
+      list.length(drinks) |> should.equal(3)
     }
-    None -> should.fail()
+    Error(_) -> should.fail()
+  }
+}
+
+pub fn list_drinks_store_not_found_test() {
+  let result = store.list_drinks("non-existent", None, store.RatingDesc, 1, 10)
+  case result {
+    Error(shared.NotFound(_)) -> True
+    _ -> False
+  }
+  |> should.be_true()
+}
+
+pub fn list_drinks_filter_by_tea_type_test() {
+  let result = store.list_drinks("store-1", Some(store.Black), store.RatingDesc, 1, 10)
+  case result {
+    Ok(#(drinks, meta)) -> {
+      meta.total |> should.equal(1)
+      case drinks {
+        [drink] -> drink.name |> should.equal("Classic Milk Tea")
+        _ -> should.fail()
+      }
+    }
+    Error(_) -> should.fail()
+  }
+}
+
+pub fn list_drinks_sort_by_name_test() {
+  let result = store.list_drinks("store-1", None, store.Name, 1, 10)
+  case result {
+    Ok(#(drinks, _)) -> {
+      case drinks {
+        [first, ..] -> first.name |> should.equal("Classic Milk Tea")
+        _ -> should.fail()
+      }
+    }
+    Error(_) -> should.fail()
+  }
+}
+
+pub fn list_drinks_pagination_test() {
+  let result = store.list_drinks("store-1", None, store.Name, 1, 2)
+  case result {
+    Ok(#(drinks, meta)) -> {
+      meta.total |> should.equal(3)
+      meta.total_pages |> should.equal(2)
+      list.length(drinks) |> should.equal(2)
+    }
+    Error(_) -> should.fail()
+  }
+}
+
+pub fn list_drinks_pagination_second_page_test() {
+  let result = store.list_drinks("store-1", None, store.Name, 2, 2)
+  case result {
+    Ok(#(drinks, meta)) -> {
+      meta.page |> should.equal(2)
+      list.length(drinks) |> should.equal(1)
+    }
+    Error(_) -> should.fail()
   }
 }

@@ -3,8 +3,8 @@ import gleam/erlang/process.{type Subject}
 import gleam/json
 import gleam/option
 import gleam/string
-import web/handlers/drink_handler
-import web/server.{type Request, type Response, json_response}
+import web/handlers/store_handlers
+import web/server.{type Request, type Response}
 import web/static
 import db/drink_store
 import db/store_actor.{type StoreActor}
@@ -25,28 +25,23 @@ fn route(request: Request, maybe_store: option.Option(StoreActor)) -> Response {
     "GET", "/" -> static.serve_index()
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
-    "GET", "/api/drinks/" <> id -> get_drink_handler(id, maybe_store)
-    "GET", path -> route_get(path)
+    "GET", path -> route_get(request, path)
     _, _ -> not_found()
   }
 }
 
-fn route_post(
-  path: String,
-  request: Request,
-  drink_store: Subject(StoreMessage),
-) -> Response {
-  // Check for drink routes: /api/stores/:store_id/drinks
-  case string.starts_with(path, "/api/stores/")
-    && string.ends_with(path, "/drinks") {
-    True -> drink_handler.create(request, drink_store)
-    False -> not_found()
+fn route_get(request: Request, path: String) -> Response {
+  case string.starts_with(path, "/static/") {
+    True -> static.serve(path)
+    False -> route_api_get(request, path)
   }
 }
 
-fn route_get(path: String) -> Response {
-  case string.starts_with(path, "/static/") {
-    True -> static.serve(path)
+fn route_api_get(request: Request, path: String) -> Response {
+  // Check for /api/stores/:store_id/drinks pattern
+  case string.starts_with(path, "/api/stores/")
+    && string.ends_with(path, "/drinks") {
+    True -> store_handlers.list_drinks_handler(request)
     False -> not_found()
   }
 }

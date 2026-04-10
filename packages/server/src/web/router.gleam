@@ -1,43 +1,38 @@
+import data/drink_store.{type StoreMessage}
 import gleam/erlang/process.{type Subject}
 import gleam/json
 import gleam/option.{type Option, None, Some}
 import gleam/string
-import store/store_actor.{type StoreMessage}
-import web/handlers/store_handler
-import web/server.{type Request, type Response}
+import web/handlers/drink_handler
+import web/server.{type Request, type Response, json_response}
 import web/static
 import web/user_store.{type UserStore}
 
-pub fn make_handler(
-  store_actor: Subject(StoreMessage),
-) -> fn(Request) -> Response {
-  fn(request: Request) { route(request, store_actor) }
+pub fn make_handler(drink_store: Subject(StoreMessage)) -> fn(Request) -> Response {
+  fn(request: Request) { route(request, drink_store) }
 }
 
-fn route(request: Request, store_actor: Subject(StoreMessage)) -> Response {
+fn route(request: Request, drink_store: Subject(StoreMessage)) -> Response {
   case request.method, request.path {
     "GET", "/" -> static.serve_index()
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
-
-    // Store API routes
-    "DELETE", path -> {
-      case is_store_path(path) {
-        True -> store_handler.delete_store_handler(request, store_actor)
-        False -> not_found()
-      }
-    }
-
+    "POST", path -> route_post(path, request, drink_store)
     "GET", path -> route_get(path)
     _, _ -> not_found()
   }
 }
 
-// Check if path matches /api/stores/:id pattern
-fn is_store_path(path: String) -> Bool {
-  case string.split(path, "/") {
-    ["", "api", "stores", _] -> True
-    _ -> False
+fn route_post(
+  path: String,
+  request: Request,
+  drink_store: Subject(StoreMessage),
+) -> Response {
+  // Check for drink routes: /api/stores/:store_id/drinks
+  case string.starts_with(path, "/api/stores/")
+    && string.ends_with(path, "/drinks") {
+    True -> drink_handler.create(request, drink_store)
+    False -> not_found()
   }
 }
 
@@ -49,7 +44,7 @@ fn route_get(path: String) -> Response {
 }
 
 fn health_handler() -> Response {
-  server.json_response(
+  json_response(
     200,
     json.object([#("status", json.string("ok"))])
     |> json.to_string,
@@ -207,7 +202,7 @@ fn extract_quoted_string_impl(s: String, acc: String) -> Result(String, Nil) {
 }
 
 fn not_found() -> Response {
-  server.json_response(
+  json_response(
     404,
     json.object([#("error", json.string("Not found"))])
     |> json.to_string,

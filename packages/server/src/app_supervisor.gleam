@@ -1,6 +1,6 @@
 import config.{type Config}
-import gleam/erlang/process.{type Subject}
-import gleam/int
+import data/drink_store
+import gleam/erlang/process
 import gleam/io
 import gleam/otp/actor
 import store/store_actor.{type StoreMessage}
@@ -11,12 +11,12 @@ import web/user_store
 pub fn start(cfg: Config) -> Result(Nil, String) {
   io.println("Starting supervisor...")
 
-  // Start the store actor for in-memory persistence
-  let store_init = store_actor.new()
-  let store_actor_result =
-    actor.new(store_init)
-    |> actor.on_message(fn(state, msg) { store_actor.handle_message(state, msg) })
-    |> actor.start()
+  // Start the drink store actor
+  let drink_store = drink_store.start()
+  io.println("Drink store started")
+
+  // Create the HTTP handler with drink store
+  let handler = router.make_handler(drink_store)
 
   case store_actor_result {
     Error(_) -> Error("Failed to start store actor")

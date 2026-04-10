@@ -1,16 +1,12 @@
+import config
+import data/drink_store
 import gleeunit
 import gleeunit/should
 import gleam/dict
-import gleam/dynamic/decode
-import gleam/json
-import gleam/list
-import gleam/string
-import config
-import users
-import web/auth/jwt
-import web/auth/login
-import web/server.{Request}
-import web/user_store
+import gleam/option.{None, Some}
+import shared.{type CreateDrinkInput, type Drink, Black, CreateDrinkInput, Green, Oolong}
+import web/handlers/drink_handler
+import web/server
 
 pub fn main() {
   gleeunit.main()
@@ -22,332 +18,158 @@ pub fn config_load_test() {
   |> should.equal(3000)
 }
 
-// User registration tests
+// Drink store tests
 
-pub fn parse_register_request_valid_test() {
-  let json = "{\"email\":\"test@example.com\",\"username\":\"testuser\",\"password\":\"Password123\"}"
-  let result = users.parse_register_request(json)
+pub fn drink_store_create_test() {
+  let store = drink_store.start()
+
+  let input =
+    CreateDrinkInput(
+      name: "Oolong Milk Tea",
+      tea_type: Oolong,
+      price: Some(5.50),
+      description: Some("Classic oolong with milk"),
+      image_url: None,
+      is_signature: True,
+    )
+
+  let result = drink_store.create_drink(store, "store_123", input)
 
   case result {
-    Ok(req) -> {
-      req.email |> should.equal("test@example.com")
-      req.username |> should.equal("testuser")
-      req.password |> should.equal("Password123")
+    Ok(drink) -> {
+      drink.name |> should.equal("Oolong Milk Tea")
+      drink.store_id |> should.equal("store_123")
+      drink.price |> should.equal(Some(5.50))
+      drink.is_signature |> should.equal(True)
     }
     Error(_) -> should.fail()
   }
 }
 
-pub fn parse_register_request_missing_field_test() {
-  let json = "{\"email\":\"test@example.com\",\"username\":\"testuser\"}"
-  let result = users.parse_register_request(json)
+pub fn drink_store_duplicate_name_test() {
+  let store = drink_store.start()
 
-  result |> should.be_error()
-}
-
-pub fn validate_registration_valid_test() {
-  let req = users.RegisterRequest(
-    email: "test@example.com",
-    username: "testuser",
-    password: "Password123",
-  )
-
-  let errors = users.validate_registration(req)
-  errors |> should.equal([])
-}
-
-pub fn validate_registration_invalid_email_test() {
-  let req = users.RegisterRequest(
-    email: "invalid-email",
-    username: "testuser",
-    password: "Password123",
-  )
-
-  let errors = users.validate_registration(req)
-  errors |> should.not_equal([])
-}
-
-pub fn validate_registration_short_password_test() {
-  let req = users.RegisterRequest(
-    email: "test@example.com",
-    username: "testuser",
-    password: "short",
-  )
-
-  let errors = users.validate_registration(req)
-  errors |> should.not_equal([])
-}
-
-pub fn validate_registration_password_no_uppercase_test() {
-  let req = users.RegisterRequest(
-    email: "test@example.com",
-    username: "testuser",
-    password: "password123",
-  )
-
-  let errors = users.validate_registration(req)
-  let has_uppercase_error = errors |> list.any(fn(e) {
-    string.contains(e.message, "uppercase")
-  })
-  has_uppercase_error |> should.be_true()
-}
-
-pub fn validate_registration_password_no_number_test() {
-  let req = users.RegisterRequest(
-    email: "test@example.com",
-    username: "testuser",
-    password: "PasswordNoNumber",
-  )
-
-  let errors = users.validate_registration(req)
-  let has_number_error = errors |> list.any(fn(e) {
-    string.contains(e.message, "number")
-  })
-  has_number_error |> should.be_true()
-}
-
-pub fn validate_registration_short_username_test() {
-  let req = users.RegisterRequest(
-    email: "test@example.com",
-    username: "ab",
-    password: "Password123",
-  )
-
-  let errors = users.validate_registration(req)
-  errors |> should.not_equal([])
-}
-
-pub fn validate_registration_empty_fields_test() {
-  let req = users.RegisterRequest(
-    email: "",
-    username: "",
-    password: "",
-  )
-
-  let errors = users.validate_registration(req)
-  // Should have errors for all three fields
-  errors |> list.length() |> should.equal(3)
-}
-
-pub fn user_to_json_test() {
-  let user = users.User(
-    id: "123-456",
-    email: "test@example.com",
-    username: "testuser",
-    password_hash: "hash123",
-  )
-
-  let json = users.user_to_json(user)
-  let json_str = json.to_string(json)
-
-  json_str |> string.contains("\"id\":\"123-456\"") |> should.be_true()
-  json_str |> string.contains("\"email\":\"test@example.com\"") |> should.be_true()
-  json_str |> string.contains("\"username\":\"testuser\"") |> should.be_true()
-  // Password hash should NOT be in the response
-  json_str |> string.contains("password_hash") |> should.be_false()
-}
-
-pub fn errors_to_json_test() {
-  let errors = [
-    users.FieldError("email", "Invalid format"),
-    users.FieldError("password", "Too short"),
-  ]
-
-  let json = users.errors_to_json(errors)
-  let json_str = json.to_string(json)
-
-  json_str |> string.contains("\"errors\"") |> should.be_true()
-  json_str |> string.contains("\"field\":\"email\"") |> should.be_true()
-  json_str |> string.contains("\"message\":\"Invalid format\"") |> should.be_true()
-}
-
-// Test successful login with valid credentials
-pub fn login_with_valid_credentials_test() {
-  let assert Ok(store) = user_store.start()
-  let jwt_secret = "test-secret"
-
-  // Add a test user
-  let test_user =
-    user_store.User(
-      id: "user-123",
-      email: "test@example.com",
-      username: "testuser",
-      password_hash: user_store.hash_password("password123"),
+  let input =
+    CreateDrinkInput(
+      name: "Black Tea",
+      tea_type: Black,
+      price: None,
+      description: None,
+      image_url: None,
+      is_signature: False,
     )
-  user_store.add_user(store, test_user)
 
-  // Create login request
-  let request_body =
-    json.object([
-      #("email", json.string("test@example.com")),
-      #("password", json.string("password123")),
-    ])
-    |> json.to_string
+  // First creation should succeed
+  let _ = drink_store.create_drink(store, "store_123", input)
 
-  let request = Request(
-    method: "POST",
-    path: "/api/auth/login",
-    headers: dict.new(),
-    body: request_body,
-  )
+  // Second creation with same name should fail with Conflict
+  let result = drink_store.create_drink(store, "store_123", input)
 
-  // Execute login
-  let response = login.handle_login(request, store, jwt_secret)
-
-  // Verify response
-  response.status |> should.equal(200)
-
-  // Parse response body and check structure
-  let body_json = json.parse(response.body, response_decoder())
-  should.be_ok(body_json)
-
-  // Verify tokens and user data
-  let assert Ok(#(access_token, refresh_token, email)) = body_json
-  access_token |> should.not_equal("")
-  refresh_token |> should.not_equal("")
-  email |> should.equal("test@example.com")
+  case result {
+    Error(shared.Conflict(_)) -> True |> should.be_true
+    _ -> should.fail()
+  }
 }
 
-// Test login with invalid credentials
-pub fn login_with_invalid_password_test() {
-  let assert Ok(store) = user_store.start()
-  let jwt_secret = "test-secret"
+pub fn drink_store_different_store_same_name_test() {
+  let store = drink_store.start()
 
-  // Add a test user
-  let test_user =
-    user_store.User(
-      id: "user-123",
-      email: "test@example.com",
-      username: "testuser",
-      password_hash: user_store.hash_password("password123"),
+  let input =
+    CreateDrinkInput(
+      name: "Green Tea",
+      tea_type: Green,
+      price: None,
+      description: None,
+      image_url: None,
+      is_signature: False,
     )
-  user_store.add_user(store, test_user)
 
-  // Create login request with wrong password
-  let request_body =
-    json.object([
-      #("email", json.string("test@example.com")),
-      #("password", json.string("wrongpassword")),
-    ])
-    |> json.to_string
+  // First creation in store_1 should succeed
+  let _ = drink_store.create_drink(store, "store_1", input)
 
-  let request = Request(
-    method: "POST",
-    path: "/api/auth/login",
-    headers: dict.new(),
-    body: request_body,
-  )
+  // Same name in store_2 should also succeed
+  let result = drink_store.create_drink(store, "store_2", input)
 
-  // Execute login
-  let response = login.handle_login(request, store, jwt_secret)
-
-  // Verify 401 response
-  response.status |> should.equal(401)
-  response.body |> should.not_equal("")
+  case result {
+    Ok(drink) -> drink.store_id |> should.equal("store_2")
+    Error(_) -> should.fail()
+  }
 }
 
-// Test login with non-existent user
-pub fn login_with_nonexistent_user_test() {
-  let assert Ok(store) = user_store.start()
-  let jwt_secret = "test-secret"
+// Drink handler tests
 
-  // Create login request for user that doesn't exist
-  let request_body =
-    json.object([
-      #("email", json.string("nobody@example.com")),
-      #("password", json.string("password123")),
-    ])
-    |> json.to_string
+pub fn drink_handler_create_success_test() {
+  let store = drink_store.start()
 
-  let request = Request(
-    method: "POST",
-    path: "/api/auth/login",
-    headers: dict.new(),
-    body: request_body,
-  )
+  let request =
+    server.Request(
+      method: "POST",
+      path: "/api/stores/store_test/drinks",
+      headers: dict.new(),
+      body: "{\"name\":\"Matcha Latte\",\"tea_type\":\"green\",\"price\":6.00,\"is_signature\":true}",
+    )
 
-  // Execute login
-  let response = login.handle_login(request, store, jwt_secret)
+  let response = drink_handler.create(request, store)
 
-  // Verify 401 response
-  response.status |> should.equal(401)
+  response.status |> should.equal(201)
 }
 
-// Test login with missing fields
-pub fn login_with_missing_fields_test() {
-  let assert Ok(store) = user_store.start()
-  let jwt_secret = "test-secret"
+pub fn drink_handler_invalid_json_test() {
+  let store = drink_store.start()
 
-  // Create login request with missing password
-  let request_body =
-    json.object([
-      #("email", json.string("test@example.com")),
-      #("password", json.string("")),
-    ])
-    |> json.to_string
+  let request =
+    server.Request(
+      method: "POST",
+      path: "/api/stores/store_test/drinks",
+      headers: dict.new(),
+      body: "invalid json",
+    )
 
-  let request = Request(
-    method: "POST",
-    path: "/api/auth/login",
-    headers: dict.new(),
-    body: request_body,
-  )
+  let response = drink_handler.create(request, store)
 
-  // Execute login
-  let response = login.handle_login(request, store, jwt_secret)
-
-  // Verify 400 response
-  response.status |> should.equal(400)
+  response.status |> should.equal(422)
 }
 
-// Test JWT token generation and verification
-pub fn jwt_token_generation_and_verification_test() {
-  let jwt_secret = "test-secret"
-  let user_id = "user-456"
-  let email = "jwt@example.com"
-  let username = "jwttest"
+pub fn drink_handler_invalid_path_test() {
+  let store = drink_store.start()
 
-  // Generate tokens
-  let assert Ok(#(access_token, refresh_token)) =
-    jwt.generate_tokens(user_id, email, username, jwt_secret)
+  let request =
+    server.Request(
+      method: "POST",
+      path: "/api/invalid/path",
+      headers: dict.new(),
+      body: "{}",
+    )
 
-  // Verify tokens are non-empty
-  access_token |> should.not_equal("")
-  refresh_token |> should.not_equal("")
+  let response = drink_handler.create(request, store)
 
-  // Verify access token can be decoded
-  let assert Ok(#(decoded_id, decoded_email, decoded_username)) =
-    jwt.verify_access_token(access_token, jwt_secret)
-
-  decoded_id |> should.equal(user_id)
-  decoded_email |> should.equal(email)
-  decoded_username |> should.equal(username)
+  response.status |> should.equal(404)
 }
 
-// Test JWT verification with wrong secret
-pub fn jwt_wrong_secret_test() {
-  let jwt_secret = "test-secret"
-  let wrong_secret = "wrong-secret"
-  let user_id = "user-789"
-  let email = "test@example.com"
-  let username = "testuser"
+pub fn drink_handler_conflict_test() {
+  let store = drink_store.start()
 
-  // Generate token with correct secret
-  let assert Ok(#(access_token, _)) =
-    jwt.generate_tokens(user_id, email, username, jwt_secret)
+  let body = "{\"name\":\"Earl Grey\",\"tea_type\":\"black\"}"
 
-  // Verify with wrong secret should fail
-  jwt.verify_access_token(access_token, wrong_secret)
-  |> should.be_error
-}
+  let request1 =
+    server.Request(
+      method: "POST",
+      path: "/api/stores/store_conflict/drinks",
+      headers: dict.new(),
+      body: body,
+    )
 
-// Response decoder for login response
-fn response_decoder() {
-  use access_token <- decode.field("access_token", decode.string)
-  use refresh_token <- decode.field("refresh_token", decode.string)
-  use user <- decode.field(
-    "user",
-    decode.field("email", decode.string, fn(email) { decode.success(email) }),
-  )
-  decode.success(#(access_token, refresh_token, user))
+  let _ = drink_handler.create(request1, store)
+
+  let request2 =
+    server.Request(
+      method: "POST",
+      path: "/api/stores/store_conflict/drinks",
+      headers: dict.new(),
+      body: body,
+    )
+
+  let response = drink_handler.create(request2, store)
+
+  response.status |> should.equal(409)
 }

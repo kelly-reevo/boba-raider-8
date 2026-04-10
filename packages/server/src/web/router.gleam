@@ -1,26 +1,26 @@
 import data.{type Store, get_store_ratings}
 import gleam/int
 import gleam/json
-import gleam/list
-import gleam/option
-import gleam/result
+import gleam/option.{None, Some}
 import gleam/string
-import rating_store.{type RatingStore}
-import web/rating_handler
+import store.{type Store}
+import web/handlers/ratings
 import web/server.{type Request, type Response}
 import web/static
 
-/// Router state containing store references
-pub type RouterState {
-  RouterState(rating_store: RatingStore)
+pub fn make_handler(store: Store) -> fn(Request) -> Response {
+  fn(request: Request) { route(request, store) }
 }
 
-/// Create request handler with state
-pub fn make_handler(state: RouterState) -> fn(Request) -> Response {
-  fn(request: Request) { route(request, state) }
+fn route(request: Request, store: Store) -> Response {
+  // First check API routes that need the store
+  case ratings.handle(request.method, request.path, request, store) {
+    Some(response) -> response
+    None -> route_static(request)
+  }
 }
 
-fn route(request: Request, state: RouterState) -> Response {
+fn route_static(request: Request) -> Response {
   case request.method, request.path {
     "GET", "/" -> static_index()
     "GET", "/health" -> health_handler()

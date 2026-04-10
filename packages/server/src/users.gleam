@@ -3,19 +3,18 @@ import gleam/erlang/process.{type Subject}
 import gleam/int
 import gleam/json.{type Json}
 import gleam/list
-import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import gleam/otp/actor
+import web/user_store
 
-/// User record stored in the system
+/// User record stored in the system - aligned with web/user_store.User
 pub type User {
   User(
     id: String,
     email: String,
     username: String,
     password_hash: String,
-    created_at: String,
   )
 }
 
@@ -191,18 +190,9 @@ pub fn validate_registration(req: RegisterRequest) -> List(FieldError) {
   list.reverse(errors)
 }
 
-/// Hash password using Erlang crypto (SHA-256 based for simplicity)
-@external(erlang, "crypto", "hash")
-fn crypto_hash(algorithm: atom.Atom, data: BitArray) -> BitArray
-
-@external(erlang, "base64", "encode")
-fn base64_encode(data: BitArray) -> String
-
-/// Generate a hash from password
+/// Hash password using web/user_store hash function
 fn hash_password(password: String) -> String {
-  let sha256 = atom.create("sha256")
-  crypto_hash(sha256, <<password:utf8>>)
-  |> base64_encode()
+  user_store.hash_password(password)
 }
 
 /// Generate unique ID
@@ -237,45 +227,11 @@ fn pad2(n: Int) -> String {
   }
 }
 
-/// User store message types
-pub type UserStoreMsg {
-  GetUserByEmail(String, Subject(Option(User)))
-  CreateUser(User, Subject(Result(Nil, String)))
-}
+// User store now provided by web/user_store.gleam
 
-/// State for the user store actor
-pub type UserStoreState {
-  UserStoreState(users: List(User))
-}
-
-/// Initialize the user store with in-memory list storage
-pub fn init_store() -> Result(Subject(UserStoreMsg), String) {
-  actor.new(UserStoreState(users: []))
-  |> actor.on_message(fn(state, msg) {
-    case msg {
-      GetUserByEmail(email, reply_to) -> {
-        let user = case list.find(state.users, fn(u) { u.email == email }) {
-          Ok(u) -> Some(u)
-          Error(_) -> None
-        }
-        process.send(reply_to, user)
-        actor.continue(state)
-      }
-      CreateUser(user, reply_to) -> {
-        let new_state = UserStoreState(users: [user, ..state.users])
-        process.send(reply_to, Ok(Nil))
-        actor.continue(new_state)
-      }
-    }
-  })
-  |> actor.start()
-  |> result.map(fn(started) { started.data })
-  |> result.map_error(fn(_) { "Failed to start user store" })
-}
-
-/// Register a new user
+/// Register a new user using unified user store
 pub fn register(
-  store: Subject(UserStoreMsg),
+  store: user_store.UserStore,
   req: RegisterRequest,
 ) -> RegisterResult {
   // Validate input
@@ -283,31 +239,21 @@ pub fn register(
   case validation_errors {
     [] -> {
       // Check if email already exists
-      let reply_subject = process.new_subject()
-      process.send(store, GetUserByEmail(req.email, reply_subject))
-
-      case process.receive(reply_subject, 5000) {
-        Ok(Some(_)) -> RegisterConflict("Email already registered")
-        Ok(None) -> {
+      case user_store.find_by_email(store, req.email) {
+        Ok(_) -> RegisterConflict("Email already registered")
+        Error(_) -> {
           // Create user
-          let user = User(
+          let user = user_store.User(
             id: generate_id(),
             email: req.email,
             username: req.username,
             password_hash: hash_password(req.password),
-            created_at: now_iso8601(),
           )
 
           // Store user
-          let create_reply = process.new_subject()
-          process.send(store, CreateUser(user, create_reply))
-
-          case process.receive(create_reply, 5000) {
-            Ok(Ok(Nil)) -> RegisterSuccess(user)
-            _ -> RegisterValidationError([FieldError("", "Failed to create user")])
-          }
+          user_store.add_user(store, user)
+          RegisterSuccess(User(user.id, user.email, user.username, user.password_hash))
         }
-        _ -> RegisterValidationError([FieldError("", "Failed to check email availability")])
       }
     }
     errors -> RegisterValidationError(errors)

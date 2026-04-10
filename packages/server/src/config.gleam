@@ -3,7 +3,7 @@ import gleam/int
 import gleam/result
 
 pub type Config {
-  Config(port: Int)
+  Config(port: Int, jwt_secret: String)
 }
 
 pub fn load() -> Config {
@@ -12,7 +12,11 @@ pub fn load() -> Config {
     |> result.try(int.parse)
     |> result.unwrap(3000)
 
-  Config(port: port)
+  let jwt_secret =
+    envoy.get("JWT_SECRET")
+    |> result.unwrap("default-secret-change-in-production")
+
+  Config(port: port, jwt_secret: jwt_secret)
 }
 
 pub fn port_to_string(cfg: Config) -> String {

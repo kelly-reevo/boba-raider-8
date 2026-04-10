@@ -1,17 +1,23 @@
 import gleam/json
 import gleam/string
+import web/auth/login
 import web/server.{type Request, type Response}
 import web/static
+import web/user_store.{type UserStore}
 
-pub fn make_handler() -> fn(Request) -> Response {
-  fn(request: Request) { route(request) }
+pub fn make_handler(
+  store: UserStore,
+  jwt_secret: String,
+) -> fn(Request) -> Response {
+  fn(request: Request) { route(request, store, jwt_secret) }
 }
 
-fn route(request: Request) -> Response {
+fn route(request: Request, store: UserStore, jwt_secret: String) -> Response {
   case request.method, request.path {
     "GET", "/" -> static.serve_index()
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
+    "POST", "/api/auth/login" -> login.handle_login(request, store, jwt_secret)
     "GET", path -> route_get(path)
     _, _ -> not_found()
   }

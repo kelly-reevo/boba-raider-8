@@ -1,26 +1,39 @@
+import gleam/erlang/process.{type Subject}
 import gleam/json
 import gleam/string
+import services/store_service.{type StoreMsg}
 import users.{RegisterSuccess, RegisterValidationError, RegisterConflict}
 import web/auth/login
+import web/handlers/store_handler
 import web/server.{type Request, type Response}
 import web/static
 import web/user_store.{type UserStore}
 
 pub fn make_handler(
-  store: UserStore,
+  user_store: UserStore,
+  store_actor: Subject(StoreMsg),
   jwt_secret: String,
 ) -> fn(Request) -> Response {
-  fn(request: Request) { route(request, store, jwt_secret) }
+  fn(request: Request) { route(request, user_store, store_actor, jwt_secret) }
 }
 
-fn route(request: Request, store: UserStore, jwt_secret: String) -> Response {
+fn route(
+  request: Request,
+  user_store: UserStore,
+  store_actor: Subject(StoreMsg),
+  jwt_secret: String,
+) -> Response {
   case request.method, request.path {
     "GET", "/" -> static.serve_index()
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
-    "POST", "/api/auth/register" -> register_handler(request, store)
-    "POST", "/api/auth/login" -> login.handle_login(request, store, jwt_secret)
+    // Auth endpoints
+    "POST", "/api/auth/register" -> register_handler(request, user_store)
+    "POST", "/api/auth/login" -> login.handle_login(request, user_store, jwt_secret)
     "POST", "/api/auth/refresh" -> refresh_handler(request)
+    // Store endpoints
+    "POST", "/api/stores" -> store_handler.create(request, store_actor)
+    // Static and fallback
     "GET", path -> route_get(path)
     _, _ -> not_found()
   }

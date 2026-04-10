@@ -1,12 +1,10 @@
 import envoy
 import gleam/int
 import gleam/result
+import infrastructure/storage_config
 
 pub type Config {
-  Config(
-    port: Int,
-    database_url: String,
-  )
+  Config(port: Int, storage: storage_config.StorageConfig)
 }
 
 pub fn load() -> Config {
@@ -15,14 +13,9 @@ pub fn load() -> Config {
     |> result.try(int.parse)
     |> result.unwrap(3000)
 
-  let database_url =
-    envoy.get("DATABASE_URL")
-    |> result.unwrap("postgres://localhost:5432/boba_raider_8_dev")
+  let storage = storage_config.load()
 
-  Config(
-    port: port,
-    database_url: database_url,
-  )
+  Config(port: port, storage: storage)
 }
 
 pub fn port_to_string(cfg: Config) -> String {

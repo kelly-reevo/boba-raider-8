@@ -1,7 +1,6 @@
 /// Shared types and functions for boba-raider-8
 
-import gleam/int
-import gleam/string
+import gleam/option.{type Option}
 
 pub type AppError {
   NotFound(String)
@@ -22,58 +21,44 @@ pub fn error_message(error: AppError) -> String {
   }
 }
 
-// Rating domain types
+// Store types
 
-pub type RatingId {
-  RatingId(String)
-}
-
-pub type UserId {
-  UserId(String)
-}
-
-pub type DrinkId {
-  DrinkId(String)
-}
-
-pub type Rating {
-  Rating(
-    id: RatingId,
-    user_id: UserId,
-    drink_id: DrinkId,
-    value: Int,
+pub type StoreSummary {
+  StoreSummary(
+    id: String,
+    name: String,
+    address: String,
+    image_url: Option(String),
   )
 }
 
-/// Extract string from RatingId
-pub fn rating_id_to_string(rating_id: RatingId) -> String {
-  let RatingId(id) = rating_id
-  id
+// Rating types
+
+pub type RatingWithStore {
+  RatingWithStore(
+    id: String,
+    overall_score: Float,
+    review_text: Option(String),
+    created_at: String,
+    updated_at: String,
+    store: StoreSummary,
+  )
 }
 
-/// Create RatingId from string
-pub fn rating_id_from_string(id: String) -> RatingId {
-  RatingId(id)
+// Pagination types
+
+pub type PaginationMeta {
+  PaginationMeta(
+    total: Int,
+    page: Int,
+    limit: Int,
+    total_pages: Int,
+  )
 }
 
-/// Extract string from UserId
-pub fn user_id_to_string(user_id: UserId) -> String {
-  let UserId(id) = user_id
-  id
-}
-
-/// Create UserId from string
-pub fn user_id_from_string(id: String) -> UserId {
-  UserId(id)
-}
-
-/// Extract string from DrinkId
-pub fn drink_id_to_string(drink_id: DrinkId) -> String {
-  let DrinkId(id) = drink_id
-  id
-}
-
-/// Create DrinkId from string
-pub fn drink_id_from_string(id: String) -> DrinkId {
-  DrinkId(id)
+pub type PaginatedResponse(a) {
+  PaginatedResponse(
+    data: List(a),
+    meta: PaginationMeta,
+  )
 }

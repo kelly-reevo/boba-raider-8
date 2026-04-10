@@ -1,4 +1,5 @@
 import gleam/int
+import frontend/drink_detail_page
 import frontend/model.{type Model}
 import frontend/msg.{type Msg}
 import lustre/attribute
@@ -19,5 +20,6 @@ pub fn view(model: Model) -> Element(Msg) {
     html.button([event.on_click(msg.Reset), attribute.class("reset")], [
       element.text("Reset"),
     ]),
+    drink_detail_page.drink_detail_page(model.drink_detail),
   ])
 }

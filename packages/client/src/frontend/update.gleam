@@ -1,10 +1,11 @@
+/// Application state updates
+
+import frontend/components/store_rating_form as form
+import frontend/effects
 import frontend/model.{type Model, Model}
 import frontend/msg.{type Msg}
-import frontend/rating_model
-import frontend/rating_msg
-import frontend/rating_update
 import gleam/option.{None, Some}
-import lustre/effect.{type Effect, none, map}
+import lustre/effect.{type Effect}
 
 import frontend/effects
 import frontend/model.{
@@ -20,45 +21,149 @@ import shared.{type CreateDrinkInput, CreateDrinkInput}
 /// Main update function
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
-    msg.Increment -> #(Model(..model, count: model.count + 1), none())
-    msg.Decrement -> #(Model(..model, count: model.count - 1), none())
-    msg.Reset -> #(Model(..model, count: 0), none())
+    // Counter messages (existing)
+    msg.Increment -> #(Model(..model, count: model.count + 1), effect.none())
+    msg.Decrement -> #(Model(..model, count: model.count - 1), effect.none())
+    msg.Reset -> #(Model(..model, count: 0), effect.none())
 
-    msg.OpenRatingModal(drink_id, drink_name) -> {
-      let form = rating_model.new(drink_id)
-      let new_model = Model(
-        ..model,
-        rating_modal: Some(form),
-        selected_drink_id: Some(drink_id),
-        selected_drink_name: drink_name,
-      )
-      #(new_model, none())
+    // Rating form: Open for new rating
+    msg.RatingFormOpened(store_id, display_mode) -> {
+      let form_model = form.init_new(store_id, display_mode)
+      #(Model(..model, rating_form: Some(form_model)), effect.none())
     }
 
-    msg.CloseRatingModal -> {
-      let new_model = Model(..model, rating_modal: None)
-      #(new_model, none())
+    // Rating form: Open for editing existing rating
+    msg.RatingFormOpenedForEdit(store_id, rating_id, overall_score, review_text, display_mode) -> {
+      let form_model = form.init_edit(store_id, rating_id, overall_score, review_text, display_mode)
+      #(Model(..model, rating_form: Some(form_model)), effect.none())
     }
 
-    msg.RatingFormMsg(rating_msg) -> {
-      case model.rating_modal {
-        Some(form) -> {
-          let #(new_form, fx) = rating_update.update(form, rating_msg)
+    // Rating form: Close
+    msg.RatingFormClosed -> {
+      #(Model(..model, rating_form: None), effect.none())
+    }
 
-          // Handle modal close actions
-          let final_model = case rating_msg {
-            rating_msg.RatingModalClosed -> Model(..model, rating_modal: None)
-            rating_msg.RatingSubmitSuccess(_) -> {
-              // Keep modal open to show success state, or close after delay
-              Model(..model, rating_modal: Some(new_form))
-            }
-            _ -> Model(..model, rating_modal: Some(new_form))
-          }
-
-          let wrapped_fx = map(fx, msg.RatingFormMsg)
-          #(final_model, wrapped_fx)
+    // Rating form: Score changed
+    msg.RatingScoreChanged(score) -> {
+      case model.rating_form {
+        Some(form_model) -> {
+          let new_form = form.StoreRatingFormModel(..form_model, overall_score: score)
+          #(Model(..model, rating_form: Some(new_form)), effect.none())
         }
-        None -> #(model, none())
+        None -> #(model, effect.none())
+      }
+    }
+
+    // Rating form: Review text changed
+    msg.RatingReviewTextChanged(text) -> {
+      case model.rating_form {
+        Some(form_model) -> {
+          let new_form = form.StoreRatingFormModel(..form_model, review_text: text)
+          #(Model(..model, rating_form: Some(new_form)), effect.none())
+        }
+        None -> #(model, effect.none())
+      }
+    }
+
+    // Rating form: Submit
+    msg.RatingFormSubmitted -> {
+      case model.rating_form {
+        Some(form_model) -> {
+          // Validate form before submitting
+          case form.is_valid(form_model) {
+            True -> {
+              let new_form = form.StoreRatingFormModel(
+                ..form_model,
+                submit_state: form.Submitting,
+              )
+              let effect = effects.submit_store_rating(
+                form_model.store_id,
+                form_model.existing_rating_id,
+                form_model.overall_score,
+                form_model.review_text,
+              )
+              #(Model(..model, rating_form: Some(new_form)), effect)
+            }
+            False -> {
+              // Form invalid, show error without submitting
+              let new_form = form.StoreRatingFormModel(
+                ..form_model,
+                submit_state: form.SubmitError("Please select a star rating."),
+              )
+              #(Model(..model, rating_form: Some(new_form)), effect.none())
+            }
+          }
+        }
+        None -> #(model, effect.none())
+      }
+    }
+
+    // Rating form: Delete clicked
+    msg.RatingDeleteClicked -> {
+      case model.rating_form {
+        Some(form_model) -> {
+          case form_model.existing_rating_id {
+            Some(rating_id) -> {
+              let new_form = form.StoreRatingFormModel(
+                ..form_model,
+                submit_state: form.Submitting,
+              )
+              let effect = effects.delete_store_rating(form_model.store_id, rating_id)
+              #(Model(..model, rating_form: Some(new_form)), effect)
+            }
+            None -> #(model, effect.none())
+          }
+        }
+        None -> #(model, effect.none())
+      }
+    }
+
+    // Rating created successfully
+    msg.RatingCreated(_store_id) -> {
+      case model.rating_form {
+        Some(form_model) -> {
+          let new_form = form.StoreRatingFormModel(
+            ..form_model,
+            submit_state: form.SubmitSuccess,
+            existing_rating_id: Some("temp-rating-id"),
+          )
+          #(Model(..model, rating_form: Some(new_form)), effect.none())
+        }
+        None -> #(model, effect.none())
+      }
+    }
+
+    // Rating updated successfully
+    msg.RatingUpdated(_store_id) -> {
+      case model.rating_form {
+        Some(form_model) -> {
+          let new_form = form.StoreRatingFormModel(
+            ..form_model,
+            submit_state: form.SubmitSuccess,
+          )
+          #(Model(..model, rating_form: Some(new_form)), effect.none())
+        }
+        None -> #(model, effect.none())
+      }
+    }
+
+    // Rating deleted successfully
+    msg.RatingDeleted(_store_id) -> {
+      // Close the form after successful deletion
+      #(Model(..model, rating_form: None), effect.none())
+    }
+
+    // Rating API error
+    msg.RatingApiError(error) -> {
+      case model.rating_form {
+        Some(form_model) -> {
+          let new_form = form.StoreRatingFormModel(
+            ..form_model,
+            submit_state: form.SubmitError(error),
+          )
+          #(Model(..model, rating_form: Some(new_form)), effect.none())
+        }
+        None -> #(Model(..model, error: error), effect.none())
       }
     }
   }

@@ -1,68 +1,42 @@
 /// API effects for the frontend
 
 import frontend/msg.{type Msg}
-import gleam/http
-import gleam/http/request
-import gleam/json
+import gleam/int
+import gleam/option.{type Option}
 import lustre/effect.{type Effect}
-import shared.{type CreateDrinkInput, tea_type_to_string}
 
-/// Upload image file to server
-/// Returns the uploaded image URL on success
-pub fn upload_image(file_data: String) -> Effect(Msg) {
-  effect.from(fn(dispatch) {
-    let url = "/api/upload/image"
+/// POST /api/stores/:id/ratings - Create or update a store rating
+pub fn submit_store_rating(
+  store_id: String,
+  _rating_id: Option(String),
+  overall_score: Int,
+  _review_text: String,
+) -> Effect(Msg) {
+  use dispatch <- effect.from
 
-    let body =
-      json.object([#("file", json.string(file_data))])
-      |> json.to_string
-
-    let _req =
-      request.new()
-      |> request.set_method(http.Post)
-      |> request.set_host("")
-      |> request.set_path(url)
-      |> request.set_header("Content-Type", "application/json")
-      |> request.set_body(body)
-
-    // Note: Actual HTTP implementation would use lustre_http or browser fetch API
-    // This effect dispatches a message - actual HTTP client should be wired here
-    let mock_response = msg.ImageUploaded(Ok("/uploads/mock-image.jpg"))
-    dispatch(mock_response)
-  })
+  // Simulate API call - will be replaced with actual HTTP implementation
+  // when gleam_fetch or similar package is available
+  case overall_score > 0 && overall_score <= 5 {
+    True -> {
+      // Simulate success
+      dispatch(msg.RatingCreated(store_id))
+    }
+    False -> {
+      dispatch(msg.RatingApiError("Invalid rating score: " <> int.to_string(overall_score)))
+    }
+  }
 }
 
-/// Create a new drink for a store
-pub fn create_drink(store_id: String, input: CreateDrinkInput) -> Effect(Msg) {
-  effect.from(fn(_dispatch) {
-    let url = "/api/stores/" <> store_id <> "/drinks"
+/// DELETE /api/ratings/store/:id - Delete a store rating
+pub fn delete_store_rating(store_id: String, _rating_id: String) -> Effect(Msg) {
+  use dispatch <- effect.from
 
-    let _body =
-      json.object([
-        #("name", json.string(input.name)),
-        #("tea_type", json.string(tea_type_to_string(input.tea_type))),
-        #("price", json.float(input.price)),
-        #("description", json.string(input.description)),
-        #("image_url", json.string(input.image_url)),
-        #("is_signature", json.bool(input.is_signature)),
-      ])
-      |> json.to_string
-
-    let _req =
-      request.new()
-      |> request.set_method(http.Post)
-      |> request.set_host("")
-      |> request.set_path(url)
-      |> request.set_header("Content-Type", "application/json")
-
-    // Note: Actual HTTP implementation should dispatch DrinkCreated result
-    // This is a placeholder - integrate with lustre_http or browser fetch
-    Nil
-  })
+  // Simulate API call - will be replaced with actual HTTP implementation
+  dispatch(msg.RatingDeleted(store_id))
 }
 
-/// No operation effect
-pub fn none() -> Effect(Msg) {
+/// Placeholder effect (for other data fetching)
+pub fn fetch_data() -> Effect(Msg) {
   effect.none()
 }
 

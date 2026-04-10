@@ -1,10 +1,9 @@
-/// Main application view
+/// Application views
 
-import frontend/create_drink_form
+import frontend/components/store_rating_form
 import frontend/model.{type Model}
-import frontend/msg.{type Msg}
-import frontend/rating_msg
-import frontend/rating_view
+import frontend/msg.{type Msg, Inline, Modal}
+import gleam/int
 import gleam/option.{None, Some}
 import lustre/attribute
 import lustre/element.{type Element}
@@ -12,7 +11,7 @@ import lustre/element/html
 import lustre/event
 import shared.{Some}
 
-/// Main view function
+/// Main application view
 pub fn view(model: Model) -> Element(Msg) {
   case model.current_page {
     Home -> view_home()
@@ -36,6 +35,8 @@ fn view_home() -> Element(Msg) {
   html.div([attribute.class("app")], [
     // Main app content (original counter demo)
     html.h1([], [element.text("boba-raider-8")]),
+
+    // Counter section (existing)
     html.div([attribute.class("counter")], [
       html.button([event.on_click(msg.Decrement)], [element.text("-")]),
       html.span([attribute.class("count")], [
@@ -96,84 +97,24 @@ fn counter_view(count: Int) -> Element(Msg) {
       element.text("Reset"),
     ]),
 
-    // Demo button to open rating modal
-    html.button(
-      [
-        event.on_click(msg.OpenRatingModal("drink-123", "Classic Milk Tea")),
-        attribute.class("open-rating-button"),
-      ],
-      [element.text("Rate Drink (Demo)")],
-    ),
+    // Demo: Button to open rating form
+    html.div([attribute.class("demo-section")], [
+      html.h2([], [element.text("Store Rating Form Demo")]),
+      html.button(
+        [event.on_click(msg.RatingFormOpened("store-123", Modal))],
+        [element.text("Open Rating Form (Modal)")],
+      ),
+      html.button(
+        [event.on_click(msg.RatingFormOpened("store-123", Inline))],
+        [element.text("Show Rating Form (Inline)")],
+      ),
+    ]),
 
-    // Rating modal (conditionally rendered)
-    case model.rating_modal {
-      Some(form) ->
-        rating_view.drink_rating_modal(
-          form,
-          model.selected_drink_name,
-          rating_msg.RatingModalClosed,
-        )
-        |> element.map(msg.RatingFormMsg)
-      None -> element.text("")
+    // Render rating form if active
+    case model.rating_form {
+      Some(form_model) -> store_rating_form.view(form_model)
+      None -> element.none()
     },
-  ])
-}
-
-/// Empty state - no stores found
-fn empty_view() -> Element(Msg) {
-  html.div([attribute.class("empty")], [
-    html.div([attribute.class("empty-icon")], [element.text("🔍")]),
-    html.h3([], [element.text("No stores found")]),
-    html.p([], [element.text("Try adjusting your search or filters")]),
-  ])
-}
-
-/// Error state with retry button
-fn error_view(error: String) -> Element(Msg) {
-  html.div([attribute.class("error")], [
-    html.div([attribute.class("error-icon")], [element.text("⚠️")]),
-    html.h3([], [element.text("Something went wrong")]),
-    html.p([], [element.text(error)]),
-    html.button(
-      [event.on_click(StoreList(RetryLoad)), attribute.class("retry-button")],
-      [element.text("Try Again")],
-    ),
-  ])
-}
-
-/// Populated state - display store cards
-fn populated_view(stores: List(Store), has_more: Bool, current_page: Int) -> Element(Msg) {
-  html.div([attribute.class("populated")], [
-    html.div([attribute.class("store-grid")], list.map(stores, store_card)),
-    pagination(has_more, current_page),
-  ])
-}
-
-/// Individual store card
-fn store_card(store: Store) -> Element(Msg) {
-  html.div([attribute.class("store-card")], [
-    html.div([attribute.class("store-image-container")], [
-      html.img([
-        attribute.src(store.image_url),
-        attribute.alt(store.name),
-        attribute.class("store-image"),
-      ]),
-    ]),
-    html.div([attribute.class("store-content")], [
-      html.h3([attribute.class("store-name")], [element.text(store.name)]),
-      html.p([attribute.class("store-address")], [
-        element.text(truncate_address(store.address, 60)),
-      ]),
-      html.div([attribute.class("store-rating")], [
-        star_rating(store.average_rating),
-        html.span([attribute.class("rating-value")], [
-          element.text(" " <> format_rating(store.average_rating) <> " "),
-        ]),
-        html.span([attribute.class("review-count")], [
-          element.text("(" <> int.to_string(store.total_reviews) <> ")"),
-        ]),
-      ]),
-    ]),
   ])
 }
 

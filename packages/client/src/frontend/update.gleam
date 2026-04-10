@@ -1,4 +1,8 @@
-/// State updates
+import frontend/effects
+import frontend/model.{type Model, Model, DrinkDetailLoading, DrinkDetailError, DrinkDetailPopulated}
+import frontend/msg.{type Msg}
+import gleam/option.{None}
+import lustre/effect.{type Effect}
 
 import frontend/effects as fx
 import frontend/model.{
@@ -20,49 +24,36 @@ import shared.{
 /// Main application update function
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
-    // Original counter messages
-    Increment -> {
-      case model.page {
-        CounterPage(count, error) -> {
-          #(Model(..model, page: CounterPage(count + 1, error)), effect.none())
-        }
+    // Counter messages (legacy)
+    msg.Increment -> #(Model(..model, count: model.count + 1), effect.none())
+    msg.Decrement -> #(Model(..model, count: model.count - 1), effect.none())
+    msg.Reset -> #(Model(..model, count: 0), effect.none())
+
+    // Drink detail messages
+    msg.LoadDrinkDetail(drink_id) -> #(
+      Model(..model, drink_detail: DrinkDetailLoading),
+      effects.load_drink_detail(drink_id),
+    )
+
+    msg.DrinkDetailLoaded(drink, ratings) -> #(
+      Model(..model, drink_detail: DrinkDetailPopulated(drink, None, ratings)),
+      effect.none(),
+    )
+
+    msg.UserRatingLoaded(user_rating) -> {
+      case model.drink_detail {
+        DrinkDetailPopulated(drink, _, other_ratings) -> #(
+          Model(..model, drink_detail: DrinkDetailPopulated(drink, user_rating, other_ratings)),
+          effect.none(),
+        )
         _ -> #(model, effect.none())
       }
     }
 
-    Decrement -> {
-      case model.page {
-        CounterPage(count, error) -> {
-          #(Model(..model, page: CounterPage(count - 1, error)), effect.none())
-        }
-        _ -> #(model, effect.none())
-      }
-    }
-
-    Reset -> {
-      case model.page {
-        CounterPage(_, error) -> {
-          #(Model(..model, page: CounterPage(0, error)), effect.none())
-        }
-        _ -> #(model, effect.none())
-      }
-    }
-
-    // Navigation
-    Navigate(_url) -> {
-      // Would use lustre_navigator in real implementation
-      #(model, effect.none())
-    }
-
-    RouteChanged(_route) -> {
-      // Would update route and page based on URL
-      #(model, effect.none())
-    }
-
-    // Edit store page messages
-    EditStoreMsg(edit_msg) -> {
-      handle_edit_store_msg(model, edit_msg)
-    }
+    msg.DrinkDetailError(error_msg) -> #(
+      Model(..model, drink_detail: DrinkDetailError(error_msg)),
+      effect.none(),
+    )
   }
 }
 

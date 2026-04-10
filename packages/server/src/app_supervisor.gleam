@@ -1,4 +1,5 @@
 import config.{type Config}
+import data/drink_store
 import gleam/erlang/process
 import gleam/io
 import web/http_server_actor
@@ -7,8 +8,12 @@ import web/router
 pub fn start(cfg: Config) -> Result(Nil, String) {
   io.println("Starting supervisor...")
 
-  // Create the HTTP handler
-  let handler = router.make_handler()
+  // Start the drink store actor
+  let drink_store = drink_store.start()
+  io.println("Drink store started")
+
+  // Create the HTTP handler with drink store
+  let handler = router.make_handler(drink_store)
 
   // Start HTTP server actor
   case http_server_actor.start(cfg.port, handler) {

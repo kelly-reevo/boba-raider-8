@@ -1,14 +1,23 @@
 import config.{type Config}
 import gleam/erlang/process
 import gleam/io
+import gleam/result
+import store/store_data
 import web/http_server_actor
 import web/router
 
 pub fn start(cfg: Config) -> Result(Nil, String) {
   io.println("Starting supervisor...")
 
-  // Create the HTTP handler
-  let handler = router.make_handler()
+  // Start store data actor
+  use store_actor <- result.try(
+    store_data.start()
+    |> result.map_error(fn(_) { "Failed to start store data actor" })
+  )
+  io.println("Store data actor started")
+
+  // Create the HTTP handler with store actor
+  let handler = router.make_handler(store_actor)
 
   // Start HTTP server actor
   case http_server_actor.start(cfg.port, handler) {

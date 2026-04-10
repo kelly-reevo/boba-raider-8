@@ -1,9 +1,7 @@
 /// Shared types and functions for boba-raider-8
 
-/// User type for authenticated users
-pub type User {
-  User(id: String, username: String)
-}
+import gleam/dynamic/decode
+import gleam/json
 
 pub type AppError {
   NotFound(String)
@@ -24,114 +22,99 @@ pub fn error_message(error: AppError) -> String {
   }
 }
 
-/// User representation
-pub type User {
-  User(id: String, username: String, email: String)
-}
-
-/// Authentication token
-pub type AuthToken {
-  AuthToken(access_token: String, refresh_token: String)
-}
-
-/// Authentication response from API
-pub type AuthResponse {
-  AuthResponse(user: User, token: AuthToken)
-}
-
-/// Login request payload
-pub type LoginRequest {
-  LoginRequest(email: String, password: String)
-}
-
-/// Registration request payload
-pub type RegisterRequest {
-  RegisterRequest(username: String, email: String, password: String)
-}
-
-/// Validation result for forms
-pub type ValidationError {
-  FieldRequired(String)
-  InvalidEmail(String)
-  PasswordTooShort(String)
-  PasswordsDoNotMatch
-}
-
-/// Validate email format (basic check)
-pub fn validate_email(email: String) -> Result(String, ValidationError) {
-  case string.contains(email, "@") {
-    True -> Ok(email)
-    False -> Error(InvalidEmail(email))
-  }
-}
-
-/// Validate password length
-pub fn validate_password(password: String) -> Result(String, ValidationError) {
-  case string.length(password) >= 8 {
-    True -> Ok(password)
-    False -> Error(PasswordTooShort(password))
-  }
-}
-
-// Store types for boba shop locations
-
-pub type StoreId {
-  StoreId(String)
-}
-
-pub type UserId {
-  UserId(String)
-}
-
+/// Store domain model
 pub type Store {
   Store(
-    id: StoreId,
+    id: String,
     name: String,
     address: String,
-    location: Location,
-    phone: Option(String),
-    hours: Option(String),
-    description: Option(String),
-    image_url: Option(String),
-    created_by: UserId,
-    created_at: Timestamp,
-    updated_at: Timestamp,
+    image_url: String,
+    average_rating: Float,
+    total_reviews: Int,
   )
 }
 
-pub type Location {
-  Location(lat: Float, lng: Float)
+/// Sort options for store listing
+pub type SortOption {
+  RatingDesc
+  RatingAsc
+  NameAsc
+  NameDesc
+  MostReviewed
 }
 
-pub type Timestamp {
-  Timestamp(String)
+/// Convert SortOption to query string value
+pub fn sort_to_string(sort: SortOption) -> String {
+  case sort {
+    RatingDesc -> "rating_desc"
+    RatingAsc -> "rating_asc"
+    NameAsc -> "name_asc"
+    NameDesc -> "name_desc"
+    MostReviewed -> "most_reviewed"
+  }
 }
 
-// Store input types for creating/updating
+/// Parse SortOption from string
+pub fn sort_from_string(s: String) -> SortOption {
+  case s {
+    "rating_desc" -> RatingDesc
+    "rating_asc" -> RatingAsc
+    "name_desc" -> NameDesc
+    "most_reviewed" -> MostReviewed
+    _ -> NameAsc
+  }
+}
 
-pub type CreateStore {
-  CreateStore(
-    name: String,
-    address: String,
-    lat: Float,
-    lng: Float,
-    phone: Option(String),
-    hours: Option(String),
-    description: Option(String),
-    image_url: Option(String),
-    created_by: UserId,
+/// Store list filters
+pub type StoreFilters {
+  StoreFilters(
+    query: String,
+    location: String,
+    sort: SortOption,
+    page: Int,
   )
 }
 
-pub type UpdateStore {
-  UpdateStore(
-    name: Option(String),
-    address: Option(String),
-    lat: Option(Float),
-    lng: Option(Float),
-    phone: Option(Option(String)),
-    hours: Option(Option(String)),
-    description: Option(Option(String)),
-    image_url: Option(Option(String)),
+/// Paginated store response
+pub type StoreListResponse {
+  StoreListResponse(
+    stores: List(Store),
+    total: Int,
+    page: Int,
+    per_page: Int,
+  )
+}
+
+/// JSON decoder for Store
+fn store_decoder() -> decode.Decoder(Store) {
+  use id <- decode.field("id", decode.string)
+  use name <- decode.field("name", decode.string)
+  use address <- decode.field("address", decode.string)
+  use image_url <- decode.field("image_url", decode.string)
+  use average_rating <- decode.field("average_rating", decode.float)
+  use total_reviews <- decode.field("total_reviews", decode.int)
+  decode.success(Store(id:, name:, address:, image_url:, average_rating:, total_reviews:))
+}
+
+/// Parse store list from JSON
+pub fn decode_store_list(json_string: String) -> Result(List(Store), AppError) {
+  let store_list_decoder = {
+    use stores <- decode.field("stores", decode.list(of: store_decoder()))
+    decode.success(stores)
+  }
+
+  case json.parse(json_string, store_list_decoder) {
+    Ok(stores) -> Ok(stores)
+    Error(_) -> Error(InvalidInput("Failed to decode store list"))
+  }
+}
+
+/// Default empty filters
+pub fn default_filters() -> StoreFilters {
+  StoreFilters(
+    query: "",
+    location: "",
+    sort: RatingDesc,
+    page: 1,
   )
 }

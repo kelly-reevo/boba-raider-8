@@ -1,10 +1,11 @@
-import frontend/effects
-import frontend/model.{type Model}
-import frontend/msg.{type Msg, InitApp}
+import frontend/model
+import frontend/msg.{type Msg, StoreList, LoadStores}
 import frontend/update
 import frontend/view
+import frontend/effects
 import lustre
 import lustre/effect.{type Effect}
+import shared
 
 pub fn main() {
   let app = lustre.application(init, update.update, view.view)
@@ -12,8 +13,6 @@ pub fn main() {
   Nil
 }
 
-fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
-  let model = model.default()
-  // Load token from localStorage on app startup
-  #(model, effects.load_token_from_storage())
+fn init(_flags: Nil) -> #(model.Model, Effect(Msg)) {
+  #(model.with_store_list_loading(), effects.fetch_stores(shared.default_filters()))
 }

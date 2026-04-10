@@ -1,17 +1,9 @@
 /// Application messages for routing, auth, and form handling
 
-import shared.{type User, type AuthToken, type AuthResponse, type AppError}
+import shared.{type Store, type SortOption, type StoreFilters}
 
-/// Routes in the application
-pub type Route {
-  Home
-  Login
-  Register
-}
-
-/// Navigation messages
-pub type Msg {
-  // Counter demo messages (legacy)
+/// Messages for counter feature (legacy)
+pub type CounterMsg {
   Increment
   Decrement
   Reset
@@ -20,4 +12,21 @@ pub type Msg {
   Logout
   StorageCleared
   RedirectComplete
+}
+
+/// Messages for store list page
+pub type StoreListMsg {
+  LoadStores
+  StoresLoaded(Result(List(Store), String))
+  SearchChanged(String)
+  LocationChanged(String)
+  SortChanged(SortOption)
+  PageChanged(Int)
+  RetryLoad
+}
+
+/// Main application message type
+pub type Msg {
+  Counter(CounterMsg)
+  StoreList(StoreListMsg)
 }

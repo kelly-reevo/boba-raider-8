@@ -1,20 +1,26 @@
-import frontend/effects
-import frontend/model.{type Model, Model}
-import frontend/msg.{type Msg}
-import gleam/option.{None}
-import lustre/effect.{type Effect}
+/// Application update logic
 
+import gleam/list
+import frontend/model.{
+  type Model, type StoreListState, type RemoteData, Model, StoreListState,
+  NotAsked, Loading, Success, Failure,
+}
+import frontend/msg.{type Msg, type StoreListMsg, Counter, StoreList, LoadStores, StoresLoaded, SearchChanged, LocationChanged, SortChanged, PageChanged, RetryLoad}
 import frontend/effects
-import frontend/model.{type Model}
-import frontend/msg.{type Msg, Home}
-import gleam/string
 import lustre/effect.{type Effect}
-import shared.{type AuthResponse, validate_email, validate_password}
+import shared.{type Store, type StoreFilters, type SortOption}
 
-/// Main update function handling all messages
+/// Main update function
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
-    // Counter demo messages (legacy)
+    Counter(counter_msg) -> update_counter(model, counter_msg)
+    StoreList(store_msg) -> update_store_list(model, store_msg)
+  }
+}
+
+/// Handle counter messages (legacy)
+fn update_counter(model: Model, msg) -> #(Model, Effect(Msg)) {
+  case msg {
     msg.Increment -> #(Model(..model, count: model.count + 1), effect.none())
     msg.Decrement -> #(Model(..model, count: model.count - 1), effect.none())
     msg.Reset -> #(Model(..model, count: 0), effect.none())
@@ -26,115 +32,52 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   }
 }
 
-/// Initialize app - load auth token from localStorage
-fn init_app(model: Model) -> #(Model, Effect(Msg)) {
-  #(model.set_route(model, Home), effects.load_token_from_storage())
-}
+/// Handle store list messages
+fn update_store_list(model: Model, msg: StoreListMsg) -> #(Model, Effect(Msg)) {
+  let state = model.store_list
 
-/// Handle login form submission with validation
-fn handle_login_submit(model: Model) -> #(Model, Effect(Msg)) {
-  let form = model.login_form
-
-  // Validate fields
-  case validate_login_form(form) {
-    Error(error_msg) -> #(model.set_login_error(model, error_msg), effect.none())
-    Ok(_) -> {
-      let loading_model = model.set_login_loading(model, True)
-      #(loading_model, effects.submit_login(form.email, form.password))
+  case msg {
+    LoadStores -> {
+      let new_state = StoreListState(..state, stores: Loading)
+      let new_model = Model(..model, store_list: new_state)
+      #(new_model, effects.fetch_stores(state.filters))
     }
-  }
-}
 
-/// Validate login form fields
-fn validate_login_form(form: model.LoginForm) -> Result(Nil, String) {
-  case form.email, form.password {
-    "", _ -> Error("Email is required")
-    _, "" -> Error("Password is required")
-    email, _ -> {
-      case validate_email(email) {
-        Error(_) -> Error("Please enter a valid email address")
-        Ok(_) -> Ok(Nil)
+    StoresLoaded(result) -> {
+      let new_state = case result {
+        Ok(stores) -> StoreListState(..state, stores: Success(stores), has_more: list.length(stores) >= 20)
+        Error(err) -> StoreListState(..state, stores: Failure(err))
       }
+      #(Model(..model, store_list: new_state), effect.none())
+    }
+
+    SearchChanged(query) -> {
+      let new_filters = shared.StoreFilters(..state.filters, query: query, page: 1)
+      let new_state = StoreListState(..state, filters: new_filters, stores: Loading)
+      #(Model(..model, store_list: new_state), effects.fetch_stores(new_filters))
+    }
+
+    LocationChanged(location) -> {
+      let new_filters = shared.StoreFilters(..state.filters, location: location, page: 1)
+      let new_state = StoreListState(..state, filters: new_filters, stores: Loading)
+      #(Model(..model, store_list: new_state), effects.fetch_stores(new_filters))
+    }
+
+    SortChanged(sort) -> {
+      let new_filters = shared.StoreFilters(..state.filters, sort: sort, page: 1)
+      let new_state = StoreListState(..state, filters: new_filters, stores: Loading)
+      #(Model(..model, store_list: new_state), effects.fetch_stores(new_filters))
+    }
+
+    PageChanged(page) -> {
+      let new_filters = shared.StoreFilters(..state.filters, page: page)
+      let new_state = StoreListState(..state, filters: new_filters, stores: Loading)
+      #(Model(..model, store_list: new_state), effects.fetch_stores(new_filters))
+    }
+
+    RetryLoad -> {
+      let new_state = StoreListState(..state, stores: Loading)
+      #(Model(..model, store_list: new_state), effects.fetch_stores(state.filters))
     }
   }
-}
-
-/// Handle successful login - store token and redirect
-fn handle_login_success(
-  model: Model,
-  response: AuthResponse,
-) -> #(Model, Effect(Msg)) {
-  let updated_model = model.set_logged_in(model, response.user, response.token)
-  let save_effect = effects.save_token_to_storage(response.user, response.token)
-  #(updated_model, save_effect)
-}
-
-/// Handle register form submission with validation
-fn handle_register_submit(model: Model) -> #(Model, Effect(Msg)) {
-  let form = model.register_form
-
-  // Validate fields
-  case validate_register_form(form) {
-    Error(error_msg) -> #(model.set_register_error(model, error_msg), effect.none())
-    Ok(_) -> {
-      let loading_model = model.set_register_loading(model, True)
-      let effect = effects.submit_register(
-        form.username,
-        form.email,
-        form.password,
-      )
-      #(loading_model, effect)
-    }
-  }
-}
-
-/// Validate registration form fields
-fn validate_register_form(form: model.RegisterForm) -> Result(Nil, String) {
-  // Check empty fields first
-  case form.username, form.email, form.password, form.confirm_password {
-    "", _, _, _ -> Error("Username is required")
-    _, "", _, _ -> Error("Email is required")
-    _, _, "", _ -> Error("Password is required")
-    _, _, _, "" -> Error("Please confirm your password")
-    username, email, password, confirm_password -> {
-      // Check username length
-      case string.length(username) >= 3 {
-        False -> Error("Username must be at least 3 characters")
-        True -> {
-          // Check email format
-          case validate_email(email) {
-            Error(_) -> Error("Please enter a valid email address")
-            Ok(_) -> {
-              // Check password length
-              case validate_password(password) {
-                Error(_) -> Error("Password must be at least 8 characters")
-                Ok(_) -> {
-                  // Check passwords match
-                  case password == confirm_password {
-                    False -> Error("Passwords do not match")
-                    True -> Ok(Nil)
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-/// Handle successful registration - store token and redirect
-fn handle_register_success(
-  model: Model,
-  response: AuthResponse,
-) -> #(Model, Effect(Msg)) {
-  let updated_model = model.set_logged_in(model, response.user, response.token)
-  let save_effect = effects.save_token_to_storage(response.user, response.token)
-  #(updated_model, save_effect)
-}
-
-/// Handle logout request
-fn handle_logout(model: Model) -> #(Model, Effect(Msg)) {
-  #(model.logout(model), effects.clear_token())
 }

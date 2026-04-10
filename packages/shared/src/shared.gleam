@@ -1,6 +1,9 @@
 /// Shared types and functions for boba-raider-8
 
-import gleam/string
+/// User type for authenticated users
+pub type User {
+  User(id: String, username: String)
+}
 
 pub type AppError {
   NotFound(String)

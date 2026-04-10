@@ -1,23 +1,19 @@
-/// Main view with routing and navigation
-
-import frontend/model.{type Model, LoggedIn, LoggedOut, AuthLoading}
-import frontend/msg.{type Msg, type Route, Home, Login, Register, NavigateTo, LogoutRequested}
-import frontend/pages/auth.{login_page, register_page, loading_spinner}
+import frontend/header
+import frontend/model.{type Model}
+import frontend/msg.{type Msg}
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
-import lustre/event
 
-/// Main view function - renders based on current route
+/// Main application view with header
 pub fn view(model: Model) -> Element(Msg) {
   html.div([attribute.class("app")], [
-    navigation_bar(model),
+    // Header with navigation and conditional auth
+    header.header(model),
+
+    // Main content area
     html.main([attribute.class("main-content")], [
-      case model.auth {
-        // Show loading while checking auth state
-        AuthLoading -> loading_spinner()
-        _ -> render_route(model)
-      },
+      html.p([], [element.text("Welcome to BobaRaider!")]),
     ]),
   ])
 }

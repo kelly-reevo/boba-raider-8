@@ -1,21 +1,18 @@
 /// Effects for localStorage and API calls
 
-import frontend/msg.{type Msg, TokenLoadedFromStorage, TokenStorageError, TokenCleared, LoginSuccess, LoginFailure, RegisterSuccess, RegisterFailure}
-import lustre/effect.{type Effect}
-import shared.{type User, type AuthToken, type AuthResponse}
-
-// ---------------------------------------------------------------------------
-// localStorage Effects
-// ---------------------------------------------------------------------------
-
-/// Load auth token from localStorage on app init
-pub fn load_token_from_storage() -> Effect(Msg) {
+/// Clear local storage and redirect (used on logout)
+/// Executes: localStorage.clear() then window.location.href = "/"
+pub fn logout() -> Effect(Msg) {
   effect.from(fn(dispatch) {
-    case do_load_from_storage() {
-      Ok(#(user, token)) -> dispatch(TokenLoadedFromStorage(user, token))
-      Error(msg) -> dispatch(TokenStorageError(msg))
-    }
+    do_logout()
+    dispatch(msg.StorageCleared)
   })
+}
+
+/// Perform the actual logout via FFI
+@external(javascript, "../ffi.mjs", "logout")
+fn do_logout() -> Nil {
+  Nil
 }
 
 /// Save auth token to localStorage on login

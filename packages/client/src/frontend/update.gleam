@@ -1,4 +1,8 @@
-/// Application update logic with routing and authentication
+import frontend/effects
+import frontend/model.{type Model, Model}
+import frontend/msg.{type Msg}
+import gleam/option.{None}
+import lustre/effect.{type Effect}
 
 import frontend/effects
 import frontend/model.{type Model}
@@ -10,41 +14,15 @@ import shared.{type AuthResponse, validate_email, validate_password}
 /// Main update function handling all messages
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
-    // Navigation
-    msg.NavigateTo(route) -> #(model.set_route(model, route), effect.none())
+    // Counter demo messages (legacy)
+    msg.Increment -> #(Model(..model, count: model.count + 1), effect.none())
+    msg.Decrement -> #(Model(..model, count: model.count - 1), effect.none())
+    msg.Reset -> #(Model(..model, count: 0), effect.none())
 
-    // App initialization
-    msg.InitApp -> init_app(model)
-
-    // Login form handling
-    msg.LoginEmailChanged(email) -> #(model.set_login_email(model, email), effect.none())
-    msg.LoginPasswordChanged(password) -> #(model.set_login_password(model, password), effect.none())
-    msg.LoginSubmitted -> handle_login_submit(model)
-    msg.LoginSuccess(response) -> handle_login_success(model, response)
-    msg.LoginFailure(error) -> #(model.set_login_error(model, shared.error_message(error)), effect.none())
-
-    // Register form handling
-    msg.RegisterUsernameChanged(username) -> #(model.set_register_username(model, username), effect.none())
-    msg.RegisterEmailChanged(email) -> #(model.set_register_email(model, email), effect.none())
-    msg.RegisterPasswordChanged(password) -> #(model.set_register_password(model, password), effect.none())
-    msg.RegisterConfirmPasswordChanged(password) -> #(model.set_register_confirm_password(model, password), effect.none())
-    msg.RegisterSubmitted -> handle_register_submit(model)
-    msg.RegisterSuccess(response) -> handle_register_success(model, response)
-    msg.RegisterFailure(error) -> #(model.set_register_error(model, shared.error_message(error)), effect.none())
-
-    // Logout handling
-    msg.LogoutRequested -> handle_logout(model)
-    msg.LogoutCompleted -> #(model.logout(model), effects.clear_token())
-
-    // localStorage callbacks
-    msg.TokenLoadedFromStorage(user, token) -> #(model.set_logged_in(model, user, token), effect.none())
-    msg.TokenStorageError(_) -> #(model.set_logged_out(model), effect.none())
-    msg.TokenCleared -> #(model, effect.none())
-
-    // Legacy counter messages
-    msg.Increment -> #(model, effect.none())
-    msg.Decrement -> #(model, effect.none())
-    msg.Reset -> #(model, effect.none())
+    // Auth messages: logout clears storage then redirects via StorageCleared
+    msg.Logout -> #(Model(..model, user: None), effects.logout())
+    msg.StorageCleared -> #(model, effect.none())
+    msg.RedirectComplete -> #(model, effect.none())
   }
 }
 

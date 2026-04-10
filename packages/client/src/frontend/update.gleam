@@ -1,170 +1,126 @@
-/// Application state updates
-
-import frontend/components/store_rating_form as form
-import frontend/effects
-import frontend/model.{type Model, Model}
-import frontend/msg.{type Msg}
-import gleam/option.{None, Some}
-import lustre/effect.{type Effect}
+/// State updates and route guards
 
 import frontend/effects
 import frontend/model.{
-  type DrinkFormData, type Model, DrinkFormData, Model, ImageUploadError,
-  SubmitError, Submitting, Success, UploadingImage, close_form, open_form,
-  reset_form,
+  type Model, Model, AuthAuthenticated, AuthUnauthenticated, None, Some,
+  can_access_route, is_authenticated,
 }
 import frontend/msg.{type Msg}
-import gleam/float
+import frontend/route.{type Route, Login, login_redirect_path, to_path, is_protected}
 import lustre/effect.{type Effect}
-import shared.{type CreateDrinkInput, CreateDrinkInput}
 
 /// Main update function
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
-    // Counter messages (existing)
-    msg.Increment -> #(Model(..model, count: model.count + 1), effect.none())
-    msg.Decrement -> #(Model(..model, count: model.count - 1), effect.none())
-    msg.Reset -> #(Model(..model, count: 0), effect.none())
+    // Route changes with authentication guard
+    msg.RouteChanged(route) -> handle_route_change(model, route)
 
-    // Rating form: Open for new rating
-    msg.RatingFormOpened(store_id, display_mode) -> {
-      let form_model = form.init_new(store_id, display_mode)
-      #(Model(..model, rating_form: Some(form_model)), effect.none())
+    // Programmatic navigation with auth check
+    msg.NavigateTo(route) -> handle_navigate_to(model, route)
+
+    // Authentication state updates
+    msg.AuthStateChanged(auth_state) -> {
+      let new_model = Model(..model, auth_state: auth_state)
+      #(new_model, effect.none())
     }
 
-    // Rating form: Open for editing existing rating
-    msg.RatingFormOpenedForEdit(store_id, rating_id, overall_score, review_text, display_mode) -> {
-      let form_model = form.init_edit(store_id, rating_id, overall_score, review_text, display_mode)
-      #(Model(..model, rating_form: Some(form_model)), effect.none())
+    // Login flow
+    msg.LoginRequested(username, password) -> {
+      #(model, effects.login(username, password))
     }
 
-    // Rating form: Close
-    msg.RatingFormClosed -> {
-      #(Model(..model, rating_form: None), effect.none())
-    }
-
-    // Rating form: Score changed
-    msg.RatingScoreChanged(score) -> {
-      case model.rating_form {
-        Some(form_model) -> {
-          let new_form = form.StoreRatingFormModel(..form_model, overall_score: score)
-          #(Model(..model, rating_form: Some(new_form)), effect.none())
-        }
-        None -> #(model, effect.none())
+    msg.LoginSucceeded(user_id, username) -> {
+      let auth_state = AuthAuthenticated(user_id, username)
+      let redirect = model.post_login_redirect
+      let new_model = Model(
+        ..model,
+        auth_state: auth_state,
+        post_login_redirect: None,
+      )
+      // Redirect to saved path or home after login
+      let effect = case redirect {
+        Some(path) -> effects.navigate_to(path)
+        None -> effects.navigate_to("/")
       }
+      #(new_model, effect)
     }
 
-    // Rating form: Review text changed
-    msg.RatingReviewTextChanged(text) -> {
-      case model.rating_form {
-        Some(form_model) -> {
-          let new_form = form.StoreRatingFormModel(..form_model, review_text: text)
-          #(Model(..model, rating_form: Some(new_form)), effect.none())
-        }
-        None -> #(model, effect.none())
+    msg.LoginFailed(_error) -> {
+      // Keep model unchanged, error displayed via auth state
+      #(model, effect.none())
+    }
+
+    // Logout flow
+    msg.LogoutRequested -> {
+      #(model, effects.logout())
+    }
+
+    msg.LogoutCompleted -> {
+      let new_model = Model(..model, auth_state: AuthUnauthenticated)
+      // Redirect to home after logout
+      #(new_model, effects.navigate_to("/"))
+    }
+
+    // Auth status check on init
+    msg.CheckAuthStatus -> {
+      #(model, effects.check_auth_status())
+    }
+
+    msg.AuthStatusReturned(result) -> {
+      let auth_state = case result {
+        Ok(state) -> state
+        Error(_) -> AuthUnauthenticated
       }
+      #(Model(..model, auth_state: auth_state), effect.none())
     }
 
-    // Rating form: Submit
-    msg.RatingFormSubmitted -> {
-      case model.rating_form {
-        Some(form_model) -> {
-          // Validate form before submitting
-          case form.is_valid(form_model) {
-            True -> {
-              let new_form = form.StoreRatingFormModel(
-                ..form_model,
-                submit_state: form.Submitting,
-              )
-              let effect = effects.submit_store_rating(
-                form_model.store_id,
-                form_model.existing_rating_id,
-                form_model.overall_score,
-                form_model.review_text,
-              )
-              #(Model(..model, rating_form: Some(new_form)), effect)
-            }
-            False -> {
-              // Form invalid, show error without submitting
-              let new_form = form.StoreRatingFormModel(
-                ..form_model,
-                submit_state: form.SubmitError("Please select a star rating."),
-              )
-              #(Model(..model, rating_form: Some(new_form)), effect.none())
-            }
-          }
-        }
-        None -> #(model, effect.none())
-      }
+    // Redirect path management
+    msg.SetPostLoginRedirect(path) -> {
+      #(Model(..model, post_login_redirect: Some(path)), effect.none())
     }
 
-    // Rating form: Delete clicked
-    msg.RatingDeleteClicked -> {
-      case model.rating_form {
-        Some(form_model) -> {
-          case form_model.existing_rating_id {
-            Some(rating_id) -> {
-              let new_form = form.StoreRatingFormModel(
-                ..form_model,
-                submit_state: form.Submitting,
-              )
-              let effect = effects.delete_store_rating(form_model.store_id, rating_id)
-              #(Model(..model, rating_form: Some(new_form)), effect)
-            }
-            None -> #(model, effect.none())
-          }
-        }
-        None -> #(model, effect.none())
-      }
+    msg.ClearPostLoginRedirect -> {
+      #(Model(..model, post_login_redirect: None), effect.none())
     }
+  }
+}
 
-    // Rating created successfully
-    msg.RatingCreated(_store_id) -> {
-      case model.rating_form {
-        Some(form_model) -> {
-          let new_form = form.StoreRatingFormModel(
-            ..form_model,
-            submit_state: form.SubmitSuccess,
-            existing_rating_id: Some("temp-rating-id"),
-          )
-          #(Model(..model, rating_form: Some(new_form)), effect.none())
-        }
-        None -> #(model, effect.none())
-      }
+/// Handle route changes with authentication guard
+fn handle_route_change(model: Model, route_val: Route) -> #(Model, Effect(Msg)) {
+  // Check if route requires auth and user is not authenticated
+  case is_protected(route_val) && !is_authenticated(model) {
+    True -> {
+      // Save current path and redirect to login
+      let current_path = to_path(route_val)
+      let new_model = Model(
+        ..model,
+        current_route: Login,
+        post_login_redirect: Some(current_path),
+      )
+      #(new_model, effects.navigate_to(login_redirect_path()))
     }
-
-    // Rating updated successfully
-    msg.RatingUpdated(_store_id) -> {
-      case model.rating_form {
-        Some(form_model) -> {
-          let new_form = form.StoreRatingFormModel(
-            ..form_model,
-            submit_state: form.SubmitSuccess,
-          )
-          #(Model(..model, rating_form: Some(new_form)), effect.none())
-        }
-        None -> #(model, effect.none())
-      }
+    False -> {
+      // Allow access
+      #(Model(..model, current_route: route_val), effect.none())
     }
+  }
+}
 
-    // Rating deleted successfully
-    msg.RatingDeleted(_store_id) -> {
-      // Close the form after successful deletion
-      #(Model(..model, rating_form: None), effect.none())
+/// Handle programmatic navigation with auth check
+fn handle_navigate_to(model: Model, route_val: Route) -> #(Model, Effect(Msg)) {
+  case can_access_route(model, route_val) {
+    True -> {
+      let path = to_path(route_val)
+      #(Model(..model, current_route: route_val), effects.navigate_to(path))
     }
-
-    // Rating API error
-    msg.RatingApiError(error) -> {
-      case model.rating_form {
-        Some(form_model) -> {
-          let new_form = form.StoreRatingFormModel(
-            ..form_model,
-            submit_state: form.SubmitError(error),
-          )
-          #(Model(..model, rating_form: Some(new_form)), effect.none())
-        }
-        None -> #(Model(..model, error: error), effect.none())
-      }
+    False -> {
+      // Save intended destination and redirect to login
+      let path = to_path(route_val)
+      let new_model = Model(
+        ..model,
+        post_login_redirect: Some(path),
+      )
+      #(new_model, effects.navigate_to(login_redirect_path()))
     }
   }
 }

@@ -3,56 +3,33 @@ import shared.{type Drink, type Rating}
 
 /// Application messages
 
-/// Form display mode for rating form
-pub type DisplayMode {
-  Modal
-  Inline
-}
+import frontend/model.{type AuthState}
+import frontend/route.{type Route}
 
-/// Rating form messages
+/// All possible messages in the application
 pub type Msg {
-  // Counter messages (existing)
-  Increment
-  Decrement
-  Reset
-
-  // Store rating form messages
-  /// Open rating form for a store (new rating)
-  RatingFormOpened(store_id: String, display_mode: DisplayMode)
-
-  /// Open rating form with existing rating data for editing
-  RatingFormOpenedForEdit(
-    store_id: String,
-    rating_id: String,
-    overall_score: Int,
-    review_text: String,
-    display_mode: DisplayMode,
-  )
-
-  /// Close the rating form modal
-  RatingFormClosed
-
-  /// Star score selection changed
-  RatingScoreChanged(score: Int)
-
-  /// Review text input changed
-  RatingReviewTextChanged(text: String)
-
-  /// Form submitted
-  RatingFormSubmitted
-
-  /// Delete rating button clicked
-  RatingDeleteClicked
-
-  /// Rating created successfully
-  RatingCreated(store_id: String)
-
-  /// Rating updated successfully
-  RatingUpdated(store_id: String)
-
-  /// Rating deleted successfully
-  RatingDeleted(store_id: String)
-
-  /// Rating API error
-  RatingApiError(error: String)
+  /// Route changed (from URL)
+  RouteChanged(route: Route)
+  /// Navigate to a route programmatically
+  NavigateTo(route: Route)
+  /// Authentication state changed
+  AuthStateChanged(auth_state: AuthState)
+  /// Login requested
+  LoginRequested(username: String, password: String)
+  /// Login succeeded
+  LoginSucceeded(user_id: String, username: String)
+  /// Login failed
+  LoginFailed(error: String)
+  /// Logout requested
+  LogoutRequested
+  /// Logout completed
+  LogoutCompleted
+  /// Check auth status on init
+  CheckAuthStatus
+  /// Auth status check returned
+  AuthStatusReturned(result: Result(AuthState, String))
+  /// Store redirect path for after login
+  SetPostLoginRedirect(path: String)
+  /// Clear redirect path
+  ClearPostLoginRedirect
 }

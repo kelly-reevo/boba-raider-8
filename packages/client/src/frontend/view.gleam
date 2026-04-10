@@ -1,17 +1,22 @@
-/// Application views
+/// View functions for all routes with loading/empty/error/populated states
 
-import frontend/components/store_rating_form
-import frontend/model.{type Model}
-import frontend/msg.{type Msg, Inline, Modal}
-import gleam/int
-import gleam/option.{None, Some}
+import frontend/model.{
+  type Model, type PageData, AuthAuthenticated, AuthLoading,
+  AuthUnauthenticated, PageEmpty, PageError, PageLoading, PagePopulated,
+  is_authenticated, Some, None,
+}
+import frontend/msg.{type Msg, LoginRequested, NavigateTo, LogoutRequested}
+import frontend/route.{
+  Home, Login, Profile, Register, StoreCreate, StoreDetail,
+  StoreEdit, StoreList, DrinkDetail, DrinkEdit, NotFound,
+}
 import lustre/attribute
-import lustre/element.{type Element}
+import lustre/element.{type Element, text}
 import lustre/element/html
 import lustre/event
 import shared.{Some}
 
-/// Main application view
+/// Main view function - routes to appropriate page view
 pub fn view(model: Model) -> Element(Msg) {
   case model.current_page {
     Home -> view_home()
@@ -33,68 +38,9 @@ fn init_store_detail(store_id: String, auth: AuthState) -> StoreDetailModel {
 
 fn view_home() -> Element(Msg) {
   html.div([attribute.class("app")], [
-    // Main app content (original counter demo)
-    html.h1([], [element.text("boba-raider-8")]),
-
-    // Counter section (existing)
-    html.div([attribute.class("counter")], [
-      html.button([event.on_click(msg.Decrement)], [element.text("-")]),
-      html.span([attribute.class("count")], [
-        element.text("Count: " <> int.to_string(model.count)),
-      ]),
-      html.button([event.on_click(msg.Increment)], [element.text("+")]),
-    ]),
-    render_footer(),
-  ])
-}
-
-fn render_header() -> Element(Msg) {
-  html.header([attribute.class("app-header")], [
-    html.h1([], [element.text("boba-raider-8")]),
-    html.nav([], [
-      html.a([attribute.href("/")], [element.text("Home")]),
-      html.a([attribute.href("/stores")], [element.text("Stores")]),
-    ]),
-
-    // Demo: Store detail section with create drink button
-    html.div([attribute.class("store-detail-demo")], [
-      html.h2([], [element.text("Store Detail Page Demo")]),
-      html.p([], [element.text("Example of how the create button appears on a store detail page: ")]),
-      // Example: Create drink button (would be called from store detail page)
-      create_drink_form.render_create_button("store-123"),
-    ]),
-
-    // The create drink form modal (renders when show_create_form is true)
-    create_drink_form.view(model),
-  ])
-}
-
-fn render_footer() -> Element(Msg) {
-  html.footer([attribute.class("app-footer")], [
-    element.text("boba-raider-8 2024"),
-  ])
-}
-
-fn render_page(model: Model) -> Element(Msg) {
-  case model.page {
-    CounterPage(count, _error) -> counter_view(count)
-    EditStorePage(state) -> edit_store_page.view(state, model.current_user)
-    _ -> html.div([], [element.text("Page not found")])
-  }
-}
-
-fn counter_view(count: Int) -> Element(Msg) {
-  html.div([attribute.class("counter-page")], [
-    html.h2([], [element.text("Counter")]),
-    html.div([attribute.class("counter")], [
-      html.button([event.on_click(Decrement)], [element.text("-")]),
-      html.span([attribute.class("count")], [
-        element.text(int.to_string(count)),
-      ]),
-      html.button([event.on_click(Increment)], [element.text("+")]),
-    ]),
-    html.button([event.on_click(Reset), attribute.class("reset")], [
-      element.text("Reset"),
+    view_navbar(model),
+    html.main([attribute.class("main-content")], [
+      view_current_route(model),
     ]),
 
     // Demo: Button to open rating form
@@ -264,180 +210,327 @@ fn navigation_bar(model: Model) -> Element(Msg) {
   ])
 }
 
-/// Home page component
-fn home_page(model: Model) -> Element(Msg) {
-  html.div([attribute.class("home-page")], [
-    case model.auth {
-      LoggedIn(user, _) -> {
-        // Authenticated home
-        html.div([attribute.class("welcome-section")], [
-          html.h1([], [element.text("Welcome back, " <> user.username <> "!")]),
-          html.p([], [
-            element.text("You are successfully authenticated. Your session is stored in localStorage."),
-          ]),
-          html.div([attribute.class("user-card")], [
-            html.h3([], [element.text("Your Profile")]),
-            html.p([], [element.text("ID: " <> user.id)]),
-            html.p([], [element.text("Email: " <> user.email)]),
-            html.p([], [element.text("Username: " <> user.username)]),
-          ]),
-        ])
-      }
-      _ -> {
-        // Unauthenticated home
-        html.div([attribute.class("welcome-section")], [
-          html.h1([], [element.text("Welcome to BobaRaider")]),
-          html.p([], [
-            element.text("Please sign in or create an account to continue."),
-          ]),
-          html.div([attribute.class("cta-buttons")], [
-            html.a(
-              [
-                attribute.href("#/login"),
-                event.on_click(NavigateTo(Login)),
-                attribute.class("btn btn-primary"),
-              ],
-              [element.text("Sign In")],
-            ),
-            html.a(
-              [
-                attribute.href("#/register"),
-                event.on_click(NavigateTo(Register)),
-                attribute.class("btn btn-secondary"),
-              ],
-              [element.text("Create Account")],
-            ),
-          ]),
-        ])
-      }
+/// Navigation bar with auth state
+fn view_navbar(model: Model) -> Element(Msg) {
+  html.nav([attribute.class("navbar")], [
+    html.div([attribute.class("nav-brand")], [
+      html.a([attribute.href("/"), event.on_click(NavigateTo(Home))], [
+        text("BobaRaider"),
+      ]),
+    ]),
+    html.div([attribute.class("nav-links")], [
+      html.a([attribute.href("/"), event.on_click(NavigateTo(Home))], [text("Home")]),
+      html.a([attribute.href("/stores"), event.on_click(NavigateTo(StoreList))], [text("Stores")]),
+    ]),
+    html.div([attribute.class("nav-auth")], [
+      view_auth_section(model),
+    ]),
+  ])
+}
+
+/// View auth section based on authentication state
+fn view_auth_section(model: Model) -> Element(Msg) {
+  case model.auth_state {
+    AuthLoading -> html.span([attribute.class("auth-loading")], [text("Loading...")])
+    AuthUnauthenticated -> html.div([], [
+      html.a(
+        [attribute.href("/login"), attribute.class("btn-login"), event.on_click(NavigateTo(Login))],
+        [text("Login")],
+      ),
+      html.a(
+        [attribute.href("/register"), attribute.class("btn-register"), event.on_click(NavigateTo(Register))],
+        [text("Register")],
+      ),
+    ])
+    AuthAuthenticated(_, username) -> html.div([], [
+      html.a(
+        [attribute.href("/profile"), attribute.class("btn-profile"), event.on_click(NavigateTo(Profile))],
+        [text(username)],
+      ),
+      html.button([attribute.class("btn-logout"), event.on_click(LogoutRequested)], [text("Logout")]),
+    ])
+  }
+}
+
+/// View current route
+fn view_current_route(model: Model) -> Element(Msg) {
+  case model.current_route {
+    Home -> view_home(model)
+    StoreList -> view_store_list(model)
+    StoreDetail(id) -> view_store_detail(model, id)
+    StoreCreate -> view_store_create(model)
+    StoreEdit(id) -> view_store_edit(model, id)
+    DrinkDetail(id) -> view_drink_detail(model, id)
+    DrinkEdit(id) -> view_drink_edit(model, id)
+    Profile -> view_profile(model)
+    Login -> view_login(model)
+    Register -> view_register(model)
+    NotFound(path) -> view_not_found(path)
+  }
+}
+
+// ============================================
+// HOME PAGE (Public)
+// ============================================
+
+fn view_home(model: Model) -> Element(Msg) {
+  html.div([attribute.class("page-home")], [
+    html.h1([], [text("Welcome to BobaRaider")]),
+    html.p([], [text("Discover and share the best boba tea spots!")]),
+    html.div([attribute.class("home-actions")], [
+      html.a(
+        [attribute.href("/stores"), attribute.class("btn-primary"), event.on_click(NavigateTo(StoreList))],
+        [text("Explore Stores")],
+      ),
+      case is_authenticated(model) {
+        True -> html.a(
+          [attribute.href("/stores/create"), attribute.class("btn-secondary"), event.on_click(NavigateTo(StoreCreate))],
+          [text("Add Store")],
+        )
+        False -> element.none()
+      },
+    ]),
+  ])
+}
+
+// ============================================
+// STORE LIST PAGE (Public)
+// ============================================
+
+fn view_store_list(_model: Model) -> Element(Msg) {
+  // For now, show empty state - this would be populated with actual data
+  html.div([attribute.class("page-store-list")], [
+    html.h1([], [text("Stores")]),
+    view_page_data_state(PageEmpty, fn(_) { element.none() }, "stores"),
+  ])
+}
+
+// ============================================
+// STORE DETAIL PAGE (Public)
+// ============================================
+
+fn view_store_detail(_model: Model, id: String) -> Element(Msg) {
+  html.div([attribute.class("page-store-detail")], [
+    html.h1([], [text("Store Details")]),
+    html.p([], [text("Store ID: " <> id)]),
+    view_page_data_state(PageEmpty, fn(_) { element.none() }, "store details"),
+  ])
+}
+
+// ============================================
+// STORE CREATE PAGE (Protected)
+// ============================================
+
+fn view_store_create(_model: Model) -> Element(Msg) {
+  html.div([attribute.class("page-store-create")], [
+    html.h1([], [text("Create New Store")]),
+    html.form([attribute.class("store-form")], [
+      html.div([attribute.class("form-group")], [
+        html.label([], [text("Store Name")]),
+        html.input([attribute.type_("text"), attribute.name("name")]),
+      ]),
+      html.div([attribute.class("form-group")], [
+        html.label([], [text("Address")]),
+        html.input([attribute.type_("text"), attribute.name("address")]),
+      ]),
+      html.button([attribute.type_("submit"), attribute.class("btn-primary")], [text("Create Store")]),
+    ]),
+  ])
+}
+
+// ============================================
+// STORE EDIT PAGE (Protected)
+// ============================================
+
+fn view_store_edit(_model: Model, id: String) -> Element(Msg) {
+  html.div([attribute.class("page-store-edit")], [
+    html.h1([], [text("Edit Store")]),
+    html.p([], [text("Editing store ID: " <> id)]),
+    view_page_data_state(PageEmpty, fn(_) { element.none() }, "store data"),
+  ])
+}
+
+// ============================================
+// DRINK DETAIL PAGE (Public)
+// ============================================
+
+fn view_drink_detail(_model: Model, id: String) -> Element(Msg) {
+  html.div([attribute.class("page-drink-detail")], [
+    html.h1([], [text("Drink Details")]),
+    html.p([], [text("Drink ID: " <> id)]),
+    view_page_data_state(PageEmpty, fn(_) { element.none() }, "drink details"),
+  ])
+}
+
+// ============================================
+// DRINK EDIT PAGE (Protected)
+// ============================================
+
+fn view_drink_edit(_model: Model, id: String) -> Element(Msg) {
+  html.div([attribute.class("page-drink-edit")], [
+    html.h1([], [text("Edit Drink")]),
+    html.p([], [text("Editing drink ID: " <> id)]),
+    view_page_data_state(PageEmpty, fn(_) { element.none() }, "drink data"),
+  ])
+}
+
+// ============================================
+// PROFILE PAGE (Protected)
+// ============================================
+
+fn view_profile(model: Model) -> Element(Msg) {
+  html.div([attribute.class("page-profile")], [
+    html.h1([], [text("Your Profile")]),
+    case model.auth_state {
+      AuthAuthenticated(user_id, username) -> html.div([], [
+        html.div([attribute.class("profile-card")], [
+          html.h2([], [text(username)]),
+          html.p([], [text("User ID: " <> user_id)]),
+        ]),
+      ])
+      _ -> view_page_data_state(PageLoading, fn(_) { element.none() }, "profile")
     },
   ])
 }
 
-/// Map location section
-fn view_map_location(store: Store) -> Element(Msg) {
-  html.div([attribute.class("map-section")], [
-    html.h2([], [element.text("Location")]),
-    html.div(
+// ============================================
+// LOGIN PAGE (Public)
+// ============================================
+
+fn view_login(model: Model) -> Element(Msg) {
+  html.div([attribute.class("page-login")], [
+    html.h1([], [text("Login")]),
+    case model.post_login_redirect {
+      Some(path) -> html.p([attribute.class("redirect-notice")], [
+        text("Please login to access " <> path),
+      ])
+      None -> element.none()
+    },
+    html.form(
       [
-        attribute.class("map-container"),
-        // Data attributes for map initialization
-        attribute.attribute("data-lat", float.to_string(store.latitude)),
-        attribute.attribute("data-lng", float.to_string(store.longitude)),
-        attribute.attribute("data-name", store.name),
+        attribute.class("login-form"),
+        event.on_submit(fn(_fields) { LoginRequested("", "") }),
       ],
       [
-        // Static map placeholder - in production this would integrate with a map library
-        html.div([attribute.class("map-placeholder")], [
-          element.text("📍 " <> store.name),
-          html.br([]),
-          element.text(
-            "Coordinates: "
-            <> float.to_string(store.latitude)
-            <> ", "
-            <> float.to_string(store.longitude),
-          ),
+        html.div([attribute.class("form-group")], [
+          html.label([attribute.for("username")], [text("Username")]),
+          html.input([
+            attribute.type_("text"),
+            attribute.id("username"),
+            attribute.name("username"),
+            attribute.required(True),
+          ]),
         ]),
+        html.div([attribute.class("form-group")], [
+          html.label([attribute.for("password")], [text("Password")]),
+          html.input([
+            attribute.type_("password"),
+            attribute.id("password"),
+            attribute.name("password"),
+            attribute.required(True),
+          ]),
+        ]),
+        html.button([attribute.type_("submit"), attribute.class("btn-primary")], [text("Login")]),
       ],
+    ),
+    html.p([attribute.class("register-link")], [
+      text("Don't have an account? "),
+      html.a(
+        [attribute.href("/register"), event.on_click(NavigateTo(Register))],
+        [text("Register")],
+      ),
+    ]),
+  ])
+}
+
+// ============================================
+// REGISTER PAGE (Public)
+// ============================================
+
+fn view_register(_model: Model) -> Element(Msg) {
+  html.div([attribute.class("page-register")], [
+    html.h1([], [text("Register")]),
+    html.form(
+      [
+        attribute.class("register-form"),
+        event.on_submit(fn(_fields) { NavigateTo(Login) }),
+      ],
+      [
+        html.div([attribute.class("form-group")], [
+          html.label([attribute.for("username")], [text("Username")]),
+          html.input([
+            attribute.type_("text"),
+            attribute.id("username"),
+            attribute.name("username"),
+            attribute.required(True),
+          ]),
+        ]),
+        html.div([attribute.class("form-group")], [
+          html.label([attribute.for("email")], [text("Email")]),
+          html.input([
+            attribute.type_("email"),
+            attribute.id("email"),
+            attribute.name("email"),
+            attribute.required(True),
+          ]),
+        ]),
+        html.div([attribute.class("form-group")], [
+          html.label([attribute.for("password")], [text("Password")]),
+          html.input([
+            attribute.type_("password"),
+            attribute.id("password"),
+            attribute.name("password"),
+            attribute.required(True),
+          ]),
+        ]),
+        html.button([attribute.type_("submit"), attribute.class("btn-primary")], [text("Register")]),
+      ],
+    ),
+    html.p([attribute.class("login-link")], [
+      text("Already have an account? "),
+      html.a(
+        [attribute.href("/login"), event.on_click(NavigateTo(Login))],
+        [text("Login")],
+      ),
+    ]),
+  ])
+}
+
+// ============================================
+// NOT FOUND PAGE
+// ============================================
+
+fn view_not_found(path: String) -> Element(Msg) {
+  html.div([attribute.class("page-not-found")], [
+    html.h1([], [text("404 - Page Not Found")]),
+    html.p([], [text("The page '" <> path <> "' could not be found.")]),
+    html.a(
+      [attribute.href("/"), attribute.class("btn-primary"), event.on_click(NavigateTo(Home))],
+      [text("Go Home")],
     ),
   ])
 }
 
-/// Add drink button (only shown for authenticated users)
-fn view_add_drink_button(auth: AuthState) -> Element(Msg) {
-  case auth {
-    Authenticated(_, _) -> {
-      html.div([attribute.class("add-drink-section")], [
-        html.button(
-          [
-            attribute.class("add-drink-button"),
-            event.on_click(wrap(ClickedAddDrink)),
-          ],
-          [element.text("+ Add Drink")],
-        ),
-      ])
-    }
-    Anonymous -> {
-      // Empty element for anonymous users
-      element.none()
-    }
-  }
-}
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
 
-/// Drinks list section
-fn view_drinks_section(drinks: List(Drink)) -> Element(Msg) {
-  html.div([attribute.class("drinks-section")], [
-    html.h2([], [element.text("Drinks")]),
-    case drinks {
-      [] -> html.p([attribute.class("empty-state")], [element.text("No drinks listed yet.")])
-      _ -> html.div([attribute.class("drinks-list")], list.map(drinks, view_drink_card))
-    },
-  ])
-}
-
-/// Single drink card
-fn view_drink_card(drink: Drink) -> Element(Msg) {
-  html.div([attribute.class("drink-card")], [
-    html.div([attribute.class("drink-image")], [
-      html.img([
-        attribute.src(drink.image_url),
-        attribute.alt(drink.name),
-      ]),
-    ]),
-    html.div([attribute.class("drink-info")], [
-      html.h3([attribute.class("drink-name")], [element.text(drink.name)]),
-      html.p([attribute.class("drink-category")], [element.text(drink.category)]),
-      html.p([attribute.class("drink-description")], [element.text(drink.description)]),
-      html.div([attribute.class("drink-price")], [
-        element.text(drink.currency <> format_price(drink.price)),
-      ]),
-    ]),
-  ])
-}
-
-fn format_price(price: Float) -> String {
-  // Format to 2 decimal places
-  let whole = float.truncate(price)
-  let decimal = float.truncate({price -. int.to_float(whole)} *. 100.0)
-  int.to_string(whole) <> "." <> case decimal {
-    d if d < 10 -> "0" <> int.to_string(d)
-    d -> int.to_string(d)
-  }
-}
-
-/// Ratings section
-fn view_ratings_section(ratings: List(Rating)) -> Element(Msg) {
-  html.div([attribute.class("ratings-section")], [
-    html.h2([], [element.text("Reviews")]),
-    case ratings {
-      [] -> html.p([attribute.class("empty-state")], [element.text("No reviews yet. Be the first to review!")])
-      _ -> html.div([attribute.class("ratings-list")], list.map(ratings, view_rating_card))
-    },
-  ])
-}
-
-/// Single rating card
-fn view_rating_card(rating: Rating) -> Element(Msg) {
-  html.div([attribute.class("rating-card")], [
-    html.div([attribute.class("rating-header")], [
-      html.span([attribute.class("rating-username")], [element.text(rating.username)]),
-      html.span([attribute.class("rating-date")], [element.text(rating.created_at)]),
-    ]),
-    html.div([attribute.class("rating-stars")], [
-      element.text(render_stars(rating.rating)),
-    ]),
-    html.p([attribute.class("rating-review")], [element.text(rating.review)]),
-  ])
-}
-
-fn render_stars(rating: Int) -> String {
-  case rating {
-    5 -> "★★★★★"
-    4 -> "★★★★☆"
-    3 -> "★★★☆☆"
-    2 -> "★★☆☆☆"
-    1 -> "★☆☆☆☆"
-    0 -> "☆☆☆☆☆"
-    _ -> "★★★★★"
+/// Render page data state with all states (loading, empty, error, populated)
+fn view_page_data_state(
+  page_data: PageData(a),
+  view_populated: fn(a) -> Element(Msg),
+  resource_name: String,
+) -> Element(Msg) {
+  case page_data {
+    PageLoading -> html.div([attribute.class("state-loading")], [
+      html.p([], [text("Loading " <> resource_name <> "...")]),
+    ])
+    PageEmpty -> html.div([attribute.class("state-empty")], [
+      html.p([], [text("No " <> resource_name <> " available.")]),
+    ])
+    PageError(message) -> html.div([attribute.class("state-error")], [
+      html.p([], [text("Error: " <> message)]),
+    ])
+    PagePopulated(data) -> view_populated(data)
   }
 }

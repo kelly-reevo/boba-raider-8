@@ -1,60 +1,91 @@
-/// API effects for the frontend
+/// Application effects for HTTP and navigation
 
-import frontend/msg.{type Msg}
-import gleam/int
-import gleam/option.{type Option}
+import frontend/model.{type AuthState, AuthAuthenticated, AuthUnauthenticated}
+import frontend/msg.{
+  type Msg, AuthStatusReturned, LoginFailed, LoginSucceeded, LogoutCompleted,
+}
 import lustre/effect.{type Effect}
 
-/// POST /api/stores/:id/ratings - Create or update a store rating
-pub fn submit_store_rating(
-  store_id: String,
-  _rating_id: Option(String),
-  overall_score: Int,
-  _review_text: String,
-) -> Effect(Msg) {
-  use dispatch <- effect.from
+/// Navigate to a route (browser location change)
+pub fn navigate_to(path: String) -> Effect(Msg) {
+  effect.from(fn(_dispatch) {
+    do_navigate_to(path)
+    Nil
+  })
+}
 
-  // Simulate API call - will be replaced with actual HTTP implementation
-  // when gleam_fetch or similar package is available
-  case overall_score > 0 && overall_score <= 5 {
-    True -> {
-      // Simulate success
-      dispatch(msg.RatingCreated(store_id))
-    }
-    False -> {
-      dispatch(msg.RatingApiError("Invalid rating score: " <> int.to_string(overall_score)))
-    }
+@external(javascript, "../ffi.mjs", "navigateTo")
+fn do_navigate_to(path: String) -> Nil
+
+/// Check authentication status on init
+pub fn check_auth_status() -> Effect(Msg) {
+  effect.from(fn(dispatch) {
+    do_check_auth_status(fn(auth_json) {
+      let auth_state = parse_auth_response(auth_json)
+      dispatch(AuthStatusReturned(auth_state))
+    })
+    Nil
+  })
+}
+
+@external(javascript, "../ffi.mjs", "checkAuthStatus")
+fn do_check_auth_status(callback: fn(String) -> Nil) -> Nil
+
+/// Login request
+pub fn login(username: String, password: String) -> Effect(Msg) {
+  effect.from(fn(dispatch) {
+    do_login(username, password, fn(result_json) {
+      let result = parse_login_response(result_json)
+      case result {
+        Ok(#(user_id, username_val)) -> dispatch(LoginSucceeded(user_id, username_val))
+        Error(msg) -> dispatch(LoginFailed(msg))
+      }
+    })
+    Nil
+  })
+}
+
+@external(javascript, "../ffi.mjs", "login")
+fn do_login(
+  username: String,
+  password: String,
+  callback: fn(String) -> Nil,
+) -> Nil
+
+/// Logout request
+pub fn logout() -> Effect(Msg) {
+  effect.from(fn(dispatch) {
+    do_logout(fn(_) {
+      dispatch(LogoutCompleted)
+    })
+    Nil
+  })
+}
+
+@external(javascript, "../ffi.mjs", "logout")
+fn do_logout(callback: fn(String) -> Nil) -> Nil
+
+/// Parse auth status JSON response
+/// Returns authenticated state from JSON: { "authenticated": bool, "user": { "id": string, "username": string } }
+fn parse_auth_response(json_str: String) -> Result(AuthState, String) {
+  // Use FFI to parse JSON
+  case do_parse_auth_json(json_str) {
+    #(True, user_id, username) -> Ok(AuthAuthenticated(user_id, username))
+    #(False, _, _) -> Ok(AuthUnauthenticated)
   }
 }
 
-/// DELETE /api/ratings/store/:id - Delete a store rating
-pub fn delete_store_rating(store_id: String, _rating_id: String) -> Effect(Msg) {
-  use dispatch <- effect.from
+@external(javascript, "../ffi.mjs", "parseAuthJson")
+fn do_parse_auth_json(json_str: String) -> #(Bool, String, String)
 
-  // Simulate API call - will be replaced with actual HTTP implementation
-  dispatch(msg.RatingDeleted(store_id))
+/// Parse login JSON response
+/// Returns user info from JSON: { "user_id": string, "username": string }
+fn parse_login_response(json_str: String) -> Result(#(String, String), String) {
+  case do_parse_login_json(json_str) {
+    #(True, user_id, username) -> Ok(#(user_id, username))
+    #(False, _, _) -> Error("Login failed")
+  }
 }
 
-/// Placeholder effect (for other data fetching)
-pub fn fetch_data() -> Effect(Msg) {
-  effect.none()
-}
-
-/// Fetch current user for authorization check
-pub fn fetch_current_user() -> Effect(Msg) {
-  // In real implementation, uses lustre_http.get
-  let _url = api_base <> "/me"
-  effect.none()
-}
-
-// JSON encoder for store input
-fn store_input_to_json(input: StoreInput) -> String {
-  json.object([
-    #("name", json.string(input.name)),
-    #("description", json.string(input.description)),
-    #("address", json.string(input.address)),
-    #("phone", json.string(input.phone)),
-    #("email", json.string(input.email)),
-  ])
-  |> json.to_string()
-}
+@external(javascript, "../ffi.mjs", "parseLoginJson")
+fn do_parse_login_json(json_str: String) -> #(Bool, String, String)

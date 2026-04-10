@@ -1,7 +1,17 @@
 import frontend/msg.{type Msg}
 import lustre/effect.{type Effect}
 
-/// Placeholder for API effects
-pub fn fetch_data() -> Effect(Msg) {
-  effect.none()
+/// Clear local storage and redirect (used on logout)
+/// Executes: localStorage.clear() then window.location.href = "/"
+pub fn logout() -> Effect(Msg) {
+  effect.from(fn(dispatch) {
+    do_logout()
+    dispatch(msg.StorageCleared)
+  })
+}
+
+/// Perform the actual logout via FFI
+@external(javascript, "../ffi.mjs", "logout")
+fn do_logout() -> Nil {
+  Nil
 }

@@ -1,5 +1,10 @@
 /// Shared types and functions for boba-raider-8
 
+/// User type for authenticated users
+pub type User {
+  User(id: String, username: String)
+}
+
 pub type AppError {
   NotFound(String)
   InvalidInput(String)

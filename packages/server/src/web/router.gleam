@@ -1,8 +1,13 @@
+/// Router - merged from units 1-6
+/// Supports auth endpoints, store creation, store listing, and store retrieval
+
+import domain/store
 import gleam/erlang/process.{type Subject}
 import gleam/json
 import gleam/option.{type Option, None, Some}
 import gleam/string
 import services/store_service.{type StoreMsg}
+import shared
 import users.{RegisterSuccess, RegisterValidationError, RegisterConflict}
 import web/auth/login
 import web/handlers/store_handler
@@ -24,7 +29,13 @@ fn route(
   store_actor: Subject(StoreMsg),
   jwt_secret: String,
 ) -> Response {
-  case request.method, request.path {
+  // Strip query string for route matching
+  let base_path = case string.split(request.path, "?") {
+    [p, _] -> p
+    _ -> request.path
+  }
+
+  case request.method, base_path {
     "GET", "/" -> static.serve_index()
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
@@ -34,14 +45,15 @@ fn route(
     "POST", "/api/auth/refresh" -> refresh_handler(request)
     // Store endpoints
     "POST", "/api/stores" -> store_handler.create(request, store_actor)
-    // Static and dynamic routes
+    "GET", "/api/stores" -> list_stores_handler(request.path)
+    // Dynamic routes (store by ID, static files)
     "GET", path -> route_get(request, path, store_actor)
     _, _ -> not_found()
   }
 }
 
 fn route_get(request: Request, path: String, store_actor: Subject(StoreMsg)) -> Response {
-  // API routes take precedence
+  // Check for store ID route
   case extract_store_id(path) {
     Some(store_id) -> store_handler.get_store(request, store_actor, store_id)
     None -> {
@@ -72,6 +84,33 @@ fn extract_store_id(path: String) -> Option(String) {
       }
     }
     False -> None
+  }
+}
+
+/// Handle GET /api/stores - List stores with filtering
+fn list_stores_handler(path: String) -> Response {
+  // Extract query string from path (everything after ?)
+  let query = case string.split(path, "?") {
+    [_, q] -> q
+    _ -> ""
+  }
+
+  case store.parse_params(query) {
+    Ok(params) -> {
+      let result = store.list_stores(params)
+      server.json_response(
+        200,
+        store.encode_result(result)
+          |> json.to_string,
+      )
+    }
+    Error(error) -> {
+      server.json_response(
+        400,
+        json.object([#("error", json.string(shared.error_message(error)))])
+          |> json.to_string,
+      )
+    }
   }
 }
 

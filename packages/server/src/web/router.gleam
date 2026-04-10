@@ -3,21 +3,22 @@ import gleam/int
 import gleam/json
 import gleam/option.{None, Some}
 import gleam/string
-import store/ratings_store.{type RatingsStore}
-import web/handlers/ratings
+import store/ratings_store.{type RatingsTable}
+import web/ratings_handler
 import web/server.{type Request, type Response}
 import web/static
 
-pub fn make_handler(store: RatingsStore) -> fn(Request) -> Response {
-  fn(request: Request) { route(request, store) }
+pub fn make_handler(table: RatingsTable) -> fn(Request) -> Response {
+  fn(request: Request) { route(request, table) }
 }
 
-fn route(request: Request, store: RatingsStore) -> Response {
+fn route(request: Request, table: RatingsTable) -> Response {
   case request.method, request.path {
     "GET", "/" -> static_index()
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
-    "GET", path -> route_get(path, request, store)
+    "DELETE", path -> route_delete(path, request, table)
+    "GET", path -> route_get(path)
     _, _ -> not_found()
   }
 }
@@ -198,6 +199,13 @@ fn parse_rating_delete_path(path: String) -> Result(String, Nil) {
   case string.split(path, "/") {
     ["", "api", "ratings", "store", rating_id] -> Ok(rating_id)
     _ -> Error(Nil)
+  }
+}
+
+fn route_delete(path: String, request: Request, table: RatingsTable) -> Response {
+  case string.starts_with(path, "/api/ratings/drink/") {
+    True -> ratings_handler.delete_rating(request, table)
+    False -> not_found()
   }
 }
 

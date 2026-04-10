@@ -22,72 +22,58 @@ pub fn error_message(error: AppError) -> String {
   }
 }
 
-/// User information for ratings display
-pub type User {
-  User(id: String, username: String)
+// Rating domain types
+
+pub type RatingId {
+  RatingId(String)
 }
 
-/// Drink rating with all four rating axes
+pub type UserId {
+  UserId(String)
+}
+
+pub type DrinkId {
+  DrinkId(String)
+}
+
 pub type Rating {
   Rating(
-    id: String,
-    user: User,
-    drink_id: String,
-    overall_score: Int,
-    sweetness: Int,
-    boba_texture: Int,
-    tea_strength: Int,
-    review_text: String,
-    created_at: String,
-    updated_at: String,
+    id: RatingId,
+    user_id: UserId,
+    drink_id: DrinkId,
+    value: Int,
   )
 }
 
-/// Paginated response wrapper
-pub type PaginatedResponse(a) {
-  PaginatedResponse(data: List(a), meta: PaginationMeta)
+/// Extract string from RatingId
+pub fn rating_id_to_string(rating_id: RatingId) -> String {
+  let RatingId(id) = rating_id
+  id
 }
 
-/// Pagination metadata
-pub type PaginationMeta {
-  PaginationMeta(total: Int, page: Int, limit: Int, total_pages: Int)
+/// Create RatingId from string
+pub fn rating_id_from_string(id: String) -> RatingId {
+  RatingId(id)
 }
 
-/// Parse and validate pagination parameters
-pub fn parse_pagination(
-  page_raw: String,
-  limit_raw: String,
-) -> Result(#(Int, Int), AppError) {
-  let page =
-    case string.trim(page_raw) {
-      "" -> 1
-      p ->
-        case int.parse(p) {
-          Ok(n) if n >= 1 -> n
-          _ -> 1
-        }
-    }
-
-  let limit =
-    case string.trim(limit_raw) {
-      "" -> 20
-      l ->
-        case int.parse(l) {
-          Ok(n) if n >= 1 && n <= 100 -> n
-          Ok(n) if n > 100 -> 100
-          _ -> 20
-        }
-    }
-
-  Ok(#(page, limit))
+/// Extract string from UserId
+pub fn user_id_to_string(user_id: UserId) -> String {
+  let UserId(id) = user_id
+  id
 }
 
-/// Calculate pagination metadata
-pub fn calculate_meta(total: Int, page: Int, limit: Int) -> PaginationMeta {
-  let total_pages = case total % limit {
-    0 -> total / limit
-    _ -> total / limit + 1
-  }
+/// Create UserId from string
+pub fn user_id_from_string(id: String) -> UserId {
+  UserId(id)
+}
 
-  PaginationMeta(total: total, page: page, limit: limit, total_pages: total_pages)
+/// Extract string from DrinkId
+pub fn drink_id_to_string(drink_id: DrinkId) -> String {
+  let DrinkId(id) = drink_id
+  id
+}
+
+/// Create DrinkId from string
+pub fn drink_id_from_string(id: String) -> DrinkId {
+  DrinkId(id)
 }

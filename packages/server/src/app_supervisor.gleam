@@ -2,8 +2,7 @@ import config.{type Config}
 import data/drink_store
 import gleam/erlang/process
 import gleam/io
-import gleam/result
-import store/ratings_store.{type RatingsStore}
+import store/ratings_store
 import web/http_server_actor
 import web/rating
 import web/router
@@ -13,9 +12,12 @@ import web/user
 pub fn start(cfg: Config) -> Result(Nil, String) {
   io.println("Starting Supervisor...")
 
-  // Start the ratings store
-  use store <- result.try(start_ratings_store())
-  io.println("Ratings store started")
+  // Initialize ratings store
+  let ratings_table = ratings_store.init()
+  io.println("Ratings store initialized")
+
+  // Create the HTTP handler with ratings table
+  let handler = router.make_handler(ratings_table)
 
   // Create the HTTP handler with store access
   let handler = router.make_handler(store)

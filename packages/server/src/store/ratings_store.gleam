@@ -1,140 +1,134 @@
-/// In-memory storage for drink ratings
+/// Simple in-memory ratings storage using ETS table
+/// Simplicity bias: Single ETS table with simple operations
 
-import gleam/dict.{type Dict}
-import gleam/erlang/process.{type Subject}
 import gleam/list
-import gleam/otp/actor
-import gleam/string
-import shared.{type Rating, type PaginationMeta}
+import gleam/option.{type Option, None, Some}
+import shared.{type DrinkId, type Rating, type RatingId, type UserId}
 
-/// Store message types
-pub type StoreMsg {
-  GetByDrink(
-    drink_id: String,
-    page: Int,
-    limit: Int,
-    reply_to: Subject(Result(PaginatedRatings, String)),
+// ETS table reference type
+pub type RatingsTable
+
+/// Initialize the ratings store (creates ETS table via FFI)
+@external(erlang, "ratings_store_ffi", "init_table")
+pub fn init() -> RatingsTable
+
+/// Insert a record into the table
+@external(erlang, "ets", "insert")
+fn ets_insert(table: RatingsTable, record: any) -> any
+
+/// Lookup a record by key (returns list of records)
+@external(erlang, "ets", "lookup")
+fn ets_lookup(table: RatingsTable, key: any) -> List(any)
+
+/// Delete a record by key
+@external(erlang, "ets", "delete")
+fn ets_delete(table: RatingsTable, key: any) -> any
+
+/// Match all records
+@external(erlang, "ets", "match_object")
+fn ets_match_object(table: RatingsTable, pattern: any) -> List(any)
+
+// FFI helpers for tuple/pattern construction
+@external(erlang, "ratings_store_ffi", "make_record")
+fn make_record(id: String, user: String, drink: String, value: Int) -> any
+
+@external(erlang, "ratings_store_ffi", "make_drink_pattern")
+fn make_drink_pattern(drink_id: String) -> any
+
+@external(erlang, "ratings_store_ffi", "make_user_pattern")
+fn make_user_pattern(user_id: String) -> any
+
+@external(erlang, "ratings_store_ffi", "unique_id")
+fn unique_id_ffi() -> String
+
+/// Storage record: {rating_id, user_id, drink_id, value}
+fn to_record(rating: Rating) -> any {
+  let id_str = shared.rating_id_to_string(rating.id)
+  let user_str = shared.user_id_to_string(rating.user_id)
+  let drink_str = shared.drink_id_to_string(rating.drink_id)
+  make_record(id_str, user_str, drink_str, rating.value)
+}
+
+fn from_record(record: any) -> Rating {
+  from_record_ffi(record)
+}
+
+@external(erlang, "ratings_store_ffi", "from_record")
+fn from_record_ffi(record: any) -> Rating
+
+/// Store a new rating
+pub fn insert(table: RatingsTable, rating: Rating) -> Rating {
+  ets_insert(table, to_record(rating))
+  rating
+}
+
+/// Create and store a new rating with auto-generated ID
+pub fn create_rating(
+  table: RatingsTable,
+  user_id: UserId,
+  drink_id: DrinkId,
+  value: Int,
+) -> Rating {
+  let rating = shared.Rating(
+    id: shared.rating_id_from_string(unique_id_ffi()),
+    user_id: user_id,
+    drink_id: drink_id,
+    value: value,
   )
-  GetDrinkRatingCount(drink_id: String, reply_to: Subject(Int))
-  Insert(Rating)
+  insert(table, rating)
+  rating
 }
 
-/// Paginated ratings result
-pub type PaginatedRatings {
-  PaginatedRatings(ratings: List(Rating), meta: PaginationMeta)
-}
-
-/// Store state
-pub type StoreState {
-  StoreState(ratings: Dict(String, Rating))
-}
-
-/// Store actor reference
-pub type RatingsStore =
-  Subject(StoreMsg)
-
-/// Start the ratings store actor
-pub fn start() -> Result(RatingsStore, String) {
-  let initial_state = StoreState(ratings: dict.new())
-
-  case
-    actor.new(initial_state)
-    |> actor.on_message(handle_message)
-    |> actor.start()
-  {
-    Ok(started) -> Ok(started.data)
-    Error(_) -> Error("Failed to start ratings store")
+/// Get a rating by ID
+pub fn get_by_id(table: RatingsTable, rating_id: RatingId) -> Option(Rating) {
+  let id_str = shared.rating_id_to_string(rating_id)
+  let results = ets_lookup(table, id_str)
+  case results {
+    [] -> None
+    [first, ..] -> Some(from_record(first))
   }
 }
 
-/// Handle store messages
-fn handle_message(
-  state: StoreState,
-  msg: StoreMsg,
-) -> actor.Next(StoreState, StoreMsg) {
-  case msg {
-    GetByDrink(drink_id, page, limit, reply_to) -> {
-      let result = get_by_drink_internal(state, drink_id, page, limit)
-      process.send(reply_to, result)
-      actor.continue(state)
-    }
-
-    GetDrinkRatingCount(drink_id, reply_to) -> {
-      let count = get_count_internal(state, drink_id)
-      process.send(reply_to, count)
-      actor.continue(state)
-    }
-
-    Insert(rating) -> {
-      let new_state =
-        StoreState(ratings: dict.insert(state.ratings, rating.id, rating))
-      actor.continue(new_state)
+/// Delete a rating by ID. Returns True if deleted, False if not found.
+pub fn delete(table: RatingsTable, rating_id: RatingId) -> Bool {
+  let id_str = shared.rating_id_to_string(rating_id)
+  let results = ets_lookup(table, id_str)
+  case results {
+    [] -> False
+    _ -> {
+      ets_delete(table, id_str)
+      True
     }
   }
 }
 
-/// Get paginated ratings for a drink
-fn get_by_drink_internal(
-  state: StoreState,
-  drink_id: String,
-  page: Int,
-  limit: Int,
-) -> Result(PaginatedRatings, String) {
-  let all_ratings =
-    dict.values(state.ratings)
-    |> list.filter(fn(r) { r.drink_id == drink_id })
-    |> list.sort(fn(a, b) { string.compare(b.created_at, a.created_at) })
+/// Get all ratings for a specific drink
+pub fn get_by_drink(table: RatingsTable, drink_id: DrinkId) -> List(Rating) {
+  let drink_str = shared.drink_id_to_string(drink_id)
+  let pattern = make_drink_pattern(drink_str)
+  let records = ets_match_object(table, pattern)
+  list.map(records, from_record)
+}
 
-  let total = list.length(all_ratings)
-  let offset = { page - 1 } * limit
+/// Get all ratings by a specific user
+pub fn get_by_user(table: RatingsTable, user_id: UserId) -> List(Rating) {
+  let user_str = shared.user_id_to_string(user_id)
+  let pattern = make_user_pattern(user_str)
+  let records = ets_match_object(table, pattern)
+  list.map(records, from_record)
+}
 
-  let paginated =
-    all_ratings
-    |> list.drop(offset)
-    |> list.take(limit)
-
-  let total_pages = case total % limit {
-    0 -> total / limit
-    _ -> total / limit + 1
+/// Calculate average rating for a drink
+pub fn calculate_drink_average(table: RatingsTable, drink_id: DrinkId) -> Float {
+  let ratings = get_by_drink(table, drink_id)
+  case ratings {
+    [] -> 0.0
+    rs -> {
+      let sum = list.fold(rs, 0, fn(acc, r) { acc + r.value })
+      int_to_float(sum) /. int_to_float(list.length(rs))
+    }
   }
-
-  let meta = shared.PaginationMeta(total: total, page: page, limit: limit, total_pages: total_pages)
-
-  Ok(PaginatedRatings(ratings: paginated, meta: meta))
 }
 
-/// Get total count of ratings for a drink
-fn get_count_internal(state: StoreState, drink_id: String) -> Int {
-  dict.values(state.ratings)
-  |> list.filter(fn(r) { r.drink_id == drink_id })
-  |> list.length
-}
-
-/// Public API: Get ratings for a drink with pagination
-pub fn get_by_drink(
-  store: RatingsStore,
-  drink_id: String,
-  page: Int,
-  limit: Int,
-) -> Result(PaginatedRatings, String) {
-  process.call(
-    store,
-    5000,
-    fn(subject) { GetByDrink(drink_id, page, limit, subject) },
-  )
-}
-
-/// Public API: Check if drink has any ratings
-pub fn has_ratings(store: RatingsStore, drink_id: String) -> Bool {
-  let count = process.call(
-    store,
-    5000,
-    fn(subject) { GetDrinkRatingCount(drink_id, subject) },
-  )
-  count > 0
-}
-
-/// Public API: Insert a rating
-pub fn insert(store: RatingsStore, rating: Rating) -> Nil {
-  process.send(store, Insert(rating))
-}
+@external(erlang, "erlang", "float")
+fn int_to_float(n: Int) -> Float

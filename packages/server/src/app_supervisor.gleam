@@ -1,14 +1,19 @@
 import config.{type Config}
 import gleam/erlang/process
 import gleam/io
+import store/ratings_store
 import web/http_server_actor
 import web/router
 
 pub fn start(cfg: Config) -> Result(Nil, String) {
   io.println("Starting supervisor...")
 
-  // Create the HTTP handler
-  let handler = router.make_handler()
+  // Initialize ratings store
+  let ratings_table = ratings_store.init()
+  io.println("Ratings store initialized")
+
+  // Create the HTTP handler with ratings table
+  let handler = router.make_handler(ratings_table)
 
   // Start HTTP server actor
   case http_server_actor.start(cfg.port, handler) {

@@ -1,53 +1,24 @@
-/// Router - merged from units 1-6
-/// Supports auth endpoints, store creation, store listing, and store retrieval
-
-import domain/store
 import gleam/erlang/process.{type Subject}
 import gleam/json
 import gleam/option.{type Option, None, Some}
 import gleam/string
-import services/store_service.{type StoreMsg}
-import shared
-import users.{RegisterSuccess, RegisterValidationError, RegisterConflict}
-import web/auth/login
-import web/handlers/store_handler
+import store/store_data.{type StoreMsg}
+import store/store_handler
 import web/server.{type Request, type Response}
 import web/static
 import web/user_store.{type UserStore}
 
-pub fn make_handler(
-  user_store: UserStore,
-  store_actor: Subject(StoreMsg),
-  jwt_secret: String,
-) -> fn(Request) -> Response {
-  fn(request: Request) { route(request, user_store, store_actor, jwt_secret) }
+pub fn make_handler(store_actor: Subject(StoreMsg)) -> fn(Request) -> Response {
+  fn(request: Request) { route(request, store_actor) }
 }
 
-fn route(
-  request: Request,
-  user_store: UserStore,
-  store_actor: Subject(StoreMsg),
-  jwt_secret: String,
-) -> Response {
-  // Strip query string for route matching
-  let base_path = case string.split(request.path, "?") {
-    [p, _] -> p
-    _ -> request.path
-  }
-
-  case request.method, base_path {
+fn route(request: Request, store_actor: Subject(StoreMsg)) -> Response {
+  case request.method, request.path {
     "GET", "/" -> static.serve_index()
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
-    // Auth endpoints
-    "POST", "/api/auth/register" -> register_handler(request, user_store)
-    "POST", "/api/auth/login" -> login.handle_login(request, user_store, jwt_secret)
-    "POST", "/api/auth/refresh" -> refresh_handler(request)
-    // Store endpoints
-    "POST", "/api/stores" -> store_handler.create(request, store_actor)
-    "GET", "/api/stores" -> list_stores_handler(request.path)
-    // Dynamic routes (store by ID, static files)
-    "GET", path -> route_get(request, path, store_actor)
+    "PATCH", path -> route_patch(path, request, store_actor)
+    "GET", path -> route_get(path)
     _, _ -> not_found()
   }
 }
@@ -111,6 +82,17 @@ fn list_stores_handler(path: String) -> Response {
           |> json.to_string,
       )
     }
+  }
+}
+
+fn route_patch(
+  path: String,
+  request: Request,
+  store_actor: Subject(StoreMsg),
+) -> Response {
+  case string.starts_with(path, "/api/stores/") {
+    True -> store_handler.update_store(request, store_actor)
+    False -> not_found()
   }
 }
 

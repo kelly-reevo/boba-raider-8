@@ -8,6 +8,7 @@ import db/drink_ratings
 import shared
 import web/server.{type Request, type Response}
 import web/static
+import web/upload
 
 pub fn make_handler(table: RatingsTable) -> fn(Request) -> Response {
   fn(request: Request) { route(request, table) }
@@ -18,7 +19,7 @@ fn route(request: Request, table: RatingsTable) -> Response {
     "GET", "/" -> static_index()
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
-    "GET", "/api/users/me/ratings/drinks" -> user_drink_ratings_handler(request)
+    "POST", "/api/upload/image" -> upload.handle_image_upload(request)
     "GET", path -> route_get(path)
     _, _ -> not_found()
   }

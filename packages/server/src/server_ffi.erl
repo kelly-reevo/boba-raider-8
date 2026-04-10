@@ -31,7 +31,7 @@ erl_to_gleam_request(#{method := Method, path := Path, headers := Headers, body 
         to_binary(Method),
         to_binary(Path),
         GleamHeaders,
-        to_binary(Body)}.
+        Body}.
 
 gleam_to_erl_response({response, Status, Headers, Body}) ->
     ErlHeaders = gleam@dict:fold(Headers, #{}, fun(Acc, K, V) ->

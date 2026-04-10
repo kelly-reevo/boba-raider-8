@@ -5,27 +5,42 @@ import gleam/list
 import gleam/option
 import gleam/result
 import gleam/string
-import handlers/rating_handler
-import store/rating_store.{type RatingStore}
+import rating_store.{type RatingStore}
+import web/rating_handler
 import web/server.{type Request, type Response}
 import web/static
 
-pub fn make_handler(store: RatingStore) -> fn(Request) -> Response {
-  fn(request: Request) { route(request, store) }
+/// Router state containing store references
+pub type RouterState {
+  RouterState(rating_store: RatingStore)
 }
 
-fn route(request: Request, store: RatingStore) -> Response {
+/// Create request handler with state
+pub fn make_handler(state: RouterState) -> fn(Request) -> Response {
+  fn(request: Request) { route(request, state) }
+}
+
+fn route(request: Request, state: RouterState) -> Response {
   case request.method, request.path {
     "GET", "/" -> static_index()
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
-    "DELETE", path -> route_delete(path, request, store)
+    "POST", path -> route_post(path, request, state)
     "GET", path -> route_get(path)
     _, _ -> not_found()
   }
 }
 
-fn route_get(path: String, store: Store) -> Response {
+fn route_post(path: String, request: Request, state: RouterState) -> Response {
+  // Check for rating endpoints
+  case string.starts_with(path, "/api/drinks/")
+    && string.ends_with(path, "/ratings") {
+    True -> rating_handler.create_rating(request, state.rating_store)
+    False -> not_found()
+  }
+}
+
+fn route_get(path: String) -> Response {
   case string.starts_with(path, "/static/") {
     True -> static_file(path)
     False -> {
@@ -164,39 +179,14 @@ fn parse_rating_delete_path(path: String) -> Result(String, Nil) {
 fn health_handler() -> Response {
   json_response(
     200,
-    json.object([#("status", json.string("ok"))])
-    |> json.to_string(),
-  )
-}
-
-fn created(rating_with_user: shared.RatingWithUser) -> Response {
-  let json_body = shared.rating_with_user_to_json(rating_with_user)
-    |> json.to_string
-  server.json_response(201, json_body)
-}
-
-fn not_found() -> Response {
-  json_response(
-    404,
-    json.object([#("error", json.string("Not found"))])
-    |> json.to_string(),
-  )
-}
-
-fn unprocessable_entity(error: AppError) -> Response {
-  let msg = shared.error_message(error)
-  server.json_response(
-    422,
-    json.object([#("error", json.string(msg))])
-    |> json.to_string,
+    json.object([#("status", json.string("ok"))]) |> json.to_string,
   )
 }
 
 fn not_found() -> Response {
   json_response(
     404,
-    json.object([#("error", json.string("Not found"))])
-    |> json.to_string,
+    json.object([#("error", json.string("Not found"))]) |> json.to_string,
   )
 }
 

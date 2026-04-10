@@ -2,6 +2,7 @@ import gleam/json
 import gleam/string
 import web/server.{type Request, type Response}
 import web/static
+import web/upload
 
 pub fn make_handler() -> fn(Request) -> Response {
   fn(request: Request) { route(request) }
@@ -12,6 +13,7 @@ fn route(request: Request) -> Response {
     "GET", "/" -> static.serve_index()
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
+    "POST", "/api/upload/image" -> upload.handle_image_upload(request)
     "GET", path -> route_get(path)
     _, _ -> not_found()
   }

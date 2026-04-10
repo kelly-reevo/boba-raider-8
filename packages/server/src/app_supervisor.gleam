@@ -2,8 +2,7 @@ import config.{type Config}
 import data/drink_store
 import gleam/erlang/process
 import gleam/io
-import gleam/otp/actor
-import store/store_actor.{type StoreMessage}
+import storage/store
 import web/http_server_actor
 import web/router
 import db/store_actor
@@ -11,10 +10,12 @@ import db/store_actor
 pub fn start(cfg: Config) -> Result(Nil, String) {
   io.println("Starting supervisor...")
 
-  // Start store actor first
-  case store_actor.start() {
-    Ok(store) -> {
-      io.println("Store actor started")
+  // Create the in-memory store
+  let app_store = store.new()
+  io.println("Store initialized")
+
+  // Create the HTTP handler with store access
+  let handler = router.make_handler(app_store)
 
       // Create the HTTP handler with store access
       let handler = router.make_handler_with_store(store)

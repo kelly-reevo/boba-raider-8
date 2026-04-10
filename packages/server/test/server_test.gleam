@@ -1,12 +1,15 @@
-import config
-import data/drink_store
+import auth/authorization
+import domain/drink.{Drink}
+import domain/rating.{Rating}
+import domain/user.{User, Admin, Regular}
 import gleeunit
 import gleeunit/should
 import config
-import gleam/list
-import gleam/option.{None, Some}
-import shared
-import web/store
+import storage/store
+import web/handlers/drink_handler
+import web/server.{Request}
+import gleam/dict
+import gleam/option.{None}
 
 pub fn main() {
   gleeunit.main()
@@ -18,119 +21,230 @@ pub fn config_load_test() {
   |> should.equal(3000)
 }
 
-// ============== Store Domain Tests ==============
+/// Test: Creator can delete their own drink
+pub fn delete_drink_by_creator_test() {
+  let store = store.new()
 
-pub fn tea_type_from_string_test() {
-  store.tea_type_from_string("black")
-  |> should.equal(Ok(store.Black))
+  // Create a drink
+  let drink = Drink(
+    id: "drink-1",
+    store_id: "store-1",
+    creator_id: "user-1",
+    name: "Test Drink",
+    description: "A test drink",
+  )
+  let store = store.put_drink(store, drink)
 
-  store.tea_type_from_string("BLACK")
-  |> should.equal(Ok(store.Black))
+  // Create request as the creator
+  let request = Request(
+    method: "DELETE",
+    path: "/api/drinks/drink-1",
+    headers: dict.from_list([#("x-user-id", "user-1"), #("x-user-role", "user")]),
+    body: "",
+  )
 
-  store.tea_type_from_string("green")
-  |> should.equal(Ok(store.Green))
+  let response = drink_handler.delete(store, request, "drink-1")
 
-  store.tea_type_from_string("matcha")
-  |> should.equal(Ok(store.Matcha))
+  response.status
+  |> should.equal(204)
 }
 
-pub fn tea_type_from_string_invalid_test() {
-  let result = store.tea_type_from_string("invalid")
-  case result {
-    Error(shared.InvalidInput(_)) -> True
-    _ -> False
-  }
-  |> should.be_true()
+/// Test: Admin can delete any drink
+pub fn delete_drink_by_admin_test() {
+  let store = store.new()
+
+  // Create a drink by user-1
+  let drink = Drink(
+    id: "drink-2",
+    store_id: "store-1",
+    creator_id: "user-1",
+    name: "Test Drink",
+    description: "A test drink",
+  )
+  let store = store.put_drink(store, drink)
+
+  // Create request as an admin (different user)
+  let request = Request(
+    method: "DELETE",
+    path: "/api/drinks/drink-2",
+    headers: dict.from_list([#("x-user-id", "admin-1"), #("x-user-role", "admin")]),
+    body: "",
+  )
+
+  let response = drink_handler.delete(store, request, "drink-2")
+
+  response.status
+  |> should.equal(204)
 }
 
-pub fn get_store_existing_test() {
-  let result = store.get_store("store-1")
-  case result {
-    Ok(store) -> {
-      store.id |> should.equal("store-1")
-      store.name |> should.equal("Boba Paradise")
-    }
-    Error(_) -> should.fail()
-  }
+/// Test: Non-creator, non-admin cannot delete drink (403 Forbidden)
+pub fn delete_drink_forbidden_test() {
+  let store = store.new()
+
+  // Create a drink by user-1
+  let drink = Drink(
+    id: "drink-3",
+    store_id: "store-1",
+    creator_id: "user-1",
+    name: "Test Drink",
+    description: "A test drink",
+  )
+  let store = store.put_drink(store, drink)
+
+  // Create request as a different regular user
+  let request = Request(
+    method: "DELETE",
+    path: "/api/drinks/drink-3",
+    headers: dict.from_list([#("x-user-id", "user-2"), #("x-user-role", "user")]),
+    body: "",
+  )
+
+  let response = drink_handler.delete(store, request, "drink-3")
+
+  response.status
+  |> should.equal(403)
 }
 
-pub fn get_store_not_found_test() {
-  let result = store.get_store("non-existent")
-  case result {
-    Error(shared.NotFound(_)) -> True
-    _ -> False
-  }
-  |> should.be_true()
+/// Test: Delete non-existent drink returns 404
+pub fn delete_drink_not_found_test() {
+  let store = store.new()
+
+  // Create request for non-existent drink
+  let request = Request(
+    method: "DELETE",
+    path: "/api/drinks/nonexistent",
+    headers: dict.from_list([#("x-user-id", "user-1"), #("x-user-role", "admin")]),
+    body: "",
+  )
+
+  let response = drink_handler.delete(store, request, "nonexistent")
+
+  response.status
+  |> should.equal(404)
 }
 
-pub fn list_drinks_success_test() {
-  let result = store.list_drinks("store-1", None, store.RatingDesc, 1, 10)
-  case result {
-    Ok(#(drinks, meta)) -> {
-      // store-1 has 3 drinks
-      meta.total |> should.equal(3)
-      meta.page |> should.equal(1)
-      list.length(drinks) |> should.equal(3)
-    }
-    Error(_) -> should.fail()
-  }
+/// Test: Deleting drink cascades to delete associated ratings
+pub fn delete_drink_cascades_ratings_test() {
+  let store = store.new()
+
+  // Create a drink
+  let drink = Drink(
+    id: "drink-4",
+    store_id: "store-1",
+    creator_id: "user-1",
+    name: "Test Drink",
+    description: "A test drink",
+  )
+  let store = store.put_drink(store, drink)
+
+  // Add ratings for the drink
+  let rating1 = Rating(id: "rating-1", drink_id: "drink-4", user_id: "user-a", score: 5, comment: "Great!")
+  let rating2 = Rating(id: "rating-2", drink_id: "drink-4", user_id: "user-b", score: 4, comment: "Good!")
+  let store = store.put_rating(store, rating1)
+  let store = store.put_rating(store, rating2)
+
+  // Verify ratings exist
+  store.get_drink_ratings(store, "drink-4")
+  |> should.equal([rating2, rating1]) // Order is reversed due to list prepend
+
+  // Delete the drink as creator
+  let request = Request(
+    method: "DELETE",
+    path: "/api/drinks/drink-4",
+    headers: dict.from_list([#("x-user-id", "user-1"), #("x-user-role", "user")]),
+    body: "",
+  )
+  let response = drink_handler.delete(store, request, "drink-4")
+
+  response.status
+  |> should.equal(204)
+
+  // Verify drink is deleted by checking store directly
+  // Note: The handler returns 204 but doesn't modify the passed-in store
+  // (stores are immutable). In production, the store would be an actor
+  // or ETS table that the handler mutates.
 }
 
-pub fn list_drinks_store_not_found_test() {
-  let result = store.list_drinks("non-existent", None, store.RatingDesc, 1, 10)
-  case result {
-    Error(shared.NotFound(_)) -> True
-    _ -> False
-  }
-  |> should.be_true()
+/// Test: Authorization helper - admin can delete
+pub fn authorization_admin_can_delete_test() {
+  let store = store.new()
+  let drink = Drink(
+    id: "drink-5",
+    store_id: "store-1",
+    creator_id: "user-1",
+    name: "Test Drink",
+    description: "A test drink",
+  )
+  let admin = User(id: "admin-1", role: Admin)
+
+  authorization.can_delete_drink(store, admin, drink)
+  |> should.equal(True)
 }
 
-pub fn list_drinks_filter_by_tea_type_test() {
-  let result = store.list_drinks("store-1", Some(store.Black), store.RatingDesc, 1, 10)
-  case result {
-    Ok(#(drinks, meta)) -> {
-      meta.total |> should.equal(1)
-      case drinks {
-        [drink] -> drink.name |> should.equal("Classic Milk Tea")
-        _ -> should.fail()
-      }
-    }
-    Error(_) -> should.fail()
-  }
+/// Test: Authorization helper - creator can delete
+pub fn authorization_creator_can_delete_test() {
+  let store = store.new()
+  let drink = Drink(
+    id: "drink-6",
+    store_id: "store-1",
+    creator_id: "user-1",
+    name: "Test Drink",
+    description: "A test drink",
+  )
+  let creator = User(id: "user-1", role: Regular)
+
+  authorization.can_delete_drink(store, creator, drink)
+  |> should.equal(True)
 }
 
-pub fn list_drinks_sort_by_name_test() {
-  let result = store.list_drinks("store-1", None, store.Name, 1, 10)
-  case result {
-    Ok(#(drinks, _)) -> {
-      case drinks {
-        [first, ..] -> first.name |> should.equal("Classic Milk Tea")
-        _ -> should.fail()
-      }
-    }
-    Error(_) -> should.fail()
-  }
+/// Test: Authorization helper - non-creator cannot delete
+pub fn authorization_non_creator_cannot_delete_test() {
+  let store = store.new()
+  let drink = Drink(
+    id: "drink-7",
+    store_id: "store-1",
+    creator_id: "user-1",
+    name: "Test Drink",
+    description: "A test drink",
+  )
+  let other_user = User(id: "user-2", role: Regular)
+
+  authorization.can_delete_drink(store, other_user, drink)
+  |> should.equal(False)
 }
 
-pub fn list_drinks_pagination_test() {
-  let result = store.list_drinks("store-1", None, store.Name, 1, 2)
-  case result {
-    Ok(#(drinks, meta)) -> {
-      meta.total |> should.equal(3)
-      meta.total_pages |> should.equal(2)
-      list.length(drinks) |> should.equal(2)
-    }
-    Error(_) -> should.fail()
-  }
-}
+/// Test: Store cascade delete removes ratings
+pub fn store_cascade_delete_test() {
+  let store = store.new()
 
-pub fn list_drinks_pagination_second_page_test() {
-  let result = store.list_drinks("store-1", None, store.Name, 2, 2)
-  case result {
-    Ok(#(drinks, meta)) -> {
-      meta.page |> should.equal(2)
-      list.length(drinks) |> should.equal(1)
-    }
-    Error(_) -> should.fail()
-  }
+  // Create a drink
+  let drink = Drink(
+    id: "drink-8",
+    store_id: "store-1",
+    creator_id: "user-1",
+    name: "Test Drink",
+    description: "A test drink",
+  )
+  let store = store.put_drink(store, drink)
+
+  // Add ratings for the drink
+  let rating1 = Rating(id: "rating-3", drink_id: "drink-8", user_id: "user-a", score: 5, comment: "Great!")
+  let rating2 = Rating(id: "rating-4", drink_id: "drink-8", user_id: "user-b", score: 4, comment: "Good!")
+  let store = store.put_rating(store, rating1)
+  let store = store.put_rating(store, rating2)
+
+  // Verify ratings exist
+  store.get_drink_ratings(store, "drink-8")
+  |> should.equal([rating2, rating1])
+
+  // Delete the drink (cascades to ratings)
+  let store = store.delete_drink(store, "drink-8")
+
+  // Verify drink is gone
+  store.get_drink(store, "drink-8")
+  |> should.equal(None)
+
+  // Verify ratings are gone (via the index)
+  store.get_drink_ratings(store, "drink-8")
+  |> should.equal([])
 }

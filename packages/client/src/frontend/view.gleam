@@ -3,7 +3,9 @@
 import frontend/create_drink_form
 import frontend/model.{type Model}
 import frontend/msg.{type Msg}
-import gleam/int
+import frontend/rating_msg
+import frontend/rating_view
+import gleam/option.{None, Some}
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
@@ -93,19 +95,27 @@ fn counter_view(count: Int) -> Element(Msg) {
     html.button([event.on_click(Reset), attribute.class("reset")], [
       element.text("Reset"),
     ]),
-    drink_detail_page.drink_detail_page(model.drink_detail),
-  ])
-}
 
-/// Skeleton card for loading state
-fn skeleton_card() -> Element(Msg) {
-  html.div([attribute.class("skeleton-card")], [
-    html.div([attribute.class("skeleton-image")], []),
-    html.div([attribute.class("skeleton-content")], [
-      html.div([attribute.class("skeleton-title")], []),
-      html.div([attribute.class("skeleton-text")], []),
-      html.div([attribute.class("skeleton-rating")], []),
-    ]),
+    // Demo button to open rating modal
+    html.button(
+      [
+        event.on_click(msg.OpenRatingModal("drink-123", "Classic Milk Tea")),
+        attribute.class("open-rating-button"),
+      ],
+      [element.text("Rate Drink (Demo)")],
+    ),
+
+    // Rating modal (conditionally rendered)
+    case model.rating_modal {
+      Some(form) ->
+        rating_view.drink_rating_modal(
+          form,
+          model.selected_drink_name,
+          rating_msg.RatingModalClosed,
+        )
+        |> element.map(msg.RatingFormMsg)
+      None -> element.text("")
+    },
   ])
 }
 

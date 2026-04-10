@@ -1,21 +1,51 @@
-/// Rating domain re-exports from shared module
-/// This module provides a convenient alias to shared rating types
+/// Shared types for drink ratings
 
-// Re-export all rating-related types from shared
-pub type Rating = shared.Rating
-pub type RatingScores = shared.RatingScores
-pub type CreateRatingInput = shared.CreateRatingInput
-pub type UserSummary = shared.UserSummary
-
-// Re-export validation functions
-pub fn is_valid_score(score: Int) -> Bool {
-  shared.is_valid_score(score)
+pub type RatingScores {
+  RatingScores(
+    overall: Int,
+    sweetness: Int,
+    boba_texture: Int,
+    tea_strength: Int,
+  )
 }
 
-pub fn is_valid_review_text(text: Option(String)) -> Bool {
-  shared.is_valid_review_text(text)
+pub type Rating {
+  Rating(
+    id: String,
+    drink_id: String,
+    user_id: String,
+    scores: RatingScores,
+    review_text: String,
+    created_at: String,
+    updated_at: String,
+  )
 }
 
-// Aliases for convenience
-import gleam/option.{type Option}
-import shared
+pub type RatingInput {
+  RatingInput(
+    overall: Int,
+    sweetness: Int,
+    boba_texture: Int,
+    tea_strength: Int,
+    review_text: String,
+  )
+}
+
+pub fn default_scores() -> RatingScores {
+  RatingScores(overall: 0, sweetness: 3, boba_texture: 3, tea_strength: 3)
+}
+
+pub fn default_input() -> RatingInput {
+  RatingInput(overall: 0, sweetness: 3, boba_texture: 3, tea_strength: 3, review_text: "")
+}
+
+pub fn is_valid_input(input: RatingInput) -> Bool {
+  input.overall >= 1
+  && input.overall <= 5
+  && input.sweetness >= 1
+  && input.sweetness <= 5
+  && input.boba_texture >= 1
+  && input.boba_texture <= 5
+  && input.tea_strength >= 1
+  && input.tea_strength <= 5
+}

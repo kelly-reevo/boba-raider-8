@@ -1,4 +1,10 @@
-/// State updates
+import frontend/model.{type Model, Model}
+import frontend/msg.{type Msg}
+import frontend/rating_model
+import frontend/rating_msg
+import frontend/rating_update
+import gleam/option.{None, Some}
+import lustre/effect.{type Effect, none, map}
 
 import frontend/effects
 import frontend/model.{
@@ -14,126 +20,46 @@ import shared.{type CreateDrinkInput, CreateDrinkInput}
 /// Main update function
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
-    // Counter messages (original)
-    msg.Increment -> {
-      let new_model = Model(..model, count: model.count + 1)
-      #(new_model, effect.none())
-    }
-    msg.Decrement -> {
-      let new_model = Model(..model, count: model.count - 1)
-      #(new_model, effect.none())
-    }
-    msg.Reset -> {
-      let new_model = Model(..model, count: 0)
-      #(new_model, effect.none())
-    }
+    msg.Increment -> #(Model(..model, count: model.count + 1), none())
+    msg.Decrement -> #(Model(..model, count: model.count - 1), none())
+    msg.Reset -> #(Model(..model, count: 0), none())
 
-    // Form visibility
-    msg.OpenCreateDrinkForm(store_id) -> {
-      #(open_form(model, store_id), effect.none())
-    }
-
-    msg.CloseCreateDrinkForm -> {
-      #(close_form(model), effect.none())
-    }
-
-    // Form field updates
-    msg.UpdateDrinkName(name) -> {
-      let form_data = model.form_data
-      let new_form_data = DrinkFormData(..form_data, name: name)
-      #(Model(..model, form_data: new_form_data), effect.none())
-    }
-
-    msg.UpdateTeaType(tea_type) -> {
-      let form_data = model.form_data
-      let new_form_data = DrinkFormData(..form_data, tea_type: tea_type)
-      #(Model(..model, form_data: new_form_data), effect.none())
-    }
-
-    msg.UpdatePrice(price) -> {
-      let form_data = model.form_data
-      let new_form_data = DrinkFormData(..form_data, price: price)
-      #(Model(..model, form_data: new_form_data), effect.none())
-    }
-
-    msg.UpdateDescription(description) -> {
-      let form_data = model.form_data
-      let new_form_data = DrinkFormData(..form_data, description: description)
-      #(Model(..model, form_data: new_form_data), effect.none())
-    }
-
-    msg.UpdateImageFile(file_data) -> {
-      let form_data = model.form_data
-      let new_form_data = DrinkFormData(..form_data, image_file: file_data)
-      #(Model(..model, form_data: new_form_data), effect.none())
-    }
-
-    msg.ToggleIsSignature -> {
-      let form_data = model.form_data
-      let new_form_data = DrinkFormData(
-        ..form_data,
-        is_signature: !form_data.is_signature,
+    msg.OpenRatingModal(drink_id, drink_name) -> {
+      let form = rating_model.new(drink_id)
+      let new_model = Model(
+        ..model,
+        rating_modal: Some(form),
+        selected_drink_id: Some(drink_id),
+        selected_drink_name: drink_name,
       )
-      #(Model(..model, form_data: new_form_data), effect.none())
+      #(new_model, none())
     }
 
-    // Form submission flow
-    msg.SubmitDrinkForm -> {
-      // Validate required fields
-      case validate_form(model.form_data) {
-        Ok(_) -> {
-          // Start with image upload if present, otherwise submit directly
-          case model.form_data.image_file {
-            "" -> {
-              // No image, submit directly with empty URL
-              let new_model = Model(..model, form_state: Submitting)
-              let input = form_to_input(model.form_data, "")
-              #(new_model, effects.create_drink(model.store_id, input))
+    msg.CloseRatingModal -> {
+      let new_model = Model(..model, rating_modal: None)
+      #(new_model, none())
+    }
+
+    msg.RatingFormMsg(rating_msg) -> {
+      case model.rating_modal {
+        Some(form) -> {
+          let #(new_form, fx) = rating_update.update(form, rating_msg)
+
+          // Handle modal close actions
+          let final_model = case rating_msg {
+            rating_msg.RatingModalClosed -> Model(..model, rating_modal: None)
+            rating_msg.RatingSubmitSuccess(_) -> {
+              // Keep modal open to show success state, or close after delay
+              Model(..model, rating_modal: Some(new_form))
             }
-            _ -> {
-              // Upload image first
-              let new_model = Model(..model, form_state: UploadingImage)
-              #(new_model, effects.upload_image(model.form_data.image_file))
-            }
+            _ -> Model(..model, rating_modal: Some(new_form))
           }
-        }
-        Error(validation_error) -> {
-          let new_model = Model(..model, form_state: SubmitError(validation_error))
-          #(new_model, effect.none())
-        }
-      }
-    }
 
-    msg.ImageUploaded(result) -> {
-      case result {
-        Ok(image_url) -> {
-          // Image uploaded, now create the drink
-          let new_model = Model(..model, form_state: Submitting)
-          let input = form_to_input(model.form_data, image_url)
-          #(new_model, effects.create_drink(model.store_id, input))
+          let wrapped_fx = map(fx, msg.RatingFormMsg)
+          #(final_model, wrapped_fx)
         }
-        Error(error) -> {
-          let new_model = Model(..model, form_state: ImageUploadError(error))
-          #(new_model, effect.none())
-        }
+        None -> #(model, none())
       }
-    }
-
-    msg.DrinkCreated(result) -> {
-      case result {
-        Ok(_) -> {
-          let new_model = Model(..model, form_state: Success)
-          #(new_model, effect.none())
-        }
-        Error(error) -> {
-          let new_model = Model(..model, form_state: SubmitError(error))
-          #(new_model, effect.none())
-        }
-      }
-    }
-
-    msg.ResetForm -> {
-      #(reset_form(model), effect.none())
     }
   }
 }

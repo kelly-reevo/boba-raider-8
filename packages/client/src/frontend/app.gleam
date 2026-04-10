@@ -1,4 +1,4 @@
-import frontend/model.{type Model}
+import frontend/model.{type Model, default}
 import frontend/msg.{type Msg}
 import frontend/update
 import frontend/view
@@ -12,5 +12,5 @@ pub fn main() {
 }
 
 fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
-  #(model.default(), effect.none())
+  #(default(), effect.none())
 }

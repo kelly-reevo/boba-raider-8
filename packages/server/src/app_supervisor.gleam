@@ -7,7 +7,7 @@ import web/router
 pub fn start(cfg: Config) -> Result(Nil, String) {
   io.println("Starting supervisor...")
 
-  // Create the HTTP handler
+  // Create the HTTP handler with store access
   let handler = router.make_handler()
 
   // Start HTTP server actor

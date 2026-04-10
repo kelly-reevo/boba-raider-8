@@ -6,26 +6,25 @@ import gleam/string
 import web/handlers/store_handlers
 import web/server.{type Request, type Response}
 import web/static
-import db/drink_store
-import db/store_actor.{type StoreActor}
-import domain/drink
+import web/controller/drink_controller
+import web/service/drink_service
 
 /// Create handler without store (for backward compatibility)
 pub fn make_handler() -> fn(Request) -> Response {
-  fn(request: Request) { route(request, option.None) }
+  // Initialize drink store (in production, would use persistent storage)
+  let drink_store = drink_service.new_store()
+
+  fn(request: Request) { route(request, drink_store) }
 }
 
-/// Create handler with store access
-pub fn make_handler_with_store(store: StoreActor) -> fn(Request) -> Response {
-  fn(request: Request) { route(request, option.Some(store)) }
-}
-
-fn route(request: Request, maybe_store: option.Option(StoreActor)) -> Response {
+fn route(request: Request, drink_store: drink_service.DrinkStore) -> Response {
   case request.method, request.path {
     "GET", "/" -> static.serve_index()
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
-    "GET", path -> route_get(request, path)
+    "GET", "/api/drinks/" <> id -> drink_controller.get_drink(drink_store, id)
+    "PATCH", "/api/drinks/" <> id -> drink_controller.patch_drink(drink_store, request, id)
+    "GET", path -> route_get(path)
     _, _ -> not_found()
   }
 }

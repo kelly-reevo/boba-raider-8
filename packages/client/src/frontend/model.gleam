@@ -1,107 +1,33 @@
 /// Application state with routing and authentication support
 
-import shared.{type AppError}
+import frontend/pages/create_store_msg.{type CreateStoreState}
 
-/// Authentication state for the user
-pub type AuthState {
-  Authenticated(user_id: String, username: String)
-  Anonymous
+/// Page types for routing
+pub type Page {
+  HomePage
+  CreateStorePage(CreateStoreState)
 }
 
-/// Data for a single store
-pub type Store {
-  Store(
-    id: String,
-    name: String,
-    address: String,
-    city: String,
-    state: String,
-    zip: String,
-    phone: String,
-    latitude: Float,
-    longitude: Float,
-    description: String,
-    website: String,
-  )
-}
-
-/// Data for a drink available at a store
-pub type Drink {
-  Drink(
-    id: String,
-    name: String,
-    description: String,
-    price: Float,
-    currency: String,
-    category: String,
-    image_url: String,
-  )
-}
-
-/// Rating/review for a store
-pub type Rating {
-  Rating(
-    id: String,
-    user_id: String,
-    username: String,
-    rating: Int,
-    review: String,
-    created_at: String,
-  )
-}
-
-/// Loading state for async data
-pub type LoadState(a) {
-  Loading
-  Error(AppError)
-  Loaded(a)
-}
-
-/// Combined data for the store detail page
-pub type StoreData {
-  StoreData(
-    store: Store,
-    drinks: List(Drink),
-    ratings: List(Rating),
-  )
-}
-
-/// Page-specific model for store detail
-pub type StoreDetailModel {
-  StoreDetailModel(
-    store_id: String,
-    data: LoadState(StoreData),
-    auth: AuthState,
-  )
-}
-
-/// Global application model
+/// Root application model
 pub type Model {
   Model(
     current_page: Page,
-    auth: AuthState,
+    error: String
   )
 }
 
-/// Application pages
-pub type Page {
-  Home
-  StoreDetail(String)
-}
-
-/// Default model state
+/// Initialize default model
 pub fn default() -> Model {
   Model(
-    current_page: Home,
-    auth: Anonymous,
+    current_page: HomePage,
+    error: ""
   )
 }
 
-/// Create a store detail model with loading state
-pub fn init_store_detail(store_id: String, auth: AuthState) -> StoreDetailModel {
-  StoreDetailModel(
-    store_id: store_id,
-    data: Loading,
-    auth: auth,
+/// Initialize with CreateStorePage
+pub fn with_create_store() -> Model {
+  Model(
+    current_page: CreateStorePage(create_store_msg.init()),
+    error: ""
   )
 }

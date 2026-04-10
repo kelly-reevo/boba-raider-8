@@ -1,22 +1,11 @@
-/// View functions for the application
-
-import gleam/float
-import gleam/int
-import gleam/list
-import frontend/model.{
-  type Model, type StoreDetailModel, type Store, type Drink,
-  type Rating, type AuthState, type StoreData,
-  StoreDetailModel, Loading, Loaded, Error as LoadError,
-  Authenticated, Anonymous, StoreDetail, Home,
-}
-import frontend/msg.{type Msg, type StoreDetailMsg, StoreDetailMsg, ClickedAddDrink, ClickedBack}
+import frontend/model.{type Model, CreateStorePage, HomePage}
+import frontend/msg.{type Msg, CreateStoreMsg, NavigateToCreateStore}
+import frontend/pages/create_store_page
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
 import shared.{error_message}
-
-// --- Main Application View ---
 
 /// Main application view
 pub fn view(model: Model) -> Element(Msg) {
@@ -40,179 +29,50 @@ fn init_store_detail(store_id: String, auth: AuthState) -> StoreDetailModel {
 
 fn view_home() -> Element(Msg) {
   html.div([attribute.class("app")], [
-    html.h1([], [element.text("boba-raider-8")]),
-    html.p([], [element.text("Welcome to boba-raider-8")]),
+    view_navigation(),
+    view_page_content(model)
   ])
 }
 
-// --- Store Detail Page Component ---
-
-/// Main store detail page view
-fn view_store_detail_page(model: StoreDetailModel) -> Element(Msg) {
-  html.div([attribute.class("store-detail-page")], [
-    view_back_button(),
-    case model.data {
-      Loading -> view_loading()
-      LoadError(e) -> view_error(e)
-      Loaded(data) -> view_store_content(data, model.auth)
-    },
-  ])
-}
-
-/// Wrap a StoreDetailMsg in the parent Msg type
-fn wrap(msg: StoreDetailMsg) -> Msg {
-  StoreDetailMsg(msg)
-}
-
-/// Loading state with spinner
-fn view_loading() -> Element(Msg) {
-  html.div([attribute.class("loading-container")], [
-    html.div([attribute.class("spinner")], []),
-    html.p([attribute.class("loading-text")], [element.text("Loading store...")]),
-  ])
-}
-
-/// Error state view
-fn view_error(error: shared.AppError) -> Element(Msg) {
-  html.div([attribute.class("error-container")], [
-    html.div([attribute.class("error-icon")], [element.text("⚠")]),
-    html.h2([attribute.class("error-title")], [element.text("Oops!")]),
-    html.p([attribute.class("error-message")], [
-      element.text(error_message(error)),
+/// Navigation header
+fn view_navigation() -> Element(Msg) {
+  html.nav([attribute.class("main-nav")], [
+    html.a([attribute.href("/"), attribute.class("logo")], [
+      element.text("boba-raider-8")
     ]),
-    html.button(
-      [attribute.class("retry-button"), event.on_click(wrap(ClickedBack))],
-      [element.text("Go Back")],
-    ),
-  ])
-}
-
-/// Back button for navigation
-fn view_back_button() -> Element(Msg) {
-  html.button(
-    [
-      attribute.class("back-button"),
-      event.on_click(wrap(ClickedBack)),
-    ],
-    [element.text("← Back")],
-  )
-}
-
-/// Full store content when data is loaded
-fn view_store_content(data: StoreData, auth: AuthState) -> Element(Msg) {
-  html.div([attribute.class("store-content")], [
-    // Store header section
-    view_store_header(data.store),
-
-    // Map location section
-    view_map_location(data.store),
-
-    // Add Drink button (only for authenticated users)
-    view_add_drink_button(auth),
-
-    // Drinks list section
-    view_drinks_section(data.drinks),
-
-    // Ratings section
-    view_ratings_section(data.ratings),
-  ])
-}
-
-/// Store header with name and basic info
-fn view_store_header(store: Store) -> Element(Msg) {
-  html.div([attribute.class("store-header")], [
-    html.h1([attribute.class("store-name")], [element.text(store.name)]),
-    html.div([attribute.class("store-meta")], [
-      html.span([attribute.class("store-category")], [element.text(store.description)]),
-    ]),
-    html.div([attribute.class("store-contact")], [
-      html.p([], [
-        html.span([attribute.class("label")], [element.text("Address: ")]),
-        element.text(store.address <> ", " <> store.city <> ", " <> store.state <> " " <> store.zip),
+    html.div([attribute.class("nav-links")], [
+      html.a([attribute.href("/"), attribute.class("nav-link")], [
+        element.text("Home")
       ]),
-      html.p([], [
-        html.span([attribute.class("label")], [element.text("Phone: ")]),
-        element.text(store.phone),
-      ]),
-      html.a(
+      html.button(
         [
-          attribute.href(store.website),
-          attribute.target("_blank"),
-          attribute.class("store-website"),
+          attribute.class("nav-link btn-link"),
+          event.on_click(NavigateToCreateStore)
         ],
-        [element.text("Visit Website")],
-      ),
-    ]),
-    // Store List Page
-    store_list_page(model.store_list),
+        [element.text("Create Store")]
+      )
+    ])
   ])
 }
 
-/// Store List Page component with all states: loading, empty, error, populated
-fn store_list_page(state: StoreListState) -> Element(Msg) {
-  html.div([attribute.class("store-list-page")], [
-    html.h2([], [element.text("Stores")]),
-    // Filters section
-    filter_section(state.filters),
-    // Results section based on state
-    case state.stores {
-      NotAsked -> not_asked_view()
-      Loading -> loading_view()
-      Success(stores) -> {
-        case list.is_empty(stores) {
-          True -> empty_view()
-          False -> populated_view(stores, state.has_more, state.filters.page)
-        }
-      }
-      Failure(error) -> error_view(error)
-    },
-  ])
+/// Route to correct page view
+fn view_page_content(model: Model) -> Element(Msg) {
+  case model.current_page {
+    HomePage -> view_home()
+    CreateStorePage(state) -> {
+      // Map page view to global Msg type
+      element.map(create_store_page.view(state), fn(m) { CreateStoreMsg(m) })
+    }
+  }
 }
 
-/// Filter section with search, location, and sort
-fn filter_section(filters: StoreFilters) -> Element(Msg) {
-  html.div([attribute.class("filters")], [
-    // Search input
-    html.div([attribute.class("filter-group")], [
-      html.label([], [element.text("Search")]),
-      html.input([
-        attribute.type_("text"),
-        attribute.value(filters.query),
-        attribute.placeholder("Search stores..."),
-        event.on_input(fn(value) { StoreList(SearchChanged(value)) }),
-        attribute.class("search-input"),
-      ]),
-    ]),
-    // Location filter
-    html.div([attribute.class("filter-group")], [
-      html.label([], [element.text("Location")]),
-      html.input([
-        attribute.type_("text"),
-        attribute.value(filters.location),
-        attribute.placeholder("Filter by location..."),
-        event.on_input(fn(value) { StoreList(LocationChanged(value)) }),
-        attribute.class("location-input"),
-      ]),
-    ]),
-    // Sort dropdown
-    html.div([attribute.class("filter-group")], [
-      html.label([], [element.text("Sort by")]),
-      html.select(
-        [
-          event.on_input(fn(value) {
-            StoreList(SortChanged(shared.sort_from_string(value)))
-          }),
-          attribute.class("sort-select"),
-        ],
-        [
-          sort_option(RatingDesc, "Highest Rated", filters.sort),
-          sort_option(RatingAsc, "Lowest Rated", filters.sort),
-          sort_option(NameAsc, "Name (A-Z)", filters.sort),
-          sort_option(NameDesc, "Name (Z-A)", filters.sort),
-          sort_option(MostReviewed, "Most Reviewed", filters.sort),
-        ],
-      ),
-    ]),
+/// Home page view
+fn view_home() -> Element(Msg) {
+  html.div([attribute.class("home-page")], [
+    html.h1([], [element.text("Welcome to boba-raider-8")]),
+    html.p([], [
+      element.text("Click 'Create Store' to add a new store listing.")
+    ])
   ])
 }
 

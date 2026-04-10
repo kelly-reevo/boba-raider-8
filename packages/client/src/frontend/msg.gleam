@@ -1,26 +1,13 @@
 /// Application messages for routing, auth, and form handling
 
-import shared.{type AppError}
-import frontend/model.{type Store, type Drink, type Rating}
+import frontend/pages/create_store_msg.{type Msg as CreateStoreMsg}
 
-/// Application messages
+/// Root application messages
 pub type Msg {
   // Navigation
+  NavigateToCreateStore
   NavigateToHome
-  NavigateToStoreDetail(store_id: String)
 
-  // Store detail page messages
-  StoreDetailMsg(StoreDetailMsg)
-}
-
-/// Messages specific to the store detail page
-pub type StoreDetailMsg {
-  // API responses
-  ReceivedStore(Result(Store, AppError))
-  ReceivedDrinks(Result(List(Drink), AppError))
-  ReceivedRatings(Result(List(Rating), AppError))
-
-  // User actions
-  ClickedAddDrink
-  ClickedBack
+  // Page-specific messages
+  CreateStoreMsg(CreateStoreMsg)
 }

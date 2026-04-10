@@ -9,12 +9,9 @@ pub fn main() {
 /// Test that default model initializes correctly
 pub fn default_model_test() {
   let m = model.default()
-  m.current_page
-  |> should.equal(Home)
-}
-
-pub fn default_model_auth_test() {
-  let m = model.default()
-  m.auth
-  |> should.equal(Anonymous)
+  case m.current_page {
+    model.HomePage -> True
+    _ -> False
+  }
+  |> should.equal(True)
 }

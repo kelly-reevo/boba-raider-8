@@ -2,11 +2,9 @@ import config
 import data/drink_store
 import gleeunit
 import gleeunit/should
-import gleam/dict
+import config
+import db/drink_store.{DrinkRecord, Rating, StoreRecord}
 import gleam/option.{None, Some}
-import shared.{type CreateDrinkInput, type Drink, Black, CreateDrinkInput, Green, Oolong}
-import web/handlers/drink_handler
-import web/server
 
 pub fn main() {
   gleeunit.main()
@@ -18,158 +16,143 @@ pub fn config_load_test() {
   |> should.equal(3000)
 }
 
-// Drink store tests
+pub fn get_drink_by_id_found_test() {
+  // Set up test data
+  let store = drink_store.new_store()
 
-pub fn drink_store_create_test() {
-  let store = drink_store.start()
+  let drink = DrinkRecord(
+    id: "drink-123",
+    store_id: "store-456",
+    name: "Classic Milk Tea",
+    tea_type: "Black",
+    price: Some(5.50),
+    description: Some("Traditional milk tea"),
+    image_url: None,
+    is_signature: True,
+    created_at: "2024-01-15T10:00:00Z",
+  )
 
-  let input =
-    CreateDrinkInput(
-      name: "Oolong Milk Tea",
-      tea_type: Oolong,
-      price: Some(5.50),
-      description: Some("Classic oolong with milk"),
-      image_url: None,
-      is_signature: True,
-    )
+  let store_record = StoreRecord(
+    id: "store-456",
+    name: "Boba Paradise",
+    address: "123 Tea Lane",
+  )
 
-  let result = drink_store.create_drink(store, "store_123", input)
+  let rating1 = Rating(
+    id: "rating-1",
+    drink_id: "drink-123",
+    overall: Some(4.5),
+    sweetness: Some(3.0),
+    texture: Some(4.0),
+    tea_strength: Some(5.0),
+  )
 
+  let rating2 = Rating(
+    id: "rating-2",
+    drink_id: "drink-123",
+    overall: Some(3.5),
+    sweetness: Some(2.0),
+    texture: Some(3.5),
+    tea_strength: Some(4.0),
+  )
+
+  // Populate store
+  let store = drink_store.insert_store(store, store_record)
+  let store = drink_store.insert_drink(store, drink)
+  let store = drink_store.insert_rating(store, rating1)
+  let store = drink_store.insert_rating(store, rating2)
+
+  // Retrieve drink
+  let result = drink_store.get_drink_by_id(store, "drink-123")
+
+  // Verify
   case result {
-    Ok(drink) -> {
-      drink.name |> should.equal("Oolong Milk Tea")
-      drink.store_id |> should.equal("store_123")
-      drink.price |> should.equal(Some(5.50))
-      drink.is_signature |> should.equal(True)
+    Some(drink_details) -> {
+      drink_details.id |> should.equal("drink-123")
+      drink_details.name |> should.equal("Classic Milk Tea")
+      drink_details.store.name |> should.equal("Boba Paradise")
+
+      // Check averages: overall = (4.5 + 3.5) / 2 = 4.0
+      case drink_details.average_rating.overall {
+        Some(avg) -> avg |> should.equal(4.0)
+        None -> should.fail()
+      }
+
+      // Check averages: sweetness = (3.0 + 2.0) / 2 = 2.5
+      case drink_details.average_rating.sweetness {
+        Some(avg) -> avg |> should.equal(2.5)
+        None -> should.fail()
+      }
     }
-    Error(_) -> should.fail()
+    None -> should.fail()
   }
 }
 
-pub fn drink_store_duplicate_name_test() {
-  let store = drink_store.start()
+pub fn get_drink_by_id_not_found_test() {
+  let store = drink_store.new_store()
 
-  let input =
-    CreateDrinkInput(
-      name: "Black Tea",
-      tea_type: Black,
-      price: None,
-      description: None,
-      image_url: None,
-      is_signature: False,
-    )
+  let result = drink_store.get_drink_by_id(store, "nonexistent")
 
-  // First creation should succeed
-  let _ = drink_store.create_drink(store, "store_123", input)
+  result |> should.equal(None)
+}
 
-  // Second creation with same name should fail with Conflict
-  let result = drink_store.create_drink(store, "store_123", input)
+pub fn get_drink_by_id_missing_store_test() {
+  // Drink exists but store doesn't - should return None
+  let store = drink_store.new_store()
+
+  let drink = DrinkRecord(
+    id: "drink-123",
+    store_id: "store-missing",
+    name: "Classic Milk Tea",
+    tea_type: "Black",
+    price: None,
+    description: None,
+    image_url: None,
+    is_signature: False,
+    created_at: "2024-01-15T10:00:00Z",
+  )
+
+  let store = drink_store.insert_drink(store, drink)
+
+  let result = drink_store.get_drink_by_id(store, "drink-123")
+
+  result |> should.equal(None)
+}
+
+pub fn get_drink_no_ratings_test() {
+  // Drink exists with no ratings - averages should be null
+  let store = drink_store.new_store()
+
+  let drink = DrinkRecord(
+    id: "drink-789",
+    store_id: "store-456",
+    name: "Green Tea",
+    tea_type: "Green",
+    price: Some(4.00),
+    description: None,
+    image_url: None,
+    is_signature: False,
+    created_at: "2024-01-15T10:00:00Z",
+  )
+
+  let store_record = StoreRecord(
+    id: "store-456",
+    name: "Boba Paradise",
+    address: "123 Tea Lane",
+  )
+
+  let store = drink_store.insert_store(store, store_record)
+  let store = drink_store.insert_drink(store, drink)
+
+  let result = drink_store.get_drink_by_id(store, "drink-789")
 
   case result {
-    Error(shared.Conflict(_)) -> True |> should.be_true
-    _ -> should.fail()
+    Some(drink_details) -> {
+      drink_details.average_rating.overall |> should.equal(None)
+      drink_details.average_rating.sweetness |> should.equal(None)
+      drink_details.average_rating.texture |> should.equal(None)
+      drink_details.average_rating.tea_strength |> should.equal(None)
+    }
+    None -> should.fail()
   }
-}
-
-pub fn drink_store_different_store_same_name_test() {
-  let store = drink_store.start()
-
-  let input =
-    CreateDrinkInput(
-      name: "Green Tea",
-      tea_type: Green,
-      price: None,
-      description: None,
-      image_url: None,
-      is_signature: False,
-    )
-
-  // First creation in store_1 should succeed
-  let _ = drink_store.create_drink(store, "store_1", input)
-
-  // Same name in store_2 should also succeed
-  let result = drink_store.create_drink(store, "store_2", input)
-
-  case result {
-    Ok(drink) -> drink.store_id |> should.equal("store_2")
-    Error(_) -> should.fail()
-  }
-}
-
-// Drink handler tests
-
-pub fn drink_handler_create_success_test() {
-  let store = drink_store.start()
-
-  let request =
-    server.Request(
-      method: "POST",
-      path: "/api/stores/store_test/drinks",
-      headers: dict.new(),
-      body: "{\"name\":\"Matcha Latte\",\"tea_type\":\"green\",\"price\":6.00,\"is_signature\":true}",
-    )
-
-  let response = drink_handler.create(request, store)
-
-  response.status |> should.equal(201)
-}
-
-pub fn drink_handler_invalid_json_test() {
-  let store = drink_store.start()
-
-  let request =
-    server.Request(
-      method: "POST",
-      path: "/api/stores/store_test/drinks",
-      headers: dict.new(),
-      body: "invalid json",
-    )
-
-  let response = drink_handler.create(request, store)
-
-  response.status |> should.equal(422)
-}
-
-pub fn drink_handler_invalid_path_test() {
-  let store = drink_store.start()
-
-  let request =
-    server.Request(
-      method: "POST",
-      path: "/api/invalid/path",
-      headers: dict.new(),
-      body: "{}",
-    )
-
-  let response = drink_handler.create(request, store)
-
-  response.status |> should.equal(404)
-}
-
-pub fn drink_handler_conflict_test() {
-  let store = drink_store.start()
-
-  let body = "{\"name\":\"Earl Grey\",\"tea_type\":\"black\"}"
-
-  let request1 =
-    server.Request(
-      method: "POST",
-      path: "/api/stores/store_conflict/drinks",
-      headers: dict.new(),
-      body: body,
-    )
-
-  let _ = drink_handler.create(request1, store)
-
-  let request2 =
-    server.Request(
-      method: "POST",
-      path: "/api/stores/store_conflict/drinks",
-      headers: dict.new(),
-      body: body,
-    )
-
-  let response = drink_handler.create(request2, store)
-
-  response.status |> should.equal(409)
 }

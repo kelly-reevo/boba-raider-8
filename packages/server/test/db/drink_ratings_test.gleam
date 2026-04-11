@@ -3,7 +3,6 @@
 
 import gleam/json
 import gleam/option.{None, Some}
-import gleeunit
 import gleeunit/should
 
 // We can't import the actual module without pgo dependency in tests

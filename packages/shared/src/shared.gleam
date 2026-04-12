@@ -64,6 +64,15 @@ pub type NewTodoInput {
   )
 }
 
+/// Input type for partial updates to a Todo (used by todo_store)
+pub type UpdateTodoInput {
+  UpdateTodoInput(
+    title: Option(String),
+    description: Option(String),
+    completed: Option(Bool),
+  )
+}
+
 /// Maximum title length
 const max_title_length = 200
 

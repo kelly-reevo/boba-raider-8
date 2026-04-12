@@ -5,7 +5,7 @@ import gleam/otp/actor
 import shared.{type Todo}
 import todo_store.{type Store}
 import web/http_server_actor
-import web/router
+import web/router.{type ListTodosFn}
 
 // Custom result types matching the test expectations
 pub type CreateResult {
@@ -41,6 +41,12 @@ pub type SupervisorMsg {
   GetTodoCmd(id: String, reply: Subject(GetResult))
   UpdateTodoCmd(id: String, changes: List(#(String, String)), reply: Subject(UpdateResult))
   DeleteTodoCmd(id: String, reply: Subject(DeleteResult))
+  ListTodosCmd(filter: String, reply: Subject(ListResult))
+}
+
+pub type ListResult {
+  ListOk(List(Todo))
+  ListError(String)
 }
 
 pub type Supervisor =
@@ -59,7 +65,19 @@ pub fn start(cfg: Config) -> Result(Supervisor, String) {
         Ok(started) -> {
           let sup = started.data
 
-          let handler = router.make_handler()
+          // Create list_todos closure that captures the supervisor
+          let list_todos: ListTodosFn = fn(filter) {
+            let reply = process.new_subject()
+            process.send(sup, ListTodosCmd(filter, reply))
+
+            case process.receive(reply, 5000) {
+              Ok(ListOk(todos)) -> Ok(todos)
+              Ok(ListError(msg)) -> Error(msg)
+              _ -> Error("timeout")
+            }
+          }
+
+          let handler = router.make_handler(list_todos)
           case http_server_actor.start(cfg.port, handler) {
             Ok(_) -> Ok(sup)
             Error(_) -> Ok(sup)
@@ -164,6 +182,22 @@ fn handle_supervisor_msg(
       }
       actor.continue(state)
     }
+
+    ListTodosCmd(filter, reply) -> {
+      case state.store {
+        Some(store) -> {
+          let result = case todo_store.list_all(store, filter) {
+            Ok(todos) -> ListOk(todos)
+            Error(_) -> ListError("Failed to list todos")
+          }
+          process.send(reply, result)
+        }
+        None -> {
+          process.send(reply, ListError("Store not available"))
+        }
+      }
+      actor.continue(state)
+    }
   }
 }
 
@@ -236,4 +270,19 @@ pub fn delete_todo(app: Supervisor, id: String) -> Result(Nil, DeleteError) {
 
 pub type DeleteError {
   NotFoundDeleteError
+}
+
+pub fn list_todos(app: Supervisor, filter: String) -> Result(List(Todo), ListError) {
+  let reply = process.new_subject()
+  process.send(app, ListTodosCmd(filter, reply))
+
+  case process.receive(reply, 5000) {
+    Ok(ListOk(todos)) -> Ok(todos)
+    Ok(ListError(msg)) -> Error(ListFailed(msg))
+    _ -> Error(ListFailed("timeout"))
+  }
+}
+
+pub type ListError {
+  ListFailed(String)
 }

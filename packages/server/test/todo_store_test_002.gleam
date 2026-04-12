@@ -1,11 +1,11 @@
-import gleam/erlang/process
 import gleam/option.{Some}
 import gleeunit/should
+import shared
 import todo_store
 
 pub fn get_by_id_returns_existing_item_test() {
   let assert Ok(store) = todo_store.start()
-  let assert Ok(created_item) = todo_store.create_todo(store, "Existing item", Some("Details"))
+  let assert Ok(created_item) = todo_store.create_todo(store, "Existing item", Some("Details"), shared.Medium, False)
   let id = created_item.id
   let result = todo_store.get_todo(store, id)
   let assert Some(found_item) = result

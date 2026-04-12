@@ -1,15 +1,12 @@
-import gleam/erlang/process
-import gleam/list
 import gleam/option.{None, Some}
-import gleam/order
 import gleam/string
 import gleeunit/should
-import shared.{Todo, UpdateTodoInput}
+import shared
 import todo_store
 
 pub fn create_returns_todo_with_generated_id_test() {
   let assert Ok(store) = todo_store.start()
-  let result = todo_store.create_todo(store, "Buy groceries", Some("Milk and eggs"))
+  let result = todo_store.create_todo(store, "Buy groceries", Some("Milk and eggs"), shared.Medium, False)
   let assert Ok(item) = result
   should.be_true(string.length(item.id) > 0)
   should.equal(item.title, "Buy groceries")
@@ -19,7 +16,7 @@ pub fn create_returns_todo_with_generated_id_test() {
 
 pub fn created_item_is_retrievable_by_id_test() {
   let assert Ok(store) = todo_store.start()
-  let assert Ok(created_item) = todo_store.create_todo(store, "Test todo", Some("Description"))
+  let assert Ok(created_item) = todo_store.create_todo(store, "Test todo", Some("Description"), shared.Medium, False)
   let id = created_item.id
   let retrieved = todo_store.get_todo(store, id)
   let assert Some(found_item) = retrieved

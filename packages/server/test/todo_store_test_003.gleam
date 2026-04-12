@@ -1,4 +1,3 @@
-import gleam/erlang/process
 import gleam/option.{None}
 import gleeunit/should
 import todo_store

@@ -2,6 +2,7 @@ import gleam/erlang/process
 import gleam/list
 import gleam/option.{None}
 import gleeunit/should
+import shared
 import todo_store
 
 pub fn concurrent_creates_generate_unique_ids_test() {
@@ -12,7 +13,8 @@ pub fn concurrent_creates_generate_unique_ids_test() {
   // Spawn 10 concurrent tasks
   list.each(subjects, fn(reply_subj) {
     process.spawn(fn() {
-      let assert Ok(item) = todo_store.create_todo(store, "Concurrent task", None)
+<<<<<<< HEAD
+      let assert Ok(item) = todo_store.create_todo(store, "Concurrent task", None, shared.Medium, False)
       process.send(reply_subj, item.id)
     })
   })

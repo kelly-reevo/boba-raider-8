@@ -10,11 +10,10 @@ pub fn start(cfg: Config) -> Result(Nil, String) {
 
   // Start the todo store actor
   case todo_store.start() {
-    Error(_) -> Error("Failed to start todo store")
     Ok(store) -> {
       io.println("Todo store started")
 
-      // Create the HTTP handler with store reference
+      // Create the HTTP handler with store
       let handler = router.make_handler(store)
 
       // Start HTTP server actor
@@ -33,5 +32,6 @@ pub fn start(cfg: Config) -> Result(Nil, String) {
         Error(err) -> Error("Failed to start HTTP server: " <> err)
       }
     }
+    Error(_) -> Error("Failed to start todo store actor")
   }
 }

@@ -142,50 +142,96 @@ fn get_todo_handler(id: String, store: Store) -> Response {
   }
 }
 
+/// Handler for POST /api/todos - creates a new todo
 fn create_todo_handler(request: Request, store: Store) -> Response {
-  // Parse request body - JSON validation already done by middleware
-  case parse_create_todo_request(request.body) {
-    Ok(#(title, description)) -> {
-      case string.trim(title) {
-        "" -> {
-          // Empty title is a validation error
-          json_response(
-            400,
-            json.object([#("error", json.string("Title cannot be empty"))])
-            |> json.to_string,
-          )
-        }
-        trimmed -> {
-          let desc_opt = case description {
-            "" -> None
-            d -> Some(d)
+  // Parse JSON body
+  let input_decoder = {
+    use title <- decode.optional_field("title", None, decode.optional(decode.string))
+    use description <- decode.optional_field("description", None, decode.optional(decode.string))
+    use priority <- decode.optional_field("priority", None, decode.optional(decode.string))
+    use completed <- decode.optional_field("completed", None, decode.optional(decode.bool))
+
+    decode.success(#(title, description, priority, completed))
+  }
+
+  case json.parse(from: request.body, using: input_decoder) {
+    Ok(#(maybe_title, maybe_description, maybe_priority, maybe_completed)) -> {
+      // Validate title
+      let title_validation = case maybe_title {
+        None -> Error("Title is required")
+        Some(title) -> {
+          let trimmed = string.trim(title)
+          case string.is_empty(trimmed) {
+            True -> Error("Title is required")
+            False -> {
+              case string.length(trimmed) > 200 {
+                True -> Error("Title must not exceed 200 characters")
+                False -> Ok(trimmed)
+              }
+            }
           }
-          case todo_store.create_todo(store, trimmed, desc_opt) {
-            Ok(item) -> json_response(201, todo_to_json(item))
-            Error(_) -> {
-              json_response(
-                500,
-                json.object([#("error", json.string("Internal server error"))])
-                |> json.to_string,
-              )
+        }
+      }
+
+      case title_validation {
+        Error(msg) -> validation_error_response(msg)
+        Ok(trimmed_title) -> {
+          // Parse and validate priority
+          let priority_result = case maybe_priority {
+            None -> Ok(shared.Medium)
+            Some(priority_str) -> {
+              case string.lowercase(priority_str) {
+                "low" -> Ok(shared.Low)
+                "medium" -> Ok(shared.Medium)
+                "high" -> Ok(shared.High)
+                _ -> Error("Priority must be one of: low, medium, high")
+              }
+            }
+          }
+
+          case priority_result {
+            Error(msg) -> validation_error_response(msg)
+            Ok(priority) -> {
+              // Determine completed (default to False)
+              let completed = case maybe_completed {
+                None -> False
+                Some(c) -> c
+              }
+
+              // Create the todo
+              case todo_store.create_todo(store, trimmed_title, maybe_description, priority, completed) {
+                Ok(created_todo) -> {
+                  json_response(201, todo_to_json(created_todo))
+                }
+                Error(error_msg) -> {
+                  validation_error_response(error_msg)
+                }
+              }
             }
           }
         }
       }
     }
     Error(_) -> {
-      json_response(
-        400,
-        json.object([#("error", json.string("Invalid request body"))])
-        |> json.to_string,
-      )
+      validation_error_response("Invalid JSON payload")
     }
   }
 }
 
 fn update_todo_handler(request: Request, id: String, store: Store) -> Response {
-  // Parse request body - JSON validation already done by middleware
-  case parse_update_todo_request(request.body) {
+  // Parse request body
+  let decoder = {
+    use title <- decode.field("title", decode.optional(decode.string))
+    use description <- decode.field("description", decode.optional(decode.string))
+    use completed <- decode.field("completed", decode.optional(decode.bool))
+    decode.success(shared.UpdateTodoInput(
+      title: title,
+      description: description,
+      completed: completed,
+    ))
+  }
+
+  case json.parse(from: request.body, using: decoder) {
     Ok(input) -> {
       case todo_store.update_todo(store, id, input) {
         Ok(item) -> json_response(200, todo_to_json(item))
@@ -209,45 +255,13 @@ fn delete_todo_handler(id: String, store: Store) -> Response {
   }
 }
 
-fn parse_create_todo_request(body: String) -> Result(#(String, String), Nil) {
-  // Parse JSON body to extract title and optional description
-  let decoder = {
-    use title <- decode.field("title", decode.string)
-    use description <- decode.field("description", decode.optional(decode.string))
-    decode.success(#(title, option.unwrap(description, "")))
-  }
-
-  case json.parse(from: body, using: decoder) {
-    Ok(result) -> Ok(result)
-    Error(_) -> Error(Nil)
-  }
-}
-
-fn parse_update_todo_request(body: String) -> Result(UpdateTodoInput, Nil) {
-  // Parse JSON body to extract optional title, description, completed
-  let decoder = {
-    use title <- decode.field("title", decode.optional(decode.string))
-    use description <- decode.field("description", decode.optional(decode.string))
-    use completed <- decode.field("completed", decode.optional(decode.bool))
-    decode.success(shared.UpdateTodoInput(
-      title: title,
-      description: description,
-      completed: completed,
-    ))
-  }
-
-  case json.parse(from: body, using: decoder) {
-    Ok(result) -> Ok(result)
-    Error(_) -> Error(Nil)
-  }
-}
-
-fn todo_to_json(item: Todo) -> String {
+/// Convert a Todo to JSON string
+fn todo_to_json(item: shared.Todo) -> String {
   json.object([
     #("id", json.string(item.id)),
     #("title", json.string(item.title)),
     #("description", case item.description {
-      Some(d) -> json.string(d)
+      Some(desc) -> json.string(desc)
       None -> json.null()
     }),
     #("priority", json.string(priority_to_string(item.priority))),
@@ -255,9 +269,28 @@ fn todo_to_json(item: Todo) -> String {
     #("created_at", json.string(item.created_at)),
     #("updated_at", json.string(item.updated_at)),
   ])
-  |> json.to_string
+  |> json.to_string()
 }
 
+/// Convert priority to string
+fn priority_to_string(priority: shared.Priority) -> String {
+  case priority {
+    shared.Low -> "low"
+    shared.Medium -> "medium"
+    shared.High -> "high"
+  }
+}
+
+/// Return a 422 validation error response
+fn validation_error_response(message: String) -> Response {
+  json_response(
+    422,
+    json.object([#("error", json.string(message))])
+    |> json.to_string(),
+  )
+}
+
+/// Convert a list of Todos to JSON array
 fn todos_to_json(todos: List(Todo)) -> String {
   json.array(todos, fn(item) {
     json.object([
@@ -273,13 +306,5 @@ fn todos_to_json(todos: List(Todo)) -> String {
       #("updated_at", json.string(item.updated_at)),
     ])
   })
-  |> json.to_string
-}
-
-fn priority_to_string(priority: shared.Priority) -> String {
-  case priority {
-    shared.Low -> "low"
-    shared.Medium -> "medium"
-    shared.High -> "high"
-  }
+  |> json.to_string()
 }

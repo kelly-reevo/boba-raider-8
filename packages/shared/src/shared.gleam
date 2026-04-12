@@ -76,9 +76,10 @@ pub type Todo {
   )
 }
 
-/// Validation error type
+/// Validation error type with variants for different error types
 pub type ValidationError {
-  ValidationError(field: String, message: String)
+  MissingField(field: String)
+  InvalidField(field: String, message: String)
 }
 
 // ============================================================================
@@ -91,8 +92,8 @@ fn validate_title(title: String) -> Result(String, List(ValidationError)) {
   let len = string.length(trimmed)
 
   case trimmed {
-    "" -> Error([ValidationError("title", "Title is required")])
-    _ if len > 200 -> Error([ValidationError("title", "Title exceeds 200 characters")])
+    "" -> Error([MissingField("title")])
+    _ if len > 200 -> Error([InvalidField("title", "Title exceeds maximum length of 200 characters")])
     _ -> Ok(trimmed)
   }
 }
@@ -104,11 +105,24 @@ fn validate_description(desc: Option(String)) -> Result(Option(String), List(Val
     Some(text) -> {
       let len = string.length(text)
       case len > 2000 {
-        True -> Error([ValidationError("description", "Description exceeds 2000 characters")])
+        True -> Error([InvalidField("description", "Description exceeds maximum length of 2000 characters")])
         False -> Ok(Some(text))
       }
     }
   }
+}
+
+/// Check if validation errors contain a specific field
+pub fn validation_errors_contain_field(
+  errors: List(ValidationError),
+  field: String,
+) -> Bool {
+  list.any(errors, fn(e) {
+    case e {
+      MissingField(f) -> f == field
+      InvalidField(f, _) -> f == field
+    }
+  })
 }
 
 // ============================================================================
@@ -240,23 +254,31 @@ pub fn new_todo(
   description description: Option(String),
   priority priority: Priority,
 ) -> Result(Todo, List(ValidationError)) {
-  // Validate inputs
-  use validated_title <- result.try(validate_title(title))
-  use validated_desc <- result.try(validate_description(description))
+  // Validate title
+  case validate_title(title) {
+    Error(errors) -> Error(errors)
+    Ok(validated_title) -> {
+      // Validate description
+      case validate_description(description) {
+        Error(errors) -> Error(errors)
+        Ok(validated_desc) -> {
+          // Generate server-side fields
+          let id = generate_uuid_v4()
+          let timestamp = generate_timestamp()
 
-  // Generate server-side fields
-  let id = generate_uuid_v4()
-  let timestamp = generate_timestamp()
-
-  Ok(Todo(
-    id: id,
-    title: validated_title,
-    description: validated_desc,
-    priority: priority,
-    completed: False,
-    created_at: timestamp,
-    updated_at: timestamp,
-  ))
+          Ok(Todo(
+            id: id,
+            title: validated_title,
+            description: validated_desc,
+            priority: priority,
+            completed: False,
+            created_at: timestamp,
+            updated_at: timestamp,
+          ))
+        }
+      }
+    }
+  }
 }
 
 /// Serialize Todo to JSON string
@@ -315,10 +337,80 @@ fn todo_decoder() -> decode.Decoder(Todo) {
   ))
 }
 
-/// Deserialize JSON string to Todo
-pub fn todo_from_json(json_str: String) -> Result(Todo, String) {
+/// Deserialize JSON string to Todo with validation
+pub fn todo_from_json(json_str: String) -> Result(Todo, List(ValidationError)) {
   case json.parse(json_str, todo_decoder()) {
     Ok(t) -> Ok(t)
-    Error(err) -> Error("Failed to parse JSON: " <> string.inspect(err))
+    Error(_) -> {
+      // Try to extract fields and provide specific validation errors
+      let id_result = extract_json_string(json_str, "id")
+      let title_result = extract_json_string(json_str, "title")
+      let priority_result = extract_json_string(json_str, "priority")
+
+      let errors = []
+
+      // Check for missing/invalid fields
+      let errors = case title_result {
+        Ok(None) | Error(_) -> [MissingField("title"), ..errors]
+        Ok(Some("")) -> [MissingField("title"), ..errors]
+        Ok(Some(t)) -> {
+          case string.length(t) > 200 {
+            True -> [InvalidField("title", "Title exceeds maximum length of 200 characters"), ..errors]
+            False -> errors
+          }
+        }
+      }
+
+      let errors = case priority_result {
+        Ok(None) | Error(_) -> [InvalidField("priority", "Priority must be 'low', 'medium', or 'high'"), ..errors]
+        Ok(Some(p)) -> {
+          case priority_from_string(p) {
+            Ok(_) -> errors
+            Error(_) -> [InvalidField("priority", "Priority must be 'low', 'medium', or 'high'"), ..errors]
+          }
+        }
+      }
+
+      let errors = case id_result {
+        Ok(None) | Error(_) -> [MissingField("id"), ..errors]
+        _ -> errors
+      }
+
+      case errors {
+        [] -> Error([InvalidField("json", "Invalid JSON structure")])
+        _ -> Error(list.reverse(errors))
+      }
+    }
+  }
+}
+
+/// Simple JSON string extraction helper - extracts string value for a key
+fn extract_json_string(json: String, key: String) -> Result(Option(String), Nil) {
+  // Look for "key": "value" pattern
+  let pattern = "\"" <> key <> "\":"
+  case string.split(json, pattern) {
+    [_, rest] | [_, rest, ..] -> {
+      // Skip whitespace and optional quote
+      let trimmed = string.trim_start(rest)
+      case trimmed {
+        "null" <> _ -> Ok(None)
+        "false" <> _ -> Ok(None)
+        "true" <> _ -> Ok(None)
+        _ -> {
+          // Look for quoted string
+          case string.starts_with(trimmed, "\"") {
+            True -> {
+              let after_quote = string.drop_start(trimmed, 1)
+              case string.split(after_quote, "\"") {
+                [value, ..] -> Ok(Some(value))
+                _ -> Error(Nil)
+              }
+            }
+            False -> Error(Nil)
+          }
+        }
+      }
+    }
+    _ -> Error(Nil)
   }
 }

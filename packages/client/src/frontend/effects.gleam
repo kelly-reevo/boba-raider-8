@@ -1,4 +1,4 @@
-/// API effects for fetching and manipulating todos
+/// API effects for the frontend
 
 import frontend/msg.{type Msg}
 import gleam/dynamic/decode
@@ -10,20 +10,60 @@ import gleam/string
 import lustre/effect.{type Effect}
 import shared.{type Priority, type Todo, priority_from_string}
 
-/// Fetch todos from the API on page load
-pub fn fetch_todos() -> Effect(Msg) {
-  let req = request.new()
-    |> request.set_host("localhost")
-    |> request.set_port(3000)
-    |> request.set_path("/api/todos")
-    |> request.set_method(http.Get)
+/// API base URL
+const api_base = "/api"
 
+/// Fetch todos from the API on page load (alias for load_todos)
+pub fn fetch_todos() -> Effect(Msg) {
+  load_todos()
+}
+
+/// Load all todos from the API
+pub fn load_todos() -> Effect(Msg) {
   effect.from(fn(dispatch) {
-    do_fetch_todos(req, dispatch)
+    let url = api_base <> "/todos"
+    let req = request.new()
+      |> request.set_method(http.Get)
+      |> request.set_host("")
+      |> request.set_path(url)
+
+    do_fetch(req, fn(response) {
+      case response {
+        Ok(json_str) -> {
+          case parse_todos(json_str) {
+            Ok(todos) -> dispatch(msg.LoadTodosOk(todos))
+            Error(err) -> dispatch(msg.LoadTodosError(err))
+          }
+        }
+        Error(err) -> dispatch(msg.LoadTodosError(err))
+      }
+    })
   })
 }
 
-/// FFI to JavaScript fetch for getting todos
+/// Delete a todo by ID
+pub fn delete_todo(id: String) -> Effect(Msg) {
+  effect.from(fn(dispatch) {
+    let url = api_base <> "/todos/" <> id
+    let req = request.new()
+      |> request.set_method(http.Delete)
+      |> request.set_host("")
+      |> request.set_path(url)
+
+    do_fetch(req, fn(response) {
+      case response {
+        Ok(_) -> dispatch(msg.DeleteTodoOk(id))
+        Error(err) -> dispatch(msg.DeleteTodoError(err))
+      }
+    })
+  })
+}
+
+/// External FFI for fetch - implemented in JavaScript
+@external(javascript, "../client_ffi.mjs", "fetch_json")
+fn do_fetch(req: request.Request(String), callback: fn(Result(String, String)) -> Nil) -> Nil
+
+/// FFI to JavaScript fetch for getting todos (legacy support)
 @external(javascript, "../client_ffi.js", "fetchTodos")
 fn do_fetch_todos(req: request.Request(String), dispatch: fn(Msg) -> Nil) -> Nil
 

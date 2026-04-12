@@ -3,8 +3,9 @@
 /// Each todo has: data-todo-id, .todo-title, .todo-description (optional),
 /// .todo-priority, .todo-checkbox, .todo-delete-btn
 
-import frontend/model
+import frontend/model.{type Model}
 import frontend/msg.{type Msg}
+import gleam/list
 import gleam/option
 import gleam/string
 import lustre/attribute
@@ -14,50 +15,56 @@ import lustre/event
 import shared.{type Priority, type Todo, High, Low, Medium}
 
 /// Main view function
-pub fn view(model: model.Model) -> Element(Msg) {
+pub fn view(model: Model) -> Element(Msg) {
   html.div([attribute.id("app")], [
     html.h1([], [element.text("Todo List")]),
-    render_todo_list(model),
+    render_content(model),
   ])
 }
 
-/// Render the todo list container with appropriate state
-fn render_todo_list(model: model.Model) -> Element(Msg) {
-  html.ul([attribute.id("todo-list")], case model.loading {
-    model.Idle -> []
-    model.Loading -> [render_loading()]
-    model.Error(err) -> [render_error(err)]
-    model.Success -> {
+/// Render appropriate content based on model state
+fn render_content(model: Model) -> Element(Msg) {
+  case model.loading {
+    model.Loading -> render_loading()
+    model.Error(msg) -> render_error(msg)
+    model.Idle | model.Success -> {
       case model.todos {
-        [] -> [render_empty()]
-        todos -> list.map(todos, render_todo)
+        [] -> render_empty()
+        _ -> render_todo_list(model)
       }
     }
-  })
+  }
 }
 
 /// Loading state indicator
 fn render_loading() -> Element(Msg) {
-  html.li(
-    [attribute.class("loading-state")],
-    [element.text("Loading todos...")],
-  )
+  html.div([attribute.class("loading-state")], [
+    html.div([attribute.class("spinner")], []),
+    element.text("Loading todos..."),
+  ])
 }
 
 /// Empty state when no todos exist
 fn render_empty() -> Element(Msg) {
-  html.li(
-    [attribute.class("empty-state")],
-    [element.text("No todos yet. Add one above!")],
-  )
+  html.div([attribute.class("empty-state")], [
+    html.p([], [element.text("No todos yet. Add one above!")]),
+  ])
 }
 
 /// Error state display
 fn render_error(error: String) -> Element(Msg) {
-  html.li(
-    [attribute.class("error-state")],
-    [element.text("Error: " <> error)],
-  )
+  html.div([attribute.class("error-state")], [
+    html.p([attribute.class("error-message")], [element.text("Error: " <> error)]),
+    html.button(
+      [event.on_click(msg.LoadTodos), attribute.class("retry-btn")],
+      [element.text("Retry")]
+    ),
+  ])
+}
+
+/// Render the todo list container with all todos
+fn render_todo_list(model: Model) -> Element(Msg) {
+  html.ul([attribute.id("todo-list")], list.map(model.todos, render_todo))
 }
 
 /// Render a single todo item with all required elements
@@ -89,7 +96,8 @@ fn render_todo(todo_item: Todo) -> Element(Msg) {
         [
           attribute.class("todo-delete-btn"),
           attribute.attribute("aria-label", "Delete todo"),
-          event.on_click(msg.DeleteTodo(todo_item.id)),
+          attribute.title("Delete this todo"),
+          event.on_click(msg.RequestDelete(todo_item.id)),
         ],
         [element.text("Delete")],
       ),
@@ -125,11 +133,8 @@ fn priority_to_class(priority: Priority) -> String {
 /// Convert Priority to display string
 fn priority_to_string(priority: Priority) -> String {
   case priority {
-    Low -> "low"
-    Medium -> "medium"
-    High -> "high"
+    Low -> "Low"
+    Medium -> "Medium"
+    High -> "High"
   }
 }
-
-// Import required modules
-import gleam/list

@@ -1,6 +1,7 @@
-/// Application state for todo list display
+/// Application state for todo list application
 
 import gleam/option.{type Option, None, Some}
+import gleam/list
 import shared.{type Todo}
 
 /// Loading state for async operations
@@ -17,6 +18,7 @@ pub type Model {
     todos: List(Todo),
     loading: LoadingState,
     error: String,
+    deleting_id: Option(String),
   )
 }
 
@@ -26,6 +28,7 @@ pub fn default() -> Model {
     todos: [],
     loading: Idle,
     error: "",
+    deleting_id: None,
   )
 }
 
@@ -37,6 +40,36 @@ pub fn has_todos(model: Model) -> Bool {
   }
 }
 
+/// Check if model has no todos (for empty state display)
+pub fn is_empty(model: Model) -> Bool {
+  case model.todos {
+    [] -> True
+    _ -> False
+  }
+}
+
+/// Remove a todo by ID from the model
+pub fn remove_todo(model: Model, id: String) -> Model {
+  Model(
+    ..model,
+    todos: remove_by_id(model.todos, id),
+    deleting_id: None,
+  )
+}
+
+/// Helper to filter out a todo by ID
+fn remove_by_id(todos: List(Todo), id: String) -> List(Todo) {
+  case todos {
+    [] -> []
+    [first, ..rest] -> {
+      case first.id == id {
+        True -> rest
+        False -> [first, ..remove_by_id(rest, id)]
+      }
+    }
+  }
+}
+
 /// Find a todo by id
 pub fn find_todo(model: Model, id: String) -> Option(Todo) {
   case list.find(model.todos, fn(t) { t.id == id }) {
@@ -44,6 +77,3 @@ pub fn find_todo(model: Model, id: String) -> Option(Todo) {
     _ -> None
   }
 }
-
-// Import required at bottom to avoid circular issues with find_todo
-import gleam/list

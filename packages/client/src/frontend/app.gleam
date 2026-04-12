@@ -1,9 +1,7 @@
-/// Main application entry point
-/// Initializes the Lustre application with todo list functionality
-/// Fetches initial data on page load
+/// Application entry point
 
 import frontend/effects
-import frontend/model
+import frontend/model.{type Model, default}
 import frontend/msg.{type Msg}
 import frontend/update
 import frontend/view
@@ -16,7 +14,7 @@ pub fn main() {
   Nil
 }
 
-/// Initialize the application with loading state and trigger todo fetch
-fn init(_flags: Nil) -> #(model.Model, Effect(Msg)) {
-  #(model.default(), effects.fetch_todos())
+fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
+  // Load todos on application start
+  #(default(), effects.fetch_todos())
 }

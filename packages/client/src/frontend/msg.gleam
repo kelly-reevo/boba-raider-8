@@ -7,6 +7,8 @@ pub type Msg {
   // Initial data loading
   LoadTodos
   TodosLoaded(Result(List(Todo), String))
+  LoadTodosOk(List(Todo))
+  LoadTodosError(String)
 
   // Todo creation
   TodoCreated(Todo)
@@ -14,7 +16,12 @@ pub type Msg {
   // Todo updates
   TodoUpdated(Todo)
 
-  // Todo deletion
+  // Todo deletion with confirmation flow
+  RequestDelete(String)
+  ConfirmDelete(String)
+  CancelDelete
+  DeleteTodoOk(String)
+  DeleteTodoError(String)
   TodoDeleted(String)
 
   // Toggle completion

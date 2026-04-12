@@ -6,6 +6,7 @@ import gleam/json
 import gleam/dict
 import gleam/option.{None}
 import gleam/dynamic/decode
+import shared
 import todo_store
 import web/router
 import web/server.{Request}
@@ -68,7 +69,7 @@ pub fn post_with_form_urlencoded_returns_415_test() {
 // Test: PATCH with unsupported Content-Type returns 415
 pub fn patch_with_unsupported_content_type_returns_415_test() {
   let assert Ok(store) = todo_store.start()
-  let assert Ok(item) = todo_store.create_todo(store, "Test", None)
+  let assert Ok(item) = todo_store.create_todo(store, "Test", None, shared.Medium, False)
   let handler = router.make_handler(store)
 
   // Action: PATCH with text/plain Content-Type

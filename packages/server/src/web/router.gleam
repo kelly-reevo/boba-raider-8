@@ -284,7 +284,7 @@ fn priority_to_string(priority: shared.Priority) -> String {
 /// Return a 422 validation error response
 fn validation_error_response(message: String) -> Response {
   json_response(
-    422,
+    400,
     json.object([#("error", json.string(message))])
     |> json.to_string(),
   )

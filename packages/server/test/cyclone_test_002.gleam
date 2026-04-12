@@ -7,13 +7,14 @@ import gleam/dict
 import gleam/option.{None}
 import gleam/string
 import gleam/dynamic/decode
+import shared
 import todo_store
 import web/router
 import web/server.{Request}
 
 // Helper: Create a test todo
 fn create_test_todo(store) {
-  let assert Ok(item) = todo_store.create_todo(store, "Test", None)
+  let assert Ok(item) = todo_store.create_todo(store, "Test", None, shared.Medium, False)
   item
 }
 

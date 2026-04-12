@@ -13,7 +13,6 @@ pub fn concurrent_creates_generate_unique_ids_test() {
   // Spawn 10 concurrent tasks
   list.each(subjects, fn(reply_subj) {
     process.spawn(fn() {
-<<<<<<< HEAD
       let assert Ok(item) = todo_store.create_todo(store, "Concurrent task", None, shared.Medium, False)
       process.send(reply_subj, item.id)
     })

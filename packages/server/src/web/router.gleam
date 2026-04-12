@@ -6,6 +6,7 @@ import gleam/string
 import gleam/otp/actor
 import gleam/erlang/process.{type Subject}
 import todo_store.{type TodoStore, type TodoItem}
+import web/handlers/todo_handler
 import web/server.{type Request, type Response}
 import web/static
 import web/todos
@@ -120,7 +121,7 @@ fn route(request: Request, store: TodoStore) -> Response {
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
     "GET", "/api/todos" -> list_todos_handler(request, store)
-    "POST", "/api/todos" -> todos.create_todo(store, request)
+    "POST", "/api/todos" -> todo_handler.create(request, store)
     "PATCH", path -> {
       case string.starts_with(path, "/api/todos/") {
         True -> todos.patch_todo(store, request)

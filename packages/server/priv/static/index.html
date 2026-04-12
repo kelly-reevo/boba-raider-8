@@ -1,13 +1,23 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>boba-raider-8</title>
-  <link rel="stylesheet" href="/static/css/styles.css">
-</head>
-<body>
-  <div id="app"></div>
-  <script type="module" src="/static/js/app.js"></script>
-</body>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo App</title>
+  </head>
+  <body>
+    <h1>Todo List</h1>
+    <div class="filter-container">
+      <button class="filter-btn" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="active">Active</button>
+      <button class="filter-btn" data-filter="completed">Completed</button>
+    </div>
+    <div id="todo-list"></div>
+    <form id="add-todo-form">
+      <input type="text" name="title" placeholder="Todo title..." required />
+      <input type="text" name="description" placeholder="Description (optional)" />
+      <button type="submit">Add Todo</button>
+    </form>
+    <script src="client.js"></script>
+  </body>
 </html>

@@ -118,6 +118,7 @@ fn route(request: Request, store: TodoStore) -> Response {
 
   case request.method, path_only {
     "GET", "/" -> static.serve_index()
+    "POST", "/" -> method_not_allowed()
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
     "GET", "/api/todos" -> list_todos_handler(request, store)
@@ -307,5 +308,14 @@ fn not_found() -> Response {
     404,
     json.object([#("error", json.string("Not found"))])
     |> json.to_string,
+  )
+}
+
+fn method_not_allowed() -> Response {
+  server.Response(
+    status: 405,
+    headers: dict.from_list([#("Content-Type", "application/json"), #("Allow", "GET")]),
+    body: json.object([#("error", json.string("Method not allowed"))])
+      |> json.to_string,
   )
 }

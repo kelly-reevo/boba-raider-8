@@ -59,7 +59,7 @@ pub fn start(cfg: Config) -> Result(Supervisor, String) {
         Ok(started) -> {
           let sup = started.data
 
-          let handler = router.make_handler()
+          let handler = router.make_handler(store)
           case http_server_actor.start(cfg.port, handler) {
             Ok(_) -> Ok(sup)
             Error(_) -> Ok(sup)

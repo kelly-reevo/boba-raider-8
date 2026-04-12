@@ -334,7 +334,13 @@ fn validate_create(payload: List(#(String, String))) -> List(String) {
   let errors = case get_field(payload, "title") {
     None -> ["title is required", ..errors]
     Some("") -> ["title is required", ..errors]
-    _ -> errors
+    Some(t) -> {
+      // Trim whitespace and check if empty
+      case string.trim(t) {
+        "" -> ["title is required", ..errors]
+        _ -> errors
+      }
+    }
   }
 
   list.reverse(errors)
@@ -342,6 +348,18 @@ fn validate_create(payload: List(#(String, String))) -> List(String) {
 
 fn validate_update(changes: List(#(String, String))) -> List(String) {
   let errors = []
+
+  // Validate title if present (check for whitespace-only)
+  let errors = case get_field(changes, "title") {
+    Some("") -> ["title is required", ..errors]
+    Some(t) -> {
+      case string.trim(t) {
+        "" -> ["title is required", ..errors]
+        _ -> errors
+      }
+    }
+    None -> errors
+  }
 
   let errors = case get_field(changes, "completed") {
     Some(v) if v != "true" && v != "false" && v != "" -> [

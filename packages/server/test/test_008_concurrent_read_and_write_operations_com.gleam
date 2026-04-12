@@ -21,7 +21,9 @@ pub fn rapid_operations_no_data_corruption_test() {
         title: "Todo " <> int.to_string(i),
         description: None,
         priority: todo_store.Medium,
-        completed: False
+        completed: False,
+        created_at: "2024-01-15T10:30:00Z",
+        updated_at: "2024-01-15T10:30:00Z"
       )
       todo_store.insert(actor, todo_data)
     })
@@ -43,14 +45,16 @@ pub fn rapid_operations_no_data_corruption_test() {
         title: item.title <> " - updated",
         description: item.description,
         priority: item.priority,
-        completed: True
+        completed: True,
+        created_at: item.created_at,
+        updated_at: "2024-01-15T12:00:00Z"
       )
       todo_store.update(actor, id, changes)
     })
 
   // All updates should succeed
   let ok_count = update_results
-    |> list.filter(fn(r) { r == todo_store.Ok })
+    |> list.filter(fn(r) { r == todo_store.UpdateOk })
     |> list.length
   should.equal(ok_count, 10)
 
@@ -69,7 +73,7 @@ pub fn rapid_operations_no_data_corruption_test() {
 
   // All deletes should succeed
   let delete_ok_count = delete_results
-    |> list.filter(fn(r) { r == todo_store.Ok })
+    |> list.filter(fn(r) { r == todo_store.UpdateOk })
     |> list.length
   should.equal(delete_ok_count, 10)
 

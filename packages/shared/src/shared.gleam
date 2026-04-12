@@ -83,6 +83,20 @@ pub type ValidationError {
 }
 
 // ============================================================================
+// Update operations
+// ============================================================================
+
+/// Input type for updating a todo with optional fields
+/// Uses standard gleam/option.Option type
+pub type UpdateTodoInput {
+  UpdateTodoInput(
+    title: option.Option(String),
+    description: option.Option(String),
+    completed: option.Option(Bool),
+  )
+}
+
+// ============================================================================
 // Validation Functions
 // ============================================================================
 

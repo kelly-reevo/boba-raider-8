@@ -18,7 +18,9 @@ pub fn insert_todo_generates_uuid_test() {
     title: "Buy groceries",
     description: Some("Milk, eggs, bread"),
     priority: todo_store.Medium,
-    completed: False
+    completed: False,
+    created_at: "2024-01-15T10:30:00Z",
+    updated_at: "2024-01-15T10:30:00Z"
   )
   let id = todo_store.insert(actor, todo_data)
   

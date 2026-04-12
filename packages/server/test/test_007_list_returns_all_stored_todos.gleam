@@ -17,13 +17,17 @@ pub fn list_returns_all_todos_test() {
     title: "First todo",
     description: None,
     priority: todo_store.Low,
-    completed: False
+    completed: False,
+    created_at: "2024-01-15T10:30:00Z",
+    updated_at: "2024-01-15T10:30:00Z"
   )
   let todo2 = todo_store.TodoData(
     title: "Second todo",
     description: Some("With description"),
     priority: todo_store.High,
-    completed: True
+    completed: True,
+    created_at: "2024-01-15T11:00:00Z",
+    updated_at: "2024-01-15T11:00:00Z"
   )
   let id1 = todo_store.insert(actor, todo1)
   let id2 = todo_store.insert(actor, todo2)

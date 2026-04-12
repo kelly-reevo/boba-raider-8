@@ -4,6 +4,7 @@ import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/result
 import gleam/string
+import shared
 
 pub type Priority {
   Low
@@ -17,6 +18,8 @@ pub type TodoData {
     description: Option(String),
     priority: Priority,
     completed: Bool,
+    created_at: String,
+    updated_at: String,
   )
 }
 
@@ -27,13 +30,18 @@ pub type TodoItem {
     description: Option(String),
     priority: Priority,
     completed: Bool,
+    created_at: String,
+    updated_at: String,
   )
 }
 
 pub type UpdateResult {
-  Ok
+  UpdateOk
   NotFound
 }
+
+// Re-export shared UpdateTodoInput for convenience
+pub type UpdateTodoInput = shared.UpdateTodoInput
 
 pub opaque type Store {
   Store(todos: Dict(String, TodoItem))
@@ -71,6 +79,8 @@ fn handle_message(state: Store, msg: Message) -> actor.Next(Store, Message) {
         description: data.description,
         priority: data.priority,
         completed: data.completed,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
       )
       let new_todos = dict.insert(state.todos, id, item)
       process.send(reply_to, id)
@@ -88,9 +98,11 @@ fn handle_message(state: Store, msg: Message) -> actor.Next(Store, Message) {
             description: data.description,
             priority: data.priority,
             completed: data.completed,
+            created_at: item.created_at,
+            updated_at: data.updated_at,
           )
           let new_todos = dict.insert(state.todos, id, updated)
-          process.send(reply_to, Ok)
+          process.send(reply_to, UpdateOk)
           actor.continue(Store(todos: new_todos))
         }
         False -> {
@@ -104,7 +116,7 @@ fn handle_message(state: Store, msg: Message) -> actor.Next(Store, Message) {
       case dict.has_key(state.todos, id) {
         True -> {
           let new_todos = dict.delete(state.todos, id)
-          process.send(reply_to, Ok)
+          process.send(reply_to, UpdateOk)
           actor.continue(Store(todos: new_todos))
         }
         False -> {
@@ -183,3 +195,110 @@ pub fn list(store: TodoStore) -> List(TodoItem) {
   let received = process.receive(reply_subject, 5000)
   result.unwrap(received, [])
 }
+
+// Helper function to create a new todo with server-generated timestamps
+pub fn create_todo(
+  store: TodoStore,
+  title: String,
+  description: Option(String),
+) -> Result(TodoItem, String) {
+  let timestamp = generate_iso_timestamp()
+  let data = TodoData(
+    title: title,
+    description: description,
+    priority: Medium,
+    completed: False,
+    created_at: timestamp,
+    updated_at: timestamp,
+  )
+  let id = insert(store, data)
+  case id {
+    "" -> Error("Failed to create todo")
+    _ -> {
+      case get(store, id) {
+        Some(item) -> Ok(item)
+        None -> Error("Failed to retrieve created todo")
+      }
+    }
+  }
+}
+
+// Helper function to update a todo by ID using UpdateTodoInput fields
+pub fn update_todo(
+  store: TodoStore,
+  id: String,
+  input: UpdateTodoInput,
+) -> Result(TodoItem, String) {
+  case get(store, id) {
+    None -> Error("Todo not found")
+    Some(existing) -> {
+      let timestamp = generate_iso_timestamp()
+      let new_title = case input.title {
+        Some(t) -> t
+        None -> existing.title
+      }
+      let new_description = case input.description {
+        Some(d) -> Some(d)
+        None -> existing.description
+      }
+      let new_completed = case input.completed {
+        Some(c) -> c
+        None -> existing.completed
+      }
+      let data = TodoData(
+        title: new_title,
+        description: new_description,
+        priority: existing.priority,
+        completed: new_completed,
+        created_at: existing.created_at,
+        updated_at: timestamp,
+      )
+      case update(store, id, data) {
+        UpdateOk -> {
+          case get(store, id) {
+            Some(item) -> Ok(item)
+            None -> Error("Failed to retrieve updated todo")
+          }
+        }
+        NotFound -> Error("Todo not found")
+      }
+    }
+  }
+}
+
+// Generate ISO8601 timestamp string
+fn generate_iso_timestamp() -> String {
+  let seconds = system_time_seconds()
+  format_iso8601(seconds)
+}
+
+// Get current time in seconds since epoch
+@external(erlang, "erlang", "system_time")
+fn system_time_seconds() -> Int
+
+// Format seconds as ISO8601 UTC string: YYYY-MM-DDTHH:MM:SSZ
+fn format_iso8601(seconds: Int) -> String {
+  let days_since_epoch = seconds / 86_400
+  let seconds_in_day = seconds % 86_400
+  let year = 1970 + days_since_epoch / 365
+  let day_of_year = days_since_epoch % 365
+  let month = day_of_year / 30 + 1
+  let day = day_of_year % 30 + 1
+  let hour = seconds_in_day / 3600
+  let minute = { seconds_in_day % 3600 } / 60
+  let second = seconds_in_day % 60
+  int_to_padded_string(year, 4) <> "-" <> int_to_padded_string(month, 2) <> "-" <> int_to_padded_string(day, 2) <> "T" <> int_to_padded_string(hour, 2) <> ":" <> int_to_padded_string(minute, 2) <> ":" <> int_to_padded_string(second, 2) <> "Z"
+}
+
+// Convert integer to zero-padded string
+fn int_to_padded_string(n: Int, width: Int) -> String {
+  let str = int_to_string(n)
+  let len = string.length(str)
+  case len >= width {
+    True -> str
+    False -> string.repeat("0", width - len) <> str
+  }
+}
+
+@external(erlang, "erlang", "integer_to_binary")
+fn int_to_string(n: Int) -> String

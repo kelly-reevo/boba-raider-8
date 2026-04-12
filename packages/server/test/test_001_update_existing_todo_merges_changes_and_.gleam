@@ -16,21 +16,25 @@ pub fn update_todo_merges_changes_test() {
     title: "Original title",
     description: None,
     priority: todo_store.Low,
-    completed: False
+    completed: False,
+    created_at: "2024-01-15T10:30:00Z",
+    updated_at: "2024-01-15T10:30:00Z"
   )
   let id = todo_store.insert(actor, todo_data)
-  
+
   // Update the todo
   let changes = todo_store.TodoData(
     title: "Updated title",
     description: Some("Added description"),
     priority: todo_store.High,
-    completed: True
+    completed: True,
+    created_at: "2024-01-15T10:30:00Z",
+    updated_at: "2024-01-16T12:00:00Z"
   )
   let result = todo_store.update(actor, id, changes)
-  
-  // Should return Ok
-  should.equal(result, todo_store.Ok)
+
+  // Should return UpdateOk
+  should.equal(result, todo_store.UpdateOk)
   
   // Verify changes were merged
   let assert Some(updated) = todo_store.get(actor, id)

@@ -16,16 +16,18 @@ pub fn delete_todo_removes_it_test() {
     title: "To be deleted",
     description: Some("Delete me"),
     priority: todo_store.Medium,
-    completed: False
+    completed: False,
+    created_at: "2024-01-15T10:30:00Z",
+    updated_at: "2024-01-15T10:30:00Z"
   )
   let id = todo_store.insert(actor, todo_data)
-  
+
   // Verify it exists
   let assert Some(_) = todo_store.get(actor, id)
-  
+
   // Delete it
   let result = todo_store.delete(actor, id)
-  should.equal(result, todo_store.Ok)
+  should.equal(result, todo_store.UpdateOk)
   
   // Verify it's gone
   let not_found = todo_store.get(actor, id)

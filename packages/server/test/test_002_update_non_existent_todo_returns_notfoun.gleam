@@ -15,7 +15,9 @@ pub fn update_nonexistent_returns_not_found_test() {
     title: "Updated title",
     description: None,
     priority: todo_store.Medium,
-    completed: True
+    completed: True,
+    created_at: "2024-01-15T10:30:00Z",
+    updated_at: "2024-01-15T10:30:00Z"
   )
   let result = todo_store.update(actor, "non-existent-uuid", changes)
   

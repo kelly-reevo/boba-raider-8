@@ -72,7 +72,7 @@ pub fn remove_todo(model: Model, id: String) -> Model {
 }
 
 /// Helper to filter out a todo by ID
-fn remove_by_id(todos: List(Todo), id: String) -> List<Todo) {
+fn remove_by_id(todos: List(Todo), id: String) -> List(Todo) {
   case todos {
     [] -> []
     [first, ..rest] -> {

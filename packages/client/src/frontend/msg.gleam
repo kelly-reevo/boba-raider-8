@@ -29,4 +29,9 @@ pub type Msg {
 
   // User delete action
   DeleteTodo(id: String)
+
+  // Error display handling
+  ShowError(message: String, type_: String)
+  DismissError(error_id: String)
+  AutoDismissError(error_id: String)
 }

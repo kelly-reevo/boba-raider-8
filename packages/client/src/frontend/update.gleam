@@ -7,7 +7,7 @@ import frontend/model.{
 import frontend/msg.{type Msg}
 import gleam/int
 import gleam/list
-import gleam/option
+import gleam/option.{Some}
 import gleam/string
 import lustre/effect.{type Effect}
 import shared

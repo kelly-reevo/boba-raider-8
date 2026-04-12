@@ -11,7 +11,7 @@ pub type Response {
 pub fn json_response(status: Int, body: String) -> Response {
   Response(
     status: status,
-    headers: dict.from_list([#("Content-Type", "application/json")]),
+    headers: dict.from_list([#("content-type", "application/json")]),
     body: body,
   )
 }
@@ -19,7 +19,7 @@ pub fn json_response(status: Int, body: String) -> Response {
 pub fn html_response(status: Int, body: String) -> Response {
   Response(
     status: status,
-    headers: dict.from_list([#("Content-Type", "text/html; charset=utf-8")]),
+    headers: dict.from_list([#("content-type", "text/html; charset=utf-8")]),
     body: body,
   )
 }
@@ -27,7 +27,7 @@ pub fn html_response(status: Int, body: String) -> Response {
 pub fn text_response(status: Int, body: String) -> Response {
   Response(
     status: status,
-    headers: dict.from_list([#("Content-Type", "text/plain")]),
+    headers: dict.from_list([#("content-type", "text/plain")]),
     body: body,
   )
 }

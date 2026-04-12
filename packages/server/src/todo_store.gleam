@@ -195,8 +195,8 @@ fn option_string_merge(opt: Option(String), default: Option(String)) -> Option(S
 // Public API functions
 
 /// Create a new todo item
-pub fn create_todo(store: Store, title: String, description: String) -> Result(Todo, Nil) {
-  process.call(store.subject, 5000, fn(r) { CreateTodo(title, Some(description), r) })
+pub fn create_todo(store: Store, title: String, description: Option(String)) -> Result(Todo, Nil) {
+  process.call(store.subject, 5000, fn(r) { CreateTodo(title, description, r) })
 }
 
 /// Get a single todo by ID

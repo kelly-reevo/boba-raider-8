@@ -18,7 +18,7 @@ fn serve_file(path: String, content_type: String) -> Response {
     Ok(content) ->
       server.Response(
         status: 200,
-        headers: dict.from_list([#("Content-Type", content_type)]),
+        headers: dict.from_list([#("content-type", content_type)]),
         body: content,
       )
     Error(_) -> server.text_response(404, "Not found")

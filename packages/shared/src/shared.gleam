@@ -22,7 +22,8 @@ pub type Todo {
   Todo(
     id: String,
     title: String,
-    description: String,
+    description: Option(String),
+    priority: String,
     completed: Bool,
     created_at: Int,
     updated_at: Int,

@@ -3,6 +3,7 @@
 
 import gleeunit/should
 import gleam/list
+import gleam/option.{Some}
 import gleam/string
 import todo_store
 import shared.{type Todo}
@@ -27,7 +28,7 @@ pub fn list_all_returns_ok_result_type_test() {
   let assert Ok(first) = list.first(todos)
   should.be_true(string.length(first.id) > 0)
   should.equal(first.title, "Test Todo")
-  should.equal(first.description, "Description")
+  should.equal(first.description, Some("Description"))
   should.be_false(first.completed)
   should.be_true(first.created_at > 0)
   should.be_true(first.updated_at > 0)

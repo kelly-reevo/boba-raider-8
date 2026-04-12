@@ -8,7 +8,7 @@ import gleam/option.{type Option, None, Some}
 import gleam/order
 import gleam/otp/actor
 import gleam/string
-import shared.{type Todo, type UpdateTodoInput, NotFound}
+import shared.{type Todo, Todo, type UpdateTodoInput, NotFound}
 
 // Internal state for the store actor
 type StoreState {
@@ -97,10 +97,36 @@ fn current_timestamp_millis() -> Int {
   system_time(1000)
 }
 
-// Generate a unique ID
+// Pad a string to minimum length by prepending a character
+fn pad_left(s: String, length: Int, pad_char: String) -> String {
+  case string.length(s) >= length {
+    True -> s
+    False -> pad_left(pad_char <> s, length, pad_char)
+  }
+}
+
+// Generate a UUID-like unique ID (36 characters: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
 fn generate_id(counter: Int) -> String {
   let now = current_timestamp_millis()
-  "todo-" <> int.to_string(counter) <> "-" <> int.to_string(now)
+
+  // Format: 8-4-4-4-12 = 36 chars total (including 4 dashes)
+  // part1: 8 chars from counter
+  let part1 = pad_left(int.to_string(counter), 8, "0")
+
+  // part2: 4 chars from timestamp
+  let part2 = string.slice(pad_left(int.to_string(now), 12, "0"), 0, 4)
+
+  // part3: 4 chars from timestamp / 10
+  let part3 = string.slice(pad_left(int.to_string(now / 10), 12, "0"), 0, 4)
+
+  // part4: 4 chars from timestamp / 100
+  let part4 = string.slice(pad_left(int.to_string(now / 100), 12, "0"), 0, 4)
+
+  // part5: 12 chars from timestamp / 1000 + counter
+  let part5_source = int.to_string(now / 1000) <> int.to_string(counter)
+  let part5 = string.slice(pad_left(part5_source, 12, "0"), 0, 12)
+
+  part1 <> "-" <> part2 <> "-" <> part3 <> "-" <> part4 <> "-" <> part5
 }
 
 // Actor message handler
@@ -173,9 +199,15 @@ fn do_create(payload: List(#(String, String)), id: String) -> CreateResult {
     [] -> {
       let title = get_field(payload, "title") |> option.unwrap("")
       let description = case get_field(payload, "description") {
-        Some("") -> ""
-        Some(d) -> d
-        None -> ""
+        Some("") -> None
+        Some(d) -> Some(d)
+        None -> None
+      }
+      let priority = case get_field(payload, "priority") {
+        Some("high") -> "high"
+        Some("medium") -> "medium"
+        Some("low") -> "low"
+        _ -> "medium"
       }
       let now = current_timestamp_millis()
 
@@ -183,6 +215,7 @@ fn do_create(payload: List(#(String, String)), id: String) -> CreateResult {
         id: id,
         title: title,
         description: description,
+        priority: priority,
         completed: False,
         created_at: now,
         updated_at: now,
@@ -214,9 +247,16 @@ fn do_update(
             None -> existing.title
           }
           let description = case get_field(changes, "description") {
-            Some("") -> ""
-            Some(d) -> d
+            Some("") -> None
+            Some(d) -> Some(d)
             None -> existing.description
+          }
+          let priority = case get_field(changes, "priority") {
+            Some("high") -> "high"
+            Some("medium") -> "medium"
+            Some("low") -> "low"
+            Some(_) -> existing.priority
+            None -> existing.priority
           }
           let completed = case get_field(changes, "completed") {
             Some("true") -> True
@@ -229,6 +269,7 @@ fn do_update(
             id: existing.id,
             title: title,
             description: description,
+            priority: priority,
             completed: completed,
             created_at: existing.created_at,
             updated_at: current_timestamp_millis(),
@@ -263,13 +304,20 @@ fn apply_filter(todos: List(Todo), filter: String) -> List(Todo) {
   }
 }
 
-// Sort todos by created_at descending (newest first)
+// Sort todos by created_at descending (newest first), with id as tiebreaker
 fn sort_by_created_at_desc(todos: List(Todo)) -> List(Todo) {
   list.sort(todos, fn(a, b) {
     case int.compare(a.created_at, b.created_at) {
       order.Gt -> order.Lt
       order.Lt -> order.Gt
-      order.Eq -> order.Eq
+      order.Eq -> {
+        // Secondary sort by id descending (newest id first)
+        case string.compare(a.id, b.id) {
+          order.Gt -> order.Lt
+          order.Lt -> order.Gt
+          order.Eq -> order.Eq
+        }
+      }
     }
   })
 }
@@ -298,6 +346,13 @@ fn validate_update(changes: List(#(String, String))) -> List(String) {
   let errors = case get_field(changes, "completed") {
     Some(v) if v != "true" && v != "false" && v != "" -> [
       "completed must be true or false", ..errors
+    ]
+    _ -> errors
+  }
+
+  let errors = case get_field(changes, "priority") {
+    Some(p) if p != "low" && p != "medium" && p != "high" && p != "" -> [
+      "priority must be low, medium, or high", ..errors
     ]
     _ -> errors
   }
@@ -412,14 +467,14 @@ pub fn delete_api(store: Store, id: String) -> DeleteApiResult {
 /// List all todos with optional filtering
 /// Filter values: "all", "active", "completed"
 /// Invalid filter defaults to "all"
-pub fn list_all(store: Store, filter: String) -> ListApiResult {
+pub fn list_all(store: Store, filter: String) -> Result(List(Todo), shared.AppError) {
   let Store(subject) = store
   let reply_subject = process.new_subject()
   actor.send(subject, ListAll(reply_subject, filter))
 
   case process.receive(reply_subject, 5000) {
-    Ok(ListSuccess(todos)) -> ListOkResult(todos)
-    _ -> ListErrorResult(ListStoreError)
+    Ok(ListSuccess(todos)) -> Ok(todos)
+    _ -> Error(shared.InternalError("Failed to list todos"))
   }
 }
 
@@ -436,7 +491,7 @@ pub fn create_todo(
     #("description", description),
   ]
   case create_api(store, payload) {
-    CreateOkResult(todo) -> Ok(todo)
+    CreateOkResult(item) -> Ok(item)
     CreateErrorResult(ValidationErrorCreate(errors)) ->
       Error(shared.InvalidInput(string.join(errors, ", ")))
   }
@@ -463,7 +518,7 @@ pub fn update_todo(
   }
 
   case update_api(store, id, changes) {
-    UpdateOkResult(todo) -> Ok(todo)
+    UpdateOkResult(item) -> Ok(item)
     UpdateErrorResult(NotFoundUpdate) -> Error(NotFound("Todo not found: " <> id))
     UpdateErrorResult(ValidationErrorUpdate(errors)) ->
       Error(shared.InvalidInput(string.join(errors, ", ")))
@@ -476,6 +531,3 @@ fn bool_to_string(b: Bool) -> String {
     False -> "false"
   }
 }
-
-@external(erlang, "string", "join")
-fn string_join(list: List(String), separator: String) -> String

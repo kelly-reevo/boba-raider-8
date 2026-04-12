@@ -7,7 +7,28 @@
   <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app">
+    <h1>Todo App</h1>
+
+    <!-- Add todo form -->
+    <form id='add-todo-form'>
+      <input type="text" name="title" placeholder="Title" required>
+      <textarea name="description" placeholder="Description"></textarea>
+      <button type="submit">Add Todo</button>
+    </form>
+
+    <!-- Filter controls -->
+    <div class="filter-controls">
+      <button id="filter-all">all</button>
+      <button id="filter-active">active</button>
+      <button id="filter-completed">completed</button>
+    </div>
+
+    <!-- Todo list container -->
+    <div id='todo-list'></div>
+  </div>
+
   <script type="module" src="/static/js/app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

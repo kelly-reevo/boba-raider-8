@@ -1,0 +1,26 @@
+{
+  "name": "boba-raider-8",
+  "version": "1.0.0",
+  "description": "Todo application with Gleam backend and JavaScript frontend",
+  "scripts": {
+    "test": "jest --testEnvironment=jsdom",
+    "test:toggle": "npm run test:toggle:unit && npm run test:toggle:e2e",
+    "test:toggle:unit": "jest --testEnvironment=jsdom --testMatch='**/__cyclone_tests__/toggle-completion/*.js' --testPathPattern='test_00[0123]'",
+    "test:toggle:e2e": "jest --testEnvironment=node --testMatch='**/__cyclone_tests__/toggle-completion/*.js' --testPathPattern='test_004' --testPathIgnorePatterns='/node_modules/'"
+  },
+  "jest": {
+    "setupFiles": ["<rootDir>/jest.setup.js"],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "__cyclone_tests__/api-client.js",
+      "__cyclone_tests__/todo-ui.js",
+      "__cyclone_tests__/todo-app.js"
+    ]
+  },
+  "devDependencies": {
+    "@jest/globals": "^29.7.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "jsdom": "^24.0.0"
+  }
+}

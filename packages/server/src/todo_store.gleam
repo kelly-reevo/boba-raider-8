@@ -1,116 +1,130 @@
+/// Todo store - OTP actor with full CRUD and filtering support
+
 import gleam/dict.{type Dict}
 import gleam/erlang/process.{type Subject}
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/order
 import gleam/otp/actor
 import gleam/string
+import shared.{type Todo, type UpdateTodoInput, NotFound}
 
-pub type Todo {
-  Todo(
-    id: String,
-    title: String,
-    description: Option(String),
-    priority: String,
-    completed: Bool,
+// Internal state for the store actor
+type StoreState {
+  StoreState(
+    todos: Dict(String, Todo),
+    next_id: Int,
   )
 }
 
-pub type CreateResult {
+// Actor messages
+type StoreMsg {
+  Create(
+    payload: List(#(String, String)),
+    reply: Subject(CreateResult),
+  )
+  Get(
+    id: String,
+    reply: Subject(GetResult),
+  )
+  Update(
+    id: String,
+    changes: List(#(String, String)),
+    reply: Subject(UpdateResult),
+  )
+  Delete(
+    id: String,
+    reply: Subject(DeleteResult),
+  )
+  ListAll(
+    reply: Subject(ListResult),
+    filter: String,
+  )
+}
+
+// Result types for internal message handling
+type CreateResult {
   CreateSuccess(Todo)
   CreateValidationError(List(String))
 }
 
-pub type GetResult {
+type GetResult {
   GetSuccess(Todo)
   GetNotFound
 }
 
-pub type UpdateResult {
+type UpdateResult {
   UpdateSuccess(Todo)
   UpdateNotFound
   UpdateValidationError(List(String))
 }
 
-pub type DeleteResult {
+type DeleteResult {
   DeleteOk
   DeleteNotFound
 }
 
-pub type StoreMsg {
-  Create(payload: List(#(String, String)), reply: Subject(CreateResult))
-  Get(id: String, reply: Subject(GetResult))
-  Update(id: String, changes: List(#(String, String)), reply: Subject(UpdateResult))
-  Delete(id: String, reply: Subject(DeleteResult))
+type ListResult {
+  ListSuccess(List(Todo))
 }
 
-pub type StoreState {
-  StoreState(todos: Dict(String, Todo), counter: Int)
+/// Store handle type (actor subject)
+pub opaque type Store {
+  Store(Subject(StoreMsg))
 }
 
-pub type Store =
-  Subject(StoreMsg)
-
-fn generate_id(counter: Int) -> String {
-  // Generate a simple UUID-like string using a counter and randomness
-  let base = int.to_string(counter)
-  let time = process.subject_owner(process.new_subject())
-  // Use the subject owner pid as a source of uniqueness
-  let pid_str = string.inspect(time)
-  let combined = base <> pid_str
-
-  // Ensure we have enough characters
-  let hex_base = string.replace(combined, "#", "")
-    |> string.replace("<", "")
-    |> string.replace(">", "")
-    |> string.replace(".", "")
-
-  // Ensure we have at least 32 characters
-  let padded = case string.length(hex_base) >= 32 {
-    True -> string.slice(hex_base, 0, 32)
-    False -> hex_base <> string.repeat("0", 32 - string.length(hex_base))
-  }
-
-  // Format as UUID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-  string.slice(padded, 0, 8)
-  <> "-"
-  <> string.slice(padded, 8, 4)
-  <> "-"
-  <> string.slice(padded, 12, 4)
-  <> "-"
-  <> string.slice(padded, 16, 4)
-  <> "-"
-  <> string.slice(padded, 20, 12)
-}
-
+/// Start the todo store actor
 pub fn start() -> Result(Store, String) {
-  let initial_state = StoreState(todos: dict.new(), counter: 0)
+  let initial_state = StoreState(todos: dict.new(), next_id: 1)
 
   case
     actor.new(initial_state)
     |> actor.on_message(handle_message)
     |> actor.start()
   {
-    Ok(started) -> Ok(started.data)
-    Error(_) -> Error("Failed to start store actor")
+    Ok(server) -> Ok(Store(server.data))
+    Error(_) -> Error("Failed to start todo store")
   }
 }
 
+// Get current timestamp in milliseconds
+@external(erlang, "erlang", "system_time")
+fn system_time(unit: Int) -> Int
+
+fn current_timestamp_millis() -> Int {
+  // 1000 = millisecond unit for Erlang system_time
+  system_time(1000)
+}
+
+// Generate a unique ID
+fn generate_id(counter: Int) -> String {
+  let now = current_timestamp_millis()
+  "todo-" <> int.to_string(counter) <> "-" <> int.to_string(now)
+}
+
+// Actor message handler
 fn handle_message(
   state: StoreState,
   msg: StoreMsg,
 ) -> actor.Next(StoreState, StoreMsg) {
   case msg {
     Create(payload, reply) -> {
-      let id = generate_id(state.counter)
+      let id = generate_id(state.next_id)
       let result = do_create(payload, id)
       process.send(reply, result)
       case result {
         CreateSuccess(item) -> {
           let new_todos = dict.insert(state.todos, item.id, item)
-          actor.continue(StoreState(todos: new_todos, counter: state.counter + 1))
+          let new_state = StoreState(
+            todos: new_todos,
+            next_id: state.next_id + 1,
+          )
+          actor.continue(new_state)
         }
-        CreateValidationError(_) -> actor.continue(StoreState(..state, counter: state.counter + 1))
+        CreateValidationError(_) -> {
+          actor.continue(StoreState(..state, next_id: state.next_id + 1))
+        }
       }
     }
 
@@ -125,7 +139,7 @@ fn handle_message(
       case result {
         UpdateSuccess(item) -> {
           let new_todos = dict.insert(state.todos, item.id, item)
-          actor.continue(StoreState(todos: new_todos, counter: state.counter))
+          actor.continue(StoreState(..state, todos: new_todos))
         }
         UpdateNotFound -> actor.continue(state)
         UpdateValidationError(_) -> actor.continue(state)
@@ -138,10 +152,18 @@ fn handle_message(
       case result {
         DeleteOk -> {
           let new_todos = dict.delete(state.todos, id)
-          actor.continue(StoreState(todos: new_todos, counter: state.counter))
+          actor.continue(StoreState(..state, todos: new_todos))
         }
         DeleteNotFound -> actor.continue(state)
       }
+    }
+
+    ListAll(reply, filter) -> {
+      let all_todos = dict.values(state.todos)
+      let filtered = apply_filter(all_todos, filter)
+      let sorted = sort_by_created_at_desc(filtered)
+      process.send(reply, ListSuccess(sorted))
+      actor.continue(state)
     }
   }
 }
@@ -151,20 +173,19 @@ fn do_create(payload: List(#(String, String)), id: String) -> CreateResult {
     [] -> {
       let title = get_field(payload, "title") |> option.unwrap("")
       let description = case get_field(payload, "description") {
-        Some("") -> None
-        desc -> desc
+        Some("") -> ""
+        Some(d) -> d
+        None -> ""
       }
-      let priority = case get_field(payload, "priority") {
-        Some(p) if p == "low" || p == "medium" || p == "high" -> p
-        _ -> "medium"
-      }
+      let now = current_timestamp_millis()
 
       let new_item = Todo(
         id: id,
         title: title,
         description: description,
-        priority: priority,
         completed: False,
+        created_at: now,
+        updated_at: now,
       )
       CreateSuccess(new_item)
     }
@@ -193,16 +214,9 @@ fn do_update(
             None -> existing.title
           }
           let description = case get_field(changes, "description") {
-            Some("") -> None
-            Some(d) -> Some(d)
+            Some("") -> ""
+            Some(d) -> d
             None -> existing.description
-          }
-          let priority = case get_field(changes, "priority") {
-            Some("low") -> "low"
-            Some("medium") -> "medium"
-            Some("high") -> "high"
-            Some(_) -> existing.priority
-            None -> existing.priority
           }
           let completed = case get_field(changes, "completed") {
             Some("true") -> True
@@ -215,8 +229,9 @@ fn do_update(
             id: existing.id,
             title: title,
             description: description,
-            priority: priority,
             completed: completed,
+            created_at: existing.created_at,
+            updated_at: current_timestamp_millis(),
           )
           UpdateSuccess(updated)
         }
@@ -232,6 +247,31 @@ fn do_delete(state: StoreState, id: String) -> DeleteResult {
     Ok(_existing) -> DeleteOk
     Error(_) -> DeleteNotFound
   }
+}
+
+// Apply filter to todos list
+// "all" - all todos
+// "active" - only completed=false
+// "completed" - only completed=true
+// Invalid filter defaults to "all"
+fn apply_filter(todos: List(Todo), filter: String) -> List(Todo) {
+  case string.lowercase(filter) {
+    "all" -> todos
+    "active" -> list.filter(todos, fn(t) { !t.completed })
+    "completed" -> list.filter(todos, fn(t) { t.completed })
+    _ -> todos
+  }
+}
+
+// Sort todos by created_at descending (newest first)
+fn sort_by_created_at_desc(todos: List(Todo)) -> List(Todo) {
+  list.sort(todos, fn(a, b) {
+    case int.compare(a.created_at, b.created_at) {
+      order.Gt -> order.Lt
+      order.Lt -> order.Gt
+      order.Eq -> order.Eq
+    }
+  })
 }
 
 fn get_field(payload: List(#(String, String)), key: String) -> Option(String) {
@@ -255,10 +295,9 @@ fn validate_create(payload: List(#(String, String))) -> List(String) {
 fn validate_update(changes: List(#(String, String))) -> List(String) {
   let errors = []
 
-  let errors = case get_field(changes, "priority") {
-    Some(p) if p != "low" && p != "medium" && p != "high" && p != "" -> [
-      "priority must be low, medium, or high",
-      ..errors
+  let errors = case get_field(changes, "completed") {
+    Some(v) if v != "true" && v != "false" && v != "" -> [
+      "completed must be true or false", ..errors
     ]
     _ -> errors
   }
@@ -305,14 +344,24 @@ pub type DeleteErrorType {
   NotFoundDelete
 }
 
+pub type ListApiResult {
+  ListOkResult(List(Todo))
+  ListErrorResult(ListErrorType)
+}
+
+pub type ListErrorType {
+  ListStoreError
+}
+
 // Public API for synchronous calls returning the exact format tests expect
 
 pub fn create_api(
   store: Store,
   payload: List(#(String, String)),
 ) -> CreateApiResult {
+  let Store(subject) = store
   let reply_subject = process.new_subject()
-  process.send(store, Create(payload, reply_subject))
+  actor.send(subject, Create(payload, reply_subject))
 
   case process.receive(reply_subject, 5000) {
     Ok(CreateSuccess(item)) -> CreateOkResult(item)
@@ -322,8 +371,9 @@ pub fn create_api(
 }
 
 pub fn get_api(store: Store, id: String) -> GetApiResult {
+  let Store(subject) = store
   let reply_subject = process.new_subject()
-  process.send(store, Get(id, reply_subject))
+  actor.send(subject, Get(id, reply_subject))
 
   case process.receive(reply_subject, 5000) {
     Ok(GetSuccess(item)) -> GetOkResult(item)
@@ -336,8 +386,9 @@ pub fn update_api(
   id: String,
   changes: List(#(String, String)),
 ) -> UpdateApiResult {
+  let Store(subject) = store
   let reply_subject = process.new_subject()
-  process.send(store, Update(id, changes, reply_subject))
+  actor.send(subject, Update(id, changes, reply_subject))
 
   case process.receive(reply_subject, 5000) {
     Ok(UpdateSuccess(item)) -> UpdateOkResult(item)
@@ -348,11 +399,83 @@ pub fn update_api(
 }
 
 pub fn delete_api(store: Store, id: String) -> DeleteApiResult {
+  let Store(subject) = store
   let reply_subject = process.new_subject()
-  process.send(store, Delete(id, reply_subject))
+  actor.send(subject, Delete(id, reply_subject))
 
   case process.receive(reply_subject, 5000) {
     Ok(DeleteOk) -> DeleteOkResult
     Ok(DeleteNotFound) | _ -> DeleteErrorResult(NotFoundDelete)
   }
 }
+
+/// List all todos with optional filtering
+/// Filter values: "all", "active", "completed"
+/// Invalid filter defaults to "all"
+pub fn list_all(store: Store, filter: String) -> ListApiResult {
+  let Store(subject) = store
+  let reply_subject = process.new_subject()
+  actor.send(subject, ListAll(reply_subject, filter))
+
+  case process.receive(reply_subject, 5000) {
+    Ok(ListSuccess(todos)) -> ListOkResult(todos)
+    _ -> ListErrorResult(ListStoreError)
+  }
+}
+
+// New-style public API using shared types
+
+/// Create a new todo using shared types
+pub fn create_todo(
+  store: Store,
+  title: String,
+  description: String,
+) -> Result(Todo, shared.AppError) {
+  let payload = [
+    #("title", title),
+    #("description", description),
+  ]
+  case create_api(store, payload) {
+    CreateOkResult(todo) -> Ok(todo)
+    CreateErrorResult(ValidationErrorCreate(errors)) ->
+      Error(shared.InvalidInput(string.join(errors, ", ")))
+  }
+}
+
+/// Update an existing todo using shared types
+pub fn update_todo(
+  store: Store,
+  id: String,
+  input: UpdateTodoInput,
+) -> Result(Todo, shared.AppError) {
+  let changes = []
+  let changes = case input.title {
+    Some(t) -> [#("title", t), ..changes]
+    None -> changes
+  }
+  let changes = case input.description {
+    Some(d) -> [#("description", d), ..changes]
+    None -> changes
+  }
+  let changes = case input.completed {
+    Some(c) -> [#("completed", bool_to_string(c)), ..changes]
+    None -> changes
+  }
+
+  case update_api(store, id, changes) {
+    UpdateOkResult(todo) -> Ok(todo)
+    UpdateErrorResult(NotFoundUpdate) -> Error(NotFound("Todo not found: " <> id))
+    UpdateErrorResult(ValidationErrorUpdate(errors)) ->
+      Error(shared.InvalidInput(string.join(errors, ", ")))
+  }
+}
+
+fn bool_to_string(b: Bool) -> String {
+  case b {
+    True -> "true"
+    False -> "false"
+  }
+}
+
+@external(erlang, "string", "join")
+fn string_join(list: List(String), separator: String) -> String

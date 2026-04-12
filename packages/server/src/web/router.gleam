@@ -239,7 +239,7 @@ fn get_todo_handler(path: String, store: TodoStore) -> Response {
   case extract_todo_id(path) {
     Some(id) -> {
       case todo_store.get(store, id) {
-        Some(item) -> server.json_response(200, todo_item_to_json(item))
+        Some(item) -> server.json_response(200, todo_item_to_json(item) |> json.to_string)
         None -> todo_not_found()
       }
     }

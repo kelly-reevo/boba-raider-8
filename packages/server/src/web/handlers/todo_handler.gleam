@@ -244,8 +244,10 @@ pub fn create(request: Request, store: TodoStore) -> Response {
             description: new_todo_item.description,
             priority: store_priority,
             completed: new_todo_item.completed,
+            created_at: new_todo_item.created_at,
+            updated_at: new_todo_item.updated_at,
           )
-          let _stored_id = insert(store, store_data)
+          let _ = insert(store, store_data)
 
           // Return 201 with the created todo
           json_response(201, todo_to_json(new_todo_item))

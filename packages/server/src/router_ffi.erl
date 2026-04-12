@@ -1,22 +1,27 @@
 -module(router_ffi).
 -export([get_store_holder/0, set_store_holder/1, unsafe_cast/1]).
 
-% Process dictionary key for the store holder actor
--define(STORE_HOLDER_KEY, store_holder_actor).
+% Registered name for the store holder actor
+-define(STORE_HOLDER_NAME, store_holder_actor).
 
-% Get the store holder actor reference, or start a new one if not exists
+% Get the store holder actor reference by registered name
 get_store_holder() ->
-    case erlang:get(?STORE_HOLDER_KEY) of
+    case whereis(?STORE_HOLDER_NAME) of
         undefined ->
-            % Will be initialized separately
             {error, nil};
         Pid ->
             {ok, Pid}
     end.
 
-% Store the store holder actor reference
+% Register the store holder actor with a global name
 set_store_holder(Pid) ->
-    erlang:put(?STORE_HOLDER_KEY, Pid),
+    try
+        register(?STORE_HOLDER_NAME, Pid)
+    catch
+        error:badarg ->
+            % Already registered, that's fine
+            ok
+    end,
     nil.
 
 % Unsafe identity cast - at runtime Gleam types have the same representation

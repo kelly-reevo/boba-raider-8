@@ -223,6 +223,8 @@ fn shared_todo_to_store_data(item: shared.Todo) -> todo_store.TodoData {
     description: item.description,
     priority: priority,
     completed: item.completed,
+    created_at: item.created_at,
+    updated_at: item.updated_at,
   )
 }
 
@@ -279,12 +281,15 @@ pub fn create_todo(
             High -> todo_store.High
           }
 
-          // Create TodoData for store
+          // Create TodoData for store with timestamps
+          let timestamp = shared.generate_timestamp()
           let data = todo_store.TodoData(
             title: validated.title,
             description: validated.description,
             priority: store_priority,
             completed: False,
+            created_at: timestamp,
+            updated_at: timestamp,
           )
 
           // Insert into store
@@ -419,13 +424,22 @@ fn validate_create_request(
   }
 }
 
+/// Strip query string from path
+fn strip_query_string(path: String) -> String {
+  case string.split(path, "?") {
+    [path_only, _] -> path_only
+    _ -> path
+  }
+}
+
 /// Handle PATCH /api/todos/:id
 pub fn patch_todo(
   store: TodoStore,
   request: Request,
 ) -> Response {
-  // Extract todo ID from path
-  let maybe_id = extract_todo_id(request.path)
+  // Extract todo ID from path (strip query string first)
+  let path_only = strip_query_string(request.path)
+  let maybe_id = extract_todo_id(path_only)
   case maybe_id {
     None ->
       json_response(
@@ -454,7 +468,7 @@ pub fn patch_todo(
                   // Convert to store format and save
                   let store_data = shared_todo_to_store_data(updated_todo)
                   case todo_store.update(store, id, store_data) {
-                    todo_store.Ok -> {
+                    todo_store.UpdateOk -> {
                       json_response(200, todo_to_json_response(updated_todo))
                     }
                     todo_store.NotFound ->

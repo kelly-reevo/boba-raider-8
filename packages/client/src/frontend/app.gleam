@@ -1,5 +1,6 @@
+import frontend/effects
 import frontend/model.{type Model}
-import frontend/msg.{type Msg}
+import frontend/msg.{type Msg, LoadTodos}
 import frontend/update
 import frontend/view
 import lustre
@@ -12,5 +13,7 @@ pub fn main() {
 }
 
 fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
-  #(model.default(), effect.none())
+  let initial_model = model.default()
+  // Load todos immediately on app start
+  #(initial_model, effects.load_todos())
 }

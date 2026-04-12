@@ -10,8 +10,14 @@ pub fn delete_todo(id: String) -> Effect(Msg) {
   effect.from(fn(dispatch) {
     delete_todo_js(url, fn(success) {
       case success {
-        True -> dispatch(msg.DeleteTodoSuccess(id))
-        False -> dispatch(msg.DeleteTodoFailed("Failed to delete todo"))
+        True -> {
+          dispatch(msg.TodoDeleted(id))
+          dispatch(msg.StopLoading(msg.DeleteLoading(id)))
+        }
+        False -> {
+          dispatch(msg.DeleteTodoFailed(id, "Failed to delete todo"))
+          dispatch(msg.StopLoading(msg.DeleteLoading(id)))
+        }
       }
     })
   })

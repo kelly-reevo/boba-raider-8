@@ -55,7 +55,7 @@ pub fn todo_item(item: Todo) -> Element(Msg) {
       attribute.type_("checkbox"),
       attribute.class("toggle-complete"),
       attribute.checked(item.completed),
-      event.on_click(ToggleTodo(item.id)),
+      event.on_check(fn(checked) { ToggleTodo(item.id, checked) }),
     ]),
     html.span([attribute.class("title")], [text(item.title)]),
     priority_badge,

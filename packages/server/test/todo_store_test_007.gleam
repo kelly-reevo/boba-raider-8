@@ -1,4 +1,3 @@
-import gleam/erlang/process
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/string
@@ -8,7 +7,7 @@ import todo_store
 
 pub fn full_crud_lifecycle_test() {
   let assert Ok(store) = todo_store.start()
-  let assert Ok(created_item) = todo_store.create_todo(store, "Lifecycle test", "Original")
+  let assert Ok(created_item) = todo_store.create_todo(store, "Lifecycle test", Some("Original"), shared.Medium, False)
   let id = created_item.id
   should.be_true(string.length(id) > 0)
   let assert Some(found) = todo_store.get_todo(store, id)

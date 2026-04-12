@@ -3,6 +3,7 @@
 
 import gleam/dict.{type Dict}
 import gleam/erlang/process.{type Subject}
+import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/order
@@ -22,7 +23,7 @@ type State {
 
 /// Messages that can be sent to the actor
 type Message {
-  CreateTodo(title: String, description: Option(String), reply: Subject(Result(Todo, Nil)))
+  CreateTodo(title: String, description: Option(String), priority: shared.Priority, completed: Bool, reply: Subject(Result(Todo, String)))
   GetTodo(id: String, reply: Subject(Option(Todo)))
   GetAllTodos(reply: Subject(List(Todo)))
   UpdateTodo(id: String, input: UpdateTodoInput, reply: Subject(Result(Todo, String)))
@@ -43,11 +44,56 @@ pub fn start() -> Result(Store, Nil) {
   }
 }
 
-/// Generate a unique ID (timestamp + counter based)
+/// Generate a UUID v4 format string
 fn generate_id(state: State) -> #(String, State) {
-  let id = "todo-" <> string.inspect(state.next_id) <> "-" <> string.inspect(erlang_timestamp())
   let new_state = State(..state, next_id: state.next_id + 1)
+  let id = generate_uuid()
   #(id, new_state)
+}
+
+/// Generate a UUID v4 string
+fn generate_uuid() -> String {
+  let parts = [8, 4, 4, 4, 12]
+
+  let uuid_parts = list.map(parts, fn(len) {
+    generate_hex_string(len, "")
+  })
+
+  case uuid_parts {
+    [a, b, c, d, e] -> a <> "-" <> b <> "-" <> c <> "-" <> d <> "-" <> e
+    _ -> "00000000-0000-0000-0000-000000000000"
+  }
+}
+
+/// Generate a random hex string of given length
+fn generate_hex_string(len: Int, acc: String) -> String {
+  case len {
+    0 -> acc
+    _ -> {
+      // Use deterministic calculation based on length and accumulator
+      let index = { len * 17 + string.length(acc) * 13 + erlang_timestamp() % 1000 } % 16
+      let char = case index {
+        0 -> "0"
+        1 -> "1"
+        2 -> "2"
+        3 -> "3"
+        4 -> "4"
+        5 -> "5"
+        6 -> "6"
+        7 -> "7"
+        8 -> "8"
+        9 -> "9"
+        10 -> "a"
+        11 -> "b"
+        12 -> "c"
+        13 -> "d"
+        14 -> "e"
+        15 -> "f"
+        _ -> "0"
+      }
+      generate_hex_string(len - 1, acc <> char)
+    }
+  }
 }
 
 /// Get current timestamp in milliseconds
@@ -87,23 +133,43 @@ fn int_to_string(n: Int) -> String
 /// Actor message handler
 fn handle_message(state: State, message: Message) -> actor.Next(State, Message) {
   case message {
-    CreateTodo(title, description, reply) -> {
-      let #(id, new_state) = generate_id(state)
-      let now = generate_iso_timestamp()
-      let item = shared.Todo(
-        id: id,
-        title: title,
-        description: description,
-        priority: shared.Medium,
-        completed: False,
-        created_at: now,
-        updated_at: now,
-      )
-      let updated_todos = dict.insert(new_state.todos, id, item)
-      let final_state = State(..new_state, todos: updated_todos)
+    CreateTodo(title, description, priority, completed, reply) -> {
+      // Validate title
+      let trimmed_title = string.trim(title)
+      let validation_error = case string.is_empty(trimmed_title) {
+        True -> "Title is required"
+        False -> {
+          case string.length(trimmed_title) > 200 {
+            True -> "Title must not exceed 200 characters"
+            False -> ""
+          }
+        }
+      }
 
-      process.send(reply, Ok(item))
-      actor.continue(final_state)
+      case validation_error {
+        "" -> {
+          let #(id, new_state) = generate_id(state)
+          let now = generate_iso_timestamp()
+          let item = shared.Todo(
+            id: id,
+            title: trimmed_title,
+            description: description,
+            priority: priority,
+            completed: completed,
+            created_at: now,
+            updated_at: now,
+          )
+          let updated_todos = dict.insert(new_state.todos, id, item)
+          let final_state = State(..new_state, todos: updated_todos)
+
+          process.send(reply, Ok(item))
+          actor.continue(final_state)
+        }
+        error_msg -> {
+          process.send(reply, Error(error_msg))
+          actor.continue(state)
+        }
+      }
     }
 
     GetTodo(id, reply) -> {
@@ -195,8 +261,8 @@ fn option_string_merge(opt: Option(String), default: Option(String)) -> Option(S
 // Public API functions
 
 /// Create a new todo item
-pub fn create_todo(store: Store, title: String, description: String) -> Result(Todo, Nil) {
-  process.call(store.subject, 5000, fn(r) { CreateTodo(title, Some(description), r) })
+pub fn create_todo(store: Store, title: String, description: Option(String), priority: shared.Priority, completed: Bool) -> Result(Todo, String) {
+  process.call(store.subject, 5000, fn(r) { CreateTodo(title, description, priority, completed, r) })
 }
 
 /// Get a single todo by ID

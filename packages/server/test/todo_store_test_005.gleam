@@ -7,7 +7,7 @@ import todo_store
 
 pub fn update_only_modifies_provided_fields_test() {
   let assert Ok(store) = todo_store.start()
-  let assert Ok(created_item) = todo_store.create_todo(store, "Original title", "Original description")
+  let assert Ok(created_item) = todo_store.create_todo(store, "Original title", Some("Original description"), shared.Medium, False)
   let id = created_item.id
   let original_created_at = created_item.created_at
   let original_updated_at = created_item.updated_at
@@ -29,7 +29,7 @@ pub fn update_only_modifies_provided_fields_test() {
 
 pub fn update_description_only_test() {
   let assert Ok(store) = todo_store.start()
-  let assert Ok(created_item) = todo_store.create_todo(store, "Title", "Original desc")
+  let assert Ok(created_item) = todo_store.create_todo(store, "Title", Some("Original desc"), shared.Medium, False)
   let id = created_item.id
   let input = UpdateTodoInput(
     title: None,
@@ -45,7 +45,7 @@ pub fn update_description_only_test() {
 
 pub fn update_completed_only_test() {
   let assert Ok(store) = todo_store.start()
-  let assert Ok(created_item) = todo_store.create_todo(store, "Title", "Desc")
+  let assert Ok(created_item) = todo_store.create_todo(store, "Title", Some("Desc"), shared.Medium, False)
   let id = created_item.id
   let input = UpdateTodoInput(
     title: None,

@@ -1,12 +1,30 @@
 /// Update functions for todo list operations
 
 import frontend/effects
-import frontend/model.{type Model, Model}
+import frontend/model.{
+  type ErrorType, type Model, ErrorInfo, Model, Network, Server, Validation,
+}
 import frontend/msg.{type Msg}
+import gleam/int
 import gleam/list
 import gleam/option
+import gleam/string
 import lustre/effect.{type Effect}
 import shared
+
+/// Convert error type string to ErrorType
+fn error_type_from_string(type_str: String) -> ErrorType {
+  case string.lowercase(type_str) {
+    "network" -> Network
+    "validation" -> Validation
+    _ -> Server
+  }
+}
+
+/// Generate unique error ID
+fn generate_error_id(count: Int, type_str: String) -> String {
+  "error-" <> int.to_string(count) <> "-" <> type_str
+}
 
 /// Main update function - handles all messages
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
@@ -21,7 +39,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     msg.TodosLoaded(result) -> {
       case result {
         Ok(todos) -> #(
-          Model(todos: todos, loading: model.Success, error: "", deleting_id: model.deleting_id),
+          Model(todos: todos, loading: model.Success, error: "", deleting_id: model.deleting_id, errors: model.errors),
           effect.none(),
         )
         Error(err) -> #(
@@ -33,7 +51,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
     // Todos loaded successfully (new format)
     msg.LoadTodosOk(todos) -> {
-      #(Model(todos: todos, loading: model.Success, error: "", deleting_id: model.deleting_id), effect.none())
+      #(Model(todos: todos, loading: model.Success, error: "", deleting_id: model.deleting_id, errors: model.errors), effect.none())
     }
 
     // Error loading todos
@@ -106,5 +124,38 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       let new_todos = list.filter(model.todos, fn(t) { t.id != id })
       #(Model(..model, todos: new_todos), effect.none())
     }
+
+    // Error display handling
+    msg.ShowError(message, type_str) -> {
+      let error_type = error_type_from_string(type_str)
+      let error_id = generate_error_id(list.length(model.errors), type_str)
+      let new_error = ErrorInfo(id: error_id, message: message, type_: error_type)
+      let new_model = Model(..model, errors: [new_error, ..model.errors])
+
+      // Auto-dismiss after 5 seconds
+      let auto_dismiss_effect =
+        effect.from(fn(dispatch) {
+          let _ = set_timeout(5000, fn() {
+            dispatch(msg.AutoDismissError(error_id))
+          })
+          Nil
+        })
+
+      #(new_model, auto_dismiss_effect)
+    }
+
+    msg.DismissError(error_id) -> {
+      #(model.dismiss_error(model, error_id), effect.none())
+    }
+
+    msg.AutoDismissError(error_id) -> {
+      #(model.dismiss_error(model, error_id), effect.none())
+    }
   }
+}
+
+// FFI for setTimeout
+@external(javascript, "../client_ffi.mjs", "set_timeout")
+fn set_timeout(_ms: Int, _callback: fn() -> Nil) -> Nil {
+  Nil
 }

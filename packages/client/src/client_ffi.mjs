@@ -41,3 +41,12 @@ export function fetch_json(req, callback) {
       });
     });
 }
+
+/**
+ * Set a timeout and execute callback
+ * @param {number} ms - Milliseconds to wait
+ * @param {Function} callback - Function to call after timeout
+ */
+export function set_timeout(ms, callback) {
+  setTimeout(callback, ms);
+}

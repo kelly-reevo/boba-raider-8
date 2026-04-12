@@ -12,6 +12,18 @@ pub type LoadingState {
   Error(String)
 }
 
+/// Error types for error display
+pub type ErrorType {
+  Network
+  Server
+  Validation
+}
+
+/// Error record for structured error handling
+pub type ErrorInfo {
+  ErrorInfo(id: String, message: String, type_: ErrorType)
+}
+
 /// Model for the todo list application
 pub type Model {
   Model(
@@ -19,6 +31,7 @@ pub type Model {
     loading: LoadingState,
     error: String,
     deleting_id: Option(String),
+    errors: List(ErrorInfo),
   )
 }
 
@@ -29,6 +42,7 @@ pub fn default() -> Model {
     loading: Idle,
     error: "",
     deleting_id: None,
+    errors: [],
   )
 }
 
@@ -58,7 +72,7 @@ pub fn remove_todo(model: Model, id: String) -> Model {
 }
 
 /// Helper to filter out a todo by ID
-fn remove_by_id(todos: List(Todo), id: String) -> List(Todo) {
+fn remove_by_id(todos: List(Todo), id: String) -> List<Todo) {
   case todos {
     [] -> []
     [first, ..rest] -> {
@@ -76,4 +90,12 @@ pub fn find_todo(model: Model, id: String) -> Option(Todo) {
     Ok(t) -> Some(t)
     _ -> None
   }
+}
+
+/// Remove an error by ID from the model
+pub fn dismiss_error(model: Model, error_id: String) -> Model {
+  Model(
+    ..model,
+    errors: list.filter(model.errors, fn(e) { e.id != error_id }),
+  )
 }

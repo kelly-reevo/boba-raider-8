@@ -3,7 +3,7 @@
 /// Each todo has: data-todo-id, .todo-title, .todo-description (optional),
 /// .todo-priority, .todo-checkbox, .todo-delete-btn
 
-import frontend/model.{type Model}
+import frontend/model.{type ErrorInfo, type ErrorType, type Model, Network, Server, Validation}
 import frontend/msg.{type Msg}
 import gleam/list
 import gleam/option
@@ -17,16 +17,78 @@ import shared.{type Priority, type Todo, High, Low, Medium}
 /// Main view function
 pub fn view(model: Model) -> Element(Msg) {
   html.div([attribute.id("app")], [
+    // Error toast container
+    render_error_container(model.errors),
+    // Main app content
     html.h1([], [element.text("Todo List")]),
     render_content(model),
   ])
+}
+
+/// Convert error type to string for data attribute
+fn error_type_to_string(error_type: ErrorType) -> String {
+  case error_type {
+    Network -> "network"
+    Server -> "server"
+    Validation -> "validation"
+  }
+}
+
+/// Get display message for error type
+fn error_type_to_message(error_type: ErrorType) -> String {
+  case error_type {
+    Network -> "Network error. Please check your connection."
+    Server -> "Server error, please try again"
+    Validation -> "Validation error. Please check your input."
+  }
+}
+
+/// Render a single error notification
+fn render_error_notification(error: ErrorInfo) -> Element(Msg) {
+  let error_message = case error.message {
+    "" -> error_type_to_message(error.type_)
+    msg -> msg
+  }
+  let type_str = error_type_to_string(error.type_)
+
+  html.div(
+    [
+      attribute.class("error-notification"),
+      attribute.attribute("data-error-type", type_str),
+    ],
+    [
+      html.span([attribute.class("error-message")], [
+        element.text(error_message),
+      ]),
+      html.button(
+        [
+          attribute.class("error-dismiss"),
+          event.on_click(msg.DismissError(error.id)),
+          attribute.attribute("aria-label", "Dismiss error"),
+        ],
+        [element.text("×")],
+      ),
+    ],
+  )
+}
+
+/// Render error container with all errors
+fn render_error_container(errors: List(ErrorInfo)) -> Element(Msg) {
+  case errors {
+    [] -> html.div([attribute.id("error-toast"), attribute.class("hidden")], [])
+    _ ->
+      html.div(
+        [attribute.id("error-toast")],
+        list.map(errors, render_error_notification),
+      )
+  }
 }
 
 /// Render appropriate content based on model state
 fn render_content(model: Model) -> Element(Msg) {
   case model.loading {
     model.Loading -> render_loading()
-    model.Error(msg) -> render_error(msg)
+    model.Error(msg) -> render_error_state(msg)
     model.Idle | model.Success -> {
       case model.todos {
         [] -> render_empty()
@@ -51,8 +113,8 @@ fn render_empty() -> Element(Msg) {
   ])
 }
 
-/// Error state display
-fn render_error(error: String) -> Element(Msg) {
+/// Error state display (for loading errors)
+fn render_error_state(error: String) -> Element(Msg) {
   html.div([attribute.class("error-state")], [
     html.p([attribute.class("error-message")], [element.text("Error: " <> error)]),
     html.button(

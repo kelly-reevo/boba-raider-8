@@ -217,7 +217,7 @@ fn system_time(unit: Atom) -> Int
 fn int_to_string(n: Int) -> String
 
 /// Generate ISO8601 timestamp string
-fn generate_timestamp() -> String {
+pub fn generate_timestamp() -> String {
   let now = system_time_millisecond() / 1000
   format_iso8601(now)
 }

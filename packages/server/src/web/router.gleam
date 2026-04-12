@@ -8,6 +8,7 @@ import gleam/erlang/process.{type Subject}
 import todo_store.{type TodoStore, type TodoItem}
 import web/server.{type Request, type Response}
 import web/static
+import web/todos
 
 // Store holder actor for test persistence across requests
 type StoreHolderState {
@@ -119,10 +120,10 @@ fn route(request: Request, store: TodoStore) -> Response {
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
     "GET", "/api/todos" -> list_todos_handler(request, store)
-    "POST", "/api/todos" -> create_todo_handler(request, store)
+    "POST", "/api/todos" -> todos.create_todo(store, request)
     "PATCH", path -> {
       case string.starts_with(path, "/api/todos/") {
-        True -> update_todo_handler(path, request, store)
+        True -> todos.patch_todo(store, request)
         False -> not_found()
       }
     }
@@ -237,95 +238,6 @@ fn health_handler() -> Response {
   )
 }
 
-// Create todo handler - POST /api/todos
-fn create_todo_handler(request: Request, store: TodoStore) -> Response {
-  case extract_create_fields(request.body) {
-    Ok(#(title, description, priority_str)) -> {
-      let priority = case priority_str {
-        "low" -> todo_store.Low
-        "high" -> todo_store.High
-        _ -> todo_store.Medium
-      }
-      let timestamp = generate_iso_timestamp()
-      let data = todo_store.TodoData(
-        title: title,
-        description: description,
-        priority: priority,
-        completed: False,
-        created_at: timestamp,
-        updated_at: timestamp,
-      )
-      let id = todo_store.insert(store, data)
-
-      let response_item = TodoItem(
-        id: id,
-        title: title,
-        description: description,
-        priority: priority,
-        completed: False,
-        created_at: timestamp,
-        updated_at: timestamp,
-      )
-
-      server.json_response(201, todo_item_to_json(response_item))
-    }
-    Error(_) -> {
-      server.json_response(
-        400,
-        json.object([#("error", json.string("Invalid request"))]) |> json.to_string,
-      )
-    }
-  }
-}
-
-// Extract fields from create request body
-fn extract_create_fields(body: String) -> Result(#(String, Option(String), String), Nil) {
-  let title = extract_json_string(body, "title")
-  let description = extract_json_string(body, "description")
-  let priority = extract_json_string(body, "priority")
-
-  case title {
-    Ok(Some(t)) -> {
-      let desc = case description {
-        Ok(Some(d)) -> Some(d)
-        _ -> None
-      }
-      let prio = case priority {
-        Ok(Some(p)) -> p
-        _ -> "medium"
-      }
-      Ok(#(t, desc, prio))
-    }
-    _ -> Error(Nil)
-  }
-}
-
-// Extract string value from JSON
-fn extract_json_string(json_str: String, key: String) -> Result(Option(String), Nil) {
-  let pattern = "\"" <> key <> "\":"
-  case string.split(json_str, pattern) {
-    [_, rest] | [_, rest, ..] -> {
-      let trimmed = string.trim_start(rest)
-      case trimmed {
-        "null" <> _ -> Ok(None)
-        _ -> {
-          case string.starts_with(trimmed, "\"") {
-            True -> {
-              let after_quote = string.drop_start(trimmed, 1)
-              case string.split(after_quote, "\"") {
-                [value, ..] -> Ok(Some(value))
-                _ -> Error(Nil)
-              }
-            }
-            False -> Error(Nil)
-          }
-        }
-      }
-    }
-    _ -> Error(Nil)
-  }
-}
-
 // Get todo handler - GET /api/todos/:id
 fn get_todo_handler(path: String, store: TodoStore) -> Response {
   let id = string.drop_start(path, 11) // Remove "/api/todos/"
@@ -350,109 +262,6 @@ fn get_todo_handler(path: String, store: TodoStore) -> Response {
         json.object([#("error", json.string("Todo not found"))]) |> json.to_string,
       )
     }
-  }
-}
-
-// Update todo handler - PATCH /api/todos/:id
-fn update_todo_handler(path: String, request: Request, store: TodoStore) -> Response {
-  let id = string.drop_start(path, 11) // Remove "/api/todos/"
-
-  case is_valid_uuid(id) {
-    True -> {
-      case todo_store.get(store, id) {
-        Some(existing) -> {
-          case extract_update_fields(request.body, existing) {
-            Ok(data) -> {
-              case todo_store.update(store, id, data) {
-                todo_store.UpdateOk -> {
-                  case todo_store.get(store, id) {
-                    Some(updated) -> server.json_response(200, todo_item_to_json(updated))
-                    None -> server.json_response(
-                      500,
-                      json.object([#("error", json.string("Failed to retrieve updated todo"))]) |> json.to_string,
-                    )
-                  }
-                }
-                todo_store.NotFound -> server.json_response(
-                  404,
-                  json.object([#("error", json.string("Todo not found"))]) |> json.to_string,
-                )
-              }
-            }
-            Error(msg) -> server.json_response(
-              422,
-              json.object([#("error", json.string(msg))]) |> json.to_string,
-            )
-          }
-        }
-        None -> server.json_response(
-          404,
-          json.object([#("error", json.string("Todo not found"))]) |> json.to_string,
-        )
-      }
-    }
-    False -> server.json_response(
-      404,
-      json.object([#("error", json.string("Todo not found"))]) |> json.to_string,
-    )
-  }
-}
-
-// Extract update fields from request body
-fn extract_update_fields(body: String, existing: TodoItem) -> Result(todo_store.TodoData, String) {
-  let title = extract_json_string(body, "title")
-  let description = extract_json_string(body, "description")
-  let priority_result = extract_json_string(body, "priority")
-  let completed_result = extract_json_bool(body, "completed")
-
-  let new_title = case title {
-    Ok(Some(t)) -> t
-    _ -> existing.title
-  }
-
-  let new_description = case description {
-    Ok(None) -> None
-    Ok(Some(d)) -> Some(d)
-    _ -> existing.description
-  }
-
-  let new_priority = case priority_result {
-    Ok(Some("low")) -> todo_store.Low
-    Ok(Some("high")) -> todo_store.High
-    Ok(Some("medium")) -> todo_store.Medium
-    Ok(None) -> existing.priority
-    _ -> existing.priority
-  }
-
-  let new_completed = case completed_result {
-    Ok(Some(c)) -> c
-    _ -> existing.completed
-  }
-
-  Ok(todo_store.TodoData(
-    title: new_title,
-    description: new_description,
-    priority: new_priority,
-    completed: new_completed,
-    created_at: existing.created_at,
-    updated_at: generate_iso_timestamp(),
-  ))
-}
-
-// Extract boolean value from JSON
-fn extract_json_bool(json_str: String, key: String) -> Result(Option(Bool), Nil) {
-  let pattern = "\"" <> key <> "\":"
-  case string.split(json_str, pattern) {
-    [_, rest] | [_, rest, ..] -> {
-      let trimmed = string.trim_start(rest)
-      case trimmed {
-        "true" <> _ -> Ok(Some(True))
-        "false" <> _ -> Ok(Some(False))
-        "null" <> _ -> Ok(None)
-        _ -> Error(Nil)
-      }
-    }
-    _ -> Error(Nil)
   }
 }
 
@@ -503,43 +312,6 @@ fn is_hex_string(s: String) -> Bool {
   string.to_graphemes(s)
   |> list.all(fn(c) { string.contains(hex_chars, c) })
 }
-
-// Generate ISO timestamp
-fn generate_iso_timestamp() -> String {
-  let seconds = system_time_seconds()
-  format_iso8601(seconds)
-}
-
-// Get current time in seconds since epoch
-@external(erlang, "erlang", "system_time")
-fn system_time_seconds() -> Int
-
-// Format seconds as ISO8601 UTC string: YYYY-MM-DDTHH:MM:SSZ
-fn format_iso8601(seconds: Int) -> String {
-  let days_since_epoch = seconds / 86_400
-  let seconds_in_day = seconds % 86_400
-  let year = 1970 + days_since_epoch / 365
-  let day_of_year = days_since_epoch % 365
-  let month = day_of_year / 30 + 1
-  let day = day_of_year % 30 + 1
-  let hour = seconds_in_day / 3600
-  let minute = { seconds_in_day % 3600 } / 60
-  let second = seconds_in_day % 60
-  int_to_padded_string(year, 4) <> "-" <> int_to_padded_string(month, 2) <> "-" <> int_to_padded_string(day, 2) <> "T" <> int_to_padded_string(hour, 2) <> ":" <> int_to_padded_string(minute, 2) <> ":" <> int_to_padded_string(second, 2) <> "Z"
-}
-
-// Convert integer to zero-padded string
-fn int_to_padded_string(n: Int, width: Int) -> String {
-  let str = int_to_string(n)
-  let len = string.length(str)
-  case len >= width {
-    True -> str
-    False -> string.repeat("0", width - len) <> str
-  }
-}
-
-@external(erlang, "erlang", "integer_to_binary")
-fn int_to_string(n: Int) -> String
 
 fn not_found() -> Response {
   server.json_response(

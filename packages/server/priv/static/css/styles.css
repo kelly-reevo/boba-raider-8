@@ -62,3 +62,133 @@ button:hover {
 .reset:hover {
   background: #616161;
 }
+
+/* Todo List Styles */
+.todo-list {
+  margin-top: 2rem;
+  text-align: left;
+  max-width: 600px;
+  width: 100%;
+}
+
+.todo-list h2 {
+  margin-bottom: 1rem;
+  color: #333;
+}
+
+.todo-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Todo Item */
+.todo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.todo-item:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  border-color: #ccc;
+}
+
+/* Toggle Complete Checkbox */
+.toggle-complete {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  margin-top: 2px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Title */
+.title {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #333;
+  flex-grow: 1;
+}
+
+.todo-item:has(.toggle-complete:checked) .title {
+  text-decoration: line-through;
+  color: #888;
+}
+
+/* Priority Badge */
+.priority-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.priority-high {
+  background: #ffebee;
+  color: #c62828;
+  border: 1px solid #ef9a9a;
+}
+
+.priority-medium {
+  background: #fff8e1;
+  color: #f57f17;
+  border: 1px solid #ffe082;
+}
+
+.priority-low {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
+}
+
+/* Description */
+.description {
+  width: 100%;
+  margin-top: 0.5rem;
+  margin-bottom: 0;
+  font-size: 0.875rem;
+  color: #666;
+  line-height: 1.4;
+}
+
+/* Delete Button */
+.delete-btn {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  background: #e53935;
+  flex-shrink: 0;
+}
+
+.delete-btn:hover {
+  background: #c62828;
+}
+
+/* Loading, Empty, and Error States */
+.loading,
+.empty,
+.error {
+  padding: 1rem;
+  text-align: center;
+  color: #666;
+}
+
+.error {
+  color: #c62828;
+  background: #ffebee;
+  border-radius: 4px;
+}
+
+.empty {
+  color: #888;
+  font-style: italic;
+}

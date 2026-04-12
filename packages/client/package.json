@@ -1,0 +1,24 @@
+{
+  "name": "boba-raider-8-client",
+  "version": "1.0.0",
+  "description": "Frontend JavaScript for boba-raider-8",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "testMatch": [
+      "**/__cyclone_tests__/**/*",
+      "**/test/**/*.test.js"
+    ],
+    "moduleDirectories": [
+      "node_modules",
+      "src"
+    ]
+  }
+}

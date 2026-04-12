@@ -1,4 +1,7 @@
-import frontend/model.{type Model}
+/// Application entry point
+
+import frontend/effects
+import frontend/model.{type Model, default}
 import frontend/msg.{type Msg}
 import frontend/update
 import frontend/view
@@ -12,5 +15,6 @@ pub fn main() {
 }
 
 fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
-  #(model.default(), effect.none())
+  // Load todos on application start
+  #(default(), effects.load_todos())
 }

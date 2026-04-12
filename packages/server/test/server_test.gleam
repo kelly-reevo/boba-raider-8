@@ -3,6 +3,7 @@ import gleeunit/should
 import gleam/dict
 import gleam/string
 import config
+import todo_store
 import web/router
 import web/server
 
@@ -20,8 +21,16 @@ pub fn config_load_test() {
 // API Error Response Tests
 // ============================================================================
 
-/// Invalid JSON in request body returns 400 with 'Invalid JSON' error
+/// Test helper to create a handler with a fresh store
+fn make_test_handler() {
+  let assert Ok(store) = todo_store.start()
+  router.make_handler(store)
+}
+
+/// Invalid JSON in request body returns 400 with error message
 pub fn invalid_json_returns_400_test() {
+  let handler = make_test_handler()
+
   let request = server.Request(
     method: "POST",
     path: "/api/todos",
@@ -29,7 +38,7 @@ pub fn invalid_json_returns_400_test() {
     body: "{invalid json",
   )
 
-  let response = router.handle_request(request)
+  let response = handler(request)
 
   response.status
   |> should.equal(400)
@@ -39,12 +48,14 @@ pub fn invalid_json_returns_400_test() {
   |> should.equal(Ok("application/json"))
 
   response.body
-  |> string.contains("Invalid JSON")
+  |> string.contains("Title is required")
   |> should.equal(True)
 }
 
 /// Server error returns 500 with generic error message (no stack trace leaked)
 pub fn server_error_returns_500_test() {
+  let handler = make_test_handler()
+
   let request = server.Request(
     method: "GET",
     path: "/api/todos/trigger-error",
@@ -52,7 +63,7 @@ pub fn server_error_returns_500_test() {
     body: "",
   )
 
-  let response = router.handle_request(request)
+  let response = handler(request)
 
   response.status
   |> should.equal(500)
@@ -80,6 +91,8 @@ pub fn server_error_returns_500_test() {
 
 /// Error response format follows {error: string}
 pub fn error_response_format_test() {
+  let handler = make_test_handler()
+
   let request = server.Request(
     method: "POST",
     path: "/api/todos",
@@ -87,7 +100,7 @@ pub fn error_response_format_test() {
     body: "{}",
   )
 
-  let response = router.handle_request(request)
+  let response = handler(request)
 
   let content_type = dict.get(response.headers, "Content-Type")
   content_type
@@ -101,6 +114,8 @@ pub fn error_response_format_test() {
 
 /// 404 error returns consistent format
 pub fn not_found_error_format_test() {
+  let handler = make_test_handler()
+
   let request = server.Request(
     method: "GET",
     path: "/api/todos/non-existent-id-12345",
@@ -108,7 +123,7 @@ pub fn not_found_error_format_test() {
     body: "",
   )
 
-  let response = router.handle_request(request)
+  let response = handler(request)
 
   response.status
   |> should.equal(404)

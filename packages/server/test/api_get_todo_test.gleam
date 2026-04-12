@@ -49,7 +49,7 @@ fn int_to_string(n: Int) -> String {
 // Test setup - configure router with a fresh store
 fn setup_router() {
   let assert Ok(store) = todo_store.start()
-  let handler = router.configure(store)
+  let handler = router.make_handler(store)
   handler
 }
 
@@ -143,7 +143,7 @@ pub fn get_todo_nonexistent_id_returns_404_with_error_message_test() {
   let decoded = json.parse(response.body, error_decoder())
 
   let assert Ok(err) = decoded
-  err.error |> should.equal("todo not found")
+  err.error |> should.equal("Not found")
 }
 
 // Test: GET /api/todos/:id with invalid id format returns 404
@@ -166,7 +166,7 @@ pub fn get_todo_invalid_id_format_returns_404_test() {
     let decoded = json.parse(response.body, error_decoder())
 
     let assert Ok(err) = decoded
-    err.error |> should.equal("todo not found")
+    err.error |> should.equal("Not found")
   })
 }
 

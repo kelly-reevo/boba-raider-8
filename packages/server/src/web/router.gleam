@@ -127,23 +127,18 @@ fn route(request: Request, store: TodoStore) -> Response {
         False -> not_found()
       }
     }
-    "DELETE", path -> {
-      case string.starts_with(path, "/api/todos/") {
-        True -> delete_todo_handler(path, store)
-        False -> not_found()
-      }
-    }
+    "DELETE", path -> route_delete(path, store)
     "GET", path -> {
       case string.starts_with(path, "/api/todos/") {
         True -> get_todo_handler(path, store)
-        False -> route_get(path)
+        False -> route_static(path)
       }
     }
     _, _ -> not_found()
   }
 }
 
-fn route_get(path: String) -> Response {
+fn route_static(path: String) -> Response {
   case string.starts_with(path, "/static/") {
     True -> static.serve(path)
     False -> not_found()
@@ -240,77 +235,70 @@ fn health_handler() -> Response {
 
 // Get todo handler - GET /api/todos/:id
 fn get_todo_handler(path: String, store: TodoStore) -> Response {
-  let id = string.drop_start(path, 11) // Remove "/api/todos/"
-
-  case is_valid_uuid(id) {
-    True -> {
+  case extract_todo_id(path) {
+    Some(id) -> {
       case todo_store.get(store, id) {
-        Some(item) -> {
-          server.json_response(200, todo_item_to_json(item))
-        }
-        None -> {
-          server.json_response(
-            404,
-            json.object([#("error", json.string("Todo not found"))]) |> json.to_string,
-          )
-        }
+        Some(item) -> server.json_response(200, todo_item_to_json(item))
+        None -> todo_not_found()
       }
     }
-    False -> {
-      server.json_response(
-        404,
-        json.object([#("error", json.string("Todo not found"))]) |> json.to_string,
-      )
-    }
+    None -> todo_not_found()
   }
 }
 
 // Delete todo handler - DELETE /api/todos/:id
-fn delete_todo_handler(path: String, store: TodoStore) -> Response {
-  let id = string.drop_start(path, 11) // Remove "/api/todos/"
-
-  case is_valid_uuid(id) {
+fn route_delete(path: String, store: TodoStore) -> Response {
+  case string.starts_with(path, "/api/todos/") {
     True -> {
-      case todo_store.delete(store, id) {
-        todo_store.UpdateOk -> server.json_response(204, "")
-        todo_store.NotFound -> server.json_response(
-          404,
-          json.object([#("error", json.string("Todo not found"))]) |> json.to_string,
-        )
+      case extract_todo_id(path) {
+        Some(id) -> delete_todo_handler(store, id)
+        None -> todo_not_found()
       }
     }
-    False -> server.json_response(
-      404,
-      json.object([#("error", json.string("Todo not found"))]) |> json.to_string,
-    )
+    False -> not_found()
   }
 }
 
-// Validate UUID format (8-4-4-4-12 hex characters)
-fn is_valid_uuid(id: String) -> Bool {
-  let parts = string.split(id, "-")
-  case parts {
-    [p1, p2, p3, p4, p5] -> {
-      string.length(p1) == 8
-      && string.length(p2) == 4
-      && string.length(p3) == 4
-      && string.length(p4) == 4
-      && string.length(p5) == 12
-      && is_hex_string(p1)
-      && is_hex_string(p2)
-      && is_hex_string(p3)
-      && is_hex_string(p4)
-      && is_hex_string(p5)
+fn delete_todo_handler(store: TodoStore, id: String) -> Response {
+  case todo_store.delete(store, id) {
+    todo_store.UpdateOk -> no_content()
+    todo_store.NotFound -> todo_not_found()
+  }
+}
+
+// Extract ID from /api/todos/:id pattern
+fn extract_todo_id(path: String) -> Option(String) {
+  case string.starts_with(path, "/api/todos/") {
+    True -> {
+      let prefix_length = 11  // length of "/api/todos/"
+      case string.length(path) > prefix_length {
+        True -> {
+          let id = string.drop_start(path, prefix_length)
+          // Return the ID even if it doesn't look like a valid UUID
+          // The store will handle the lookup and return NotFound if it doesn't exist
+          Some(id)
+        }
+        False -> None
+      }
     }
-    _ -> False
+    False -> None
   }
 }
 
-// Check if string contains only hex characters
-fn is_hex_string(s: String) -> Bool {
-  let hex_chars = "0123456789abcdefABCDEF"
-  string.to_graphemes(s)
-  |> list.all(fn(c) { string.contains(hex_chars, c) })
+fn no_content() -> Response {
+  server.Response(
+    status: 204,
+    headers: dict.from_list([#("Content-Type", "application/json")]),
+    body: "",
+  )
+}
+
+fn todo_not_found() -> Response {
+  server.json_response(
+    404,
+    json.object([#("error", json.string("Todo not found"))])
+    |> json.to_string,
+  )
 }
 
 fn not_found() -> Response {

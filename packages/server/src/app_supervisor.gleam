@@ -10,7 +10,10 @@ pub fn start(cfg: Config) -> Result(Nil, String) {
 
   // Start the todo store
   case todo_store.start() {
-    Error(err) -> Error("Failed to start todo store: " <> err)
+    Error(err) -> {
+      io.println("Failed to start todo store: " <> err)
+      Error("Failed to start todo store: " <> err)
+    }
     Ok(store) -> {
       io.println("Todo store started")
 

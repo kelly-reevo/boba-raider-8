@@ -1,10 +1,9 @@
 import gleam/erlang/process
 import gleam/list
 import gleam/option.{None, Some}
-import gleam/order
 import gleam/string
 import gleeunit/should
-import shared.{None as SharedNone, Some as SharedSome, Todo, UpdateTodoInput}
+import shared.{UpdateTodoInput}
 import todo_store
 
 pub fn full_crud_lifecycle_test() {
@@ -17,13 +16,13 @@ pub fn full_crud_lifecycle_test() {
   let all_before = todo_store.get_all_todos(store)
   should.equal(list.length(all_before), 1)
   let input = UpdateTodoInput(
-    title: SharedSome("Updated title"),
-    description: SharedSome("Updated description"),
-    completed: SharedSome(True),
+    title: Some("Updated title"),
+    description: Some("Updated description"),
+    completed: Some(True),
   )
   let assert Ok(updated) = todo_store.update_todo(store, id, input)
   should.equal(updated.title, "Updated title")
-  should.equal(updated.description, "Updated description")
+  should.equal(updated.description, Some("Updated description"))
   should.be_true(updated.completed)
   let assert Some(after_update) = todo_store.get_todo(store, id)
   should.equal(after_update.title, "Updated title")

@@ -1,10 +1,6 @@
 import gleam/erlang/process
-import gleam/list
-import gleam/option.{None, Some}
-import gleam/order
-import gleam/string
+import gleam/option.{Some}
 import gleeunit/should
-import shared.{None as SharedNone, Some as SharedSome, Todo, UpdateTodoInput}
 import todo_store
 
 pub fn get_by_id_returns_existing_item_test() {
@@ -15,5 +11,5 @@ pub fn get_by_id_returns_existing_item_test() {
   let assert Some(found_item) = result
   should.equal(found_item.id, id)
   should.equal(found_item.title, "Existing item")
-  should.equal(found_item.description, "Details")
+  should.equal(found_item.description, Some("Details"))
 }

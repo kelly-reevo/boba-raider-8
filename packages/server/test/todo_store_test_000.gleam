@@ -4,7 +4,7 @@ import gleam/option.{None, Some}
 import gleam/order
 import gleam/string
 import gleeunit/should
-import shared.{None as SharedNone, Some as SharedSome, Todo, UpdateTodoInput}
+import shared.{Todo, UpdateTodoInput}
 import todo_store
 
 pub fn create_returns_todo_with_generated_id_test() {
@@ -13,7 +13,7 @@ pub fn create_returns_todo_with_generated_id_test() {
   let assert Ok(item) = result
   should.be_true(string.length(item.id) > 0)
   should.equal(item.title, "Buy groceries")
-  should.equal(item.description, "Milk and eggs")
+  should.equal(item.description, Some("Milk and eggs"))
   should.be_false(item.completed)
 }
 
@@ -25,5 +25,5 @@ pub fn created_item_is_retrievable_by_id_test() {
   let assert Some(found_item) = retrieved
   should.equal(found_item.id, id)
   should.equal(found_item.title, "Test todo")
-  should.equal(found_item.description, "Description")
+  should.equal(found_item.description, Some("Description"))
 }

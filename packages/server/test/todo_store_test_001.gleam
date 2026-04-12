@@ -1,10 +1,6 @@
 import gleam/erlang/process
 import gleam/list
-import gleam/option.{None, Some}
-import gleam/order
-import gleam/string
 import gleeunit/should
-import shared.{None as SharedNone, Some as SharedSome, Todo, UpdateTodoInput}
 import todo_store
 
 pub fn concurrent_creates_generate_unique_ids_test() {

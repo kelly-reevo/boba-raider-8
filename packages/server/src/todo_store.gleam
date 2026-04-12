@@ -132,7 +132,7 @@ fn handle_message(state: State, message: Message) -> actor.Next(State, Message) 
           let updated = shared.Todo(
             id: existing.id,
             title: option.unwrap(input.title, existing.title),
-            description: option.unwrap(input.description, existing.description),
+            description: option_string_merge(input.description, existing.description),
             priority: existing.priority,
             completed: option.unwrap(input.completed, existing.completed),
             created_at: existing.created_at,
@@ -173,6 +173,22 @@ fn string_compare(a: String, b: String) -> order.Order {
     order.Lt -> order.Lt
     order.Gt -> order.Gt
     order.Eq -> order.Eq
+  }
+}
+
+/// Merge an Option value - if Some, use the value; if None, use the default
+fn option_merge(opt: Option(a), default: a) -> a {
+  case opt {
+    Some(value) -> value
+    None -> default
+  }
+}
+
+/// Merge an Option(String) field for updates - handles the Option(Option(String)) case
+fn option_string_merge(opt: Option(String), default: Option(String)) -> Option(String) {
+  case opt {
+    Some(value) -> Some(value)
+    None -> default
   }
 }
 

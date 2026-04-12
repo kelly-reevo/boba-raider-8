@@ -1,10 +1,7 @@
 import gleam/erlang/process
 import gleam/list
-import gleam/option.{None, Some}
-import gleam/order
-import gleam/string
+import gleam/option.{None}
 import gleeunit/should
-import shared.{None as SharedNone, Some as SharedSome, Todo, UpdateTodoInput}
 import todo_store
 
 pub fn delete_removes_existing_item_test() {

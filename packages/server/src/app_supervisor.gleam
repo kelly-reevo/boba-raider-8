@@ -59,10 +59,15 @@ pub fn start(cfg: Config) -> Result(Supervisor, String) {
         Ok(started) -> {
           let sup = started.data
 
-          let handler = router.make_handler()
-          case http_server_actor.start(cfg.port, handler) {
-            Ok(_) -> Ok(sup)
-            Error(_) -> Ok(sup)
+          case state.store {
+            Some(store) -> {
+              let handler = router.make_handler(store)
+              case http_server_actor.start(cfg.port, handler) {
+                Ok(_) -> Ok(sup)
+                Error(_) -> Ok(sup)
+              }
+            }
+            None -> Error("Store not available")
           }
         }
         Error(_) -> Error("Failed to start supervisor")

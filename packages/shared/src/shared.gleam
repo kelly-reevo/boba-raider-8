@@ -14,3 +14,30 @@ pub fn error_message(error: AppError) -> String {
     InternalError(msg) -> "Internal error: " <> msg
   }
 }
+
+/// Option type for optional fields in update operations
+pub type Option(a) {
+  Some(a)
+  None
+}
+
+/// Todo item representing a task
+pub type Todo {
+  Todo(
+    id: String,
+    title: String,
+    description: String,
+    completed: Bool,
+    created_at: Int,
+    updated_at: Int,
+  )
+}
+
+/// Input type for partial updates to a Todo
+pub type UpdateTodoInput {
+  UpdateTodoInput(
+    title: Option(String),
+    description: Option(String),
+    completed: Option(Bool),
+  )
+}

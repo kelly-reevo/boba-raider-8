@@ -8,14 +8,12 @@ import web/router
 pub fn start(cfg: Config) -> Result(Nil, String) {
   io.println("Starting supervisor...")
 
-  // Start the todo store actor
+  // Start the todo store
   case todo_store.start() {
     Error(err) -> Error("Failed to start todo store: " <> err)
     Ok(store) -> {
-      io.println("Todo store started")
-
-      // Configure the router with the store
-      let handler = router.configure(store)
+      // Create the HTTP handler with the store
+      let handler = router.make_handler(store)
 
       // Start HTTP server actor
       case http_server_actor.start(cfg.port, handler) {

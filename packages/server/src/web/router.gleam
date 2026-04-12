@@ -1,58 +1,34 @@
 import gleam/dict
-import gleam/dynamic/decode
 import gleam/json
 import gleam/option.{type Option, None, Some}
 import gleam/string
+import gleam/dynamic/decode
 import shared
 import todo_store.{type Store}
-import web/server.{type Request, type Response, json_response}
+import web/server.{type Request, type Response}
 import web/static
 
-// Store reference (using a mutable reference pattern)
-// For simplicity, we use an ETS table entry that can be looked up
-
-/// Configure the router with a store instance
-/// Called during app startup or test setup
-pub fn configure(store: Store) -> fn(Request) -> Response {
-  // Store in ETS using FFI
-  ffi_configure(store)
-  handle_request
+/// Make handler with store for production use
+/// The store is passed explicitly to each handler
+pub fn make_handler(store: Store) -> fn(Request) -> Response {
+  fn(request: Request) { route(request, store) }
 }
 
-/// Get the currently configured store
-fn get_store() -> Option(Store) {
-  ffi_get_store()
-}
-
-// FFI for store registry
-@external(erlang, "router_ffi", "configure")
-fn ffi_configure(store: Store) -> Nil
-
-@external(erlang, "router_ffi", "get_store")
-fn ffi_get_store() -> Option(Store)
-
-/// Main entry point for handling requests
-/// Exported for both production use and test access
-pub fn handle_request(request: Request) -> Response {
-  route(request)
-}
-
-fn route(request: Request) -> Response {
+fn route(request: Request, store: Store) -> Response {
   // Wrap all routes with error handling
   wrap_with_error_handling(fn() {
-    // Match API paths first
     case request.method, request.path {
       "GET", "/" -> static.serve_index()
       "GET", "/health" -> health_handler()
       "GET", "/api/health" -> health_handler()
 
-      // Todo API endpoints
-      "GET", "/api/todos" -> list_todos_handler()
+      // TODO API endpoints
+      "GET", "/api/todos" -> list_todos_handler(store)
       "GET", "/api/todos/trigger-error" -> trigger_error_handler()
-      "GET", "/api/todos/" <> id -> get_todo_handler(id)
-      "POST", "/api/todos" -> create_todo_handler(request)
-      "PATCH", "/api/todos/" <> id -> update_todo_handler(request, id)
-      "DELETE", "/api/todos/" <> id -> delete_todo_handler(id)
+      "GET", "/api/todos/" <> id -> get_todo_handler(id, store)
+      "POST", "/api/todos" -> create_todo_handler(request, store)
+      "PATCH", "/api/todos/" <> id -> update_todo_handler(request, id, store)
+      "DELETE", "/api/todos/" <> id -> delete_todo_handler(id, store)
 
       "GET", path -> route_get(path)
       _, _ -> not_found_error()
@@ -125,7 +101,7 @@ fn ffi_execute_with_catch(handler: fn() -> Response) -> Result(Response, Nil)
 // ============================================================================
 
 fn health_handler() -> Response {
-  json_response(
+  server.json_response(
     200,
     json.object([#("status", json.string("ok"))])
     |> json.to_string,
@@ -146,147 +122,158 @@ fn trigger_error_handler() -> Response {
 }
 
 /// List all todos
-fn list_todos_handler() -> Response {
-  case get_store() {
-    None -> internal_error()
-    Some(store) -> {
-      let todos = todo_store.get_all_todos(store)
-      let todos_json = json.array(todos, todo_to_response_json)
-      json_response(200, todos_json |> json.to_string)
-    }
-  }
+fn list_todos_handler(store: Store) -> Response {
+  let todos = todo_store.get_all_todos(store)
+  let todos_json = json.array(todos, todo_to_response_json)
+  server.json_response(200, todos_json |> json.to_string)
 }
 
 /// Get a single todo by ID
-fn get_todo_handler(id: String) -> Response {
-  case get_store() {
-    None -> internal_error()
-    Some(store) -> {
-      case todo_store.get_todo(store, id) {
-        None -> not_found_error()
-        Some(found) -> {
-          let json_body = todo_to_response_json(found) |> json.to_string
-          json_response(200, json_body)
-        }
-      }
+fn get_todo_handler(id: String, store: Store) -> Response {
+  case todo_store.get_todo(store, id) {
+    None -> not_found_error()
+    Some(found) -> {
+      let json_body = todo_to_response_json(found) |> json.to_string
+      server.json_response(200, json_body)
     }
   }
+}
+
+// Decoder for create todo request body
+type CreateTodoRequest {
+  CreateTodoRequest(title: String, description: String)
+}
+
+fn create_todo_decoder() -> decode.Decoder(CreateTodoRequest) {
+  use title <- decode.field("title", decode.string)
+  use description <- decode.optional_field(
+    "description",
+    "",
+    decode.string,
+  )
+  decode.success(CreateTodoRequest(title:, description:))
 }
 
 /// POST /api/todos - Create a new todo
-fn create_todo_handler(request: Request) -> Response {
-  case get_store() {
-    None -> internal_error()
-    Some(store) -> {
-      // Parse request body
-      let result = parse_create_input(request.body)
+fn create_todo_handler(request: Request, store: Store) -> Response {
+  // Parse the JSON body
+  let parse_result = json.parse(request.body, create_todo_decoder())
 
-      case result {
-        Error(msg) -> bad_request_error(msg)
-        Ok(#(title, description)) -> {
-          case todo_store.create_todo(store, title, description) {
-            Error(err) -> bad_request_error(err)
-            Ok(created) -> {
-              let json_body = shared.todo_to_json(created) |> json.to_string
-              json_response(201, json_body)
+  case parse_result {
+    // Successfully parsed JSON
+    Ok(parsed) -> {
+      let trimmed_title = string.trim(parsed.title)
+
+      // Validate title is not empty
+      case string.is_empty(trimmed_title) {
+        True -> {
+          bad_request_error("Title is required")
+        }
+        False -> {
+          // Validate title length (max 200 chars)
+          case string.length(trimmed_title) > 200 {
+            True -> {
+              bad_request_error("Title is too long")
+            }
+            False -> {
+              // Create the todo in the store
+              case todo_store.create_todo(store, trimmed_title, parsed.description) {
+                Ok(created_todo) -> {
+                  // Return 201 with created todo JSON
+                  server.json_response(
+                    201,
+                    shared.todo_to_json(created_todo) |> json.to_string,
+                  )
+                }
+                Error(msg) -> {
+                  bad_request_error(msg)
+                }
+              }
             }
           }
         }
       }
     }
+
+    // Failed to parse JSON
+    Error(_) -> {
+      bad_request_error("Title is required")
+    }
   }
 }
 
-/// Parse create todo input from JSON
-fn parse_create_input(body: String) -> Result(#(String, String), String) {
-  // Decode the title (required)
-  let title_decoder = {
-    use title <- decode.field("title", decode.string)
-    decode.success(title)
-  }
+// Decoder for update todo request body
+type UpdateTodoRequest {
+  UpdateTodoRequest(
+    title: Option(String),
+    description: Option(String),
+    completed: Option(Bool),
+  )
+}
 
-  // Decode the description (optional)
-  let desc_decoder = {
-    use desc <- decode.optional_field("description", "", decode.string)
-    decode.success(desc)
-  }
-
-  let title_result = json.parse(body, title_decoder)
-  let desc_result = json.parse(body, desc_decoder)
-
-  case title_result {
-    Error(_) -> Error("Invalid JSON: missing or invalid title")
-    Ok(title) -> {
-      let trimmed = string.trim(title)
-      case string.is_empty(trimmed) {
-        True -> Error("Title is required")
-        False -> {
-          let description = case desc_result {
-            Ok(d) -> d
-            Error(_) -> ""
-          }
-          Ok(#(trimmed, description))
-        }
-      }
-    }
-  }
+fn update_todo_decoder() -> decode.Decoder(UpdateTodoRequest) {
+  use title <- decode.optional_field("title", None, decode.optional(decode.string))
+  use description <- decode.optional_field(
+    "description",
+    None,
+    decode.optional(decode.string),
+  )
+  use completed <- decode.optional_field(
+    "completed",
+    None,
+    decode.optional(decode.bool),
+  )
+  decode.success(UpdateTodoRequest(title:, description:, completed:))
 }
 
 /// Update an existing todo
-fn update_todo_handler(request: Request, id: String) -> Response {
-  case get_store() {
-    None -> internal_error()
-    Some(store) -> {
-      // Parse the update input
-      case parse_update_input(request.body) {
-        Error(msg) -> bad_request_error(msg)
-        Ok(input) -> {
-          case todo_store.update_todo(store, id, input) {
-            Error(_) -> not_found_error()
-            Ok(updated) -> {
-              let json_body = shared.todo_to_json(updated) |> json.to_string
-              json_response(200, json_body)
+fn update_todo_handler(request: Request, id: String, store: Store) -> Response {
+  // Parse the update input
+  case json.parse(request.body, update_todo_decoder()) {
+    Ok(input) -> {
+      // Validate title if provided
+      case input.title {
+        Some(title) -> {
+          let trimmed = string.trim(title)
+          case string.is_empty(trimmed) {
+            True -> bad_request_error("Title cannot be empty")
+            False -> {
+              case string.length(trimmed) > 200 {
+                True -> bad_request_error("Title is too long")
+                False -> do_update(id, store, Some(trimmed), input.description, input.completed)
+              }
             }
           }
         }
+        None -> do_update(id, store, None, input.description, input.completed)
       }
     }
+    Error(_) -> bad_request_error("Invalid JSON")
   }
 }
 
-/// Parse update todo input from JSON
-fn parse_update_input(body: String) -> Result(shared.UpdateTodoInput, String) {
-  let decoder = {
-    use title <- decode.optional_field("title", None, decode.optional(decode.string))
-    use description <- decode.optional_field(
-      "description",
-      None,
-      decode.optional(decode.string),
-    )
-    use completed <- decode.optional_field(
-      "completed",
-      None,
-      decode.optional(decode.bool),
-    )
-    decode.success(shared.UpdateTodoInput(title:, description:, completed:))
-  }
-
-  case json.parse(body, decoder) {
-    Ok(input) -> Ok(input)
-    Error(_) -> Error("Invalid JSON")
+fn do_update(
+  id: String,
+  store: Store,
+  title: Option(String),
+  description: Option(String),
+  completed: Option(Bool),
+) -> Response {
+  let input = shared.UpdateTodoInput(title:, description:, completed:)
+  case todo_store.update_todo(store, id, input) {
+    Error(_) -> not_found_error()
+    Ok(updated) -> {
+      let json_body = shared.todo_to_json(updated) |> json.to_string
+      server.json_response(200, json_body)
+    }
   }
 }
 
 /// Delete a todo
-fn delete_todo_handler(id: String) -> Response {
-  case get_store() {
-    None -> internal_error()
-    Some(store) -> {
-      case todo_store.delete_todo(store, id) {
-        Error(_) -> not_found_error()
-        Ok(_) -> server.json_response(204, "")
-      }
-    }
+fn delete_todo_handler(id: String, store: Store) -> Response {
+  case todo_store.delete_todo(store, id) {
+    Error(_) -> not_found_error()
+    Ok(_) -> server.json_response(204, "")
   }
 }
 
@@ -301,5 +288,7 @@ fn todo_to_response_json(item: shared.Todo) -> json.Json {
       False -> json.string(item.description)
     }),
     #("completed", json.bool(item.completed)),
+    #("created_at", json.int(item.created_at)),
+    #("updated_at", json.int(item.updated_at)),
   ])
 }

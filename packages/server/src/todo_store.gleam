@@ -244,3 +244,18 @@ pub fn delete(id: String) -> Result(Nil, AppError) {
   process.receive(reply, 5000)
   |> result.unwrap(Error(shared.InternalError("Timeout")))
 }
+
+/// Helper function for tests: create todo with store, title, description
+/// Uses Medium priority by default
+pub fn create_todo(
+  _store: TodoStore,
+  title: String,
+  description: String,
+) -> Result(Todo, AppError) {
+  let attrs = shared.new_todo_attrs(
+    title: title,
+    description: Some(description),
+    priority: shared.Medium,
+  )
+  create(attrs)
+}

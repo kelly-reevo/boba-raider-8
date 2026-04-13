@@ -3,11 +3,11 @@
  *
  * Boundary contracts:
  * - renderTodos(todos: Todo[]) -> void (mutates DOM element with id 'todo-list')
- * - Each item: <div class='todo-item priority-{p}' data-id='{id}'>
- *   - Checkbox with class 'todo-checkbox', data-action='toggle'
+ * - Each item: <li class='todo-item priority-{p}' data-id='{id}'>
+ *   - Checkbox with class 'todo-toggle', data-id='{id}'
  *   - Title span with class 'todo-title'
  *   - Description div with class 'todo-description' (if present)
- *   - Delete button with class 'todo-delete', data-action='delete'
+ *   - Delete button with class 'todo-delete-btn', data-id='{id}'
  */
 
 /**
@@ -36,7 +36,7 @@ export function renderTodos(todos) {
  * @returns {HTMLElement}
  */
 function createTodoElement(todo) {
-  const todoEl = document.createElement('div');
+  const todoEl = document.createElement('li');
   todoEl.className = `todo-item priority-${todo.priority}`;
   todoEl.setAttribute('data-id', todo.id);
 
@@ -46,9 +46,9 @@ function createTodoElement(todo) {
 
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox';
-  checkbox.className = 'todo-checkbox';
+  checkbox.className = 'todo-toggle';
   checkbox.checked = todo.completed;
-  checkbox.setAttribute('data-action', 'toggle');
+  checkbox.setAttribute('data-id', todo.id);
   todoEl.appendChild(checkbox);
 
   const titleEl = document.createElement('span');
@@ -64,8 +64,8 @@ function createTodoElement(todo) {
   }
 
   const deleteBtn = document.createElement('button');
-  deleteBtn.className = 'todo-delete';
-  deleteBtn.setAttribute('data-action', 'delete');
+  deleteBtn.className = 'todo-delete-btn';
+  deleteBtn.setAttribute('data-id', todo.id);
   deleteBtn.textContent = 'Delete';
   todoEl.appendChild(deleteBtn);
 

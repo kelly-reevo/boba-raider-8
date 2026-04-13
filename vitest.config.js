@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { svelte } from '@sveltejs/vite-plugin-svelte';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -8,6 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   plugins: [
     react(),
+    svelte(),
     {
       name: 'treat-tests-as-jsx',
       enforce: 'pre',
@@ -38,6 +40,7 @@ export default defineConfig({
   },
   test: {
     include: [
+      '__cyclone_tests__/**/*.test.js',
       '__cyclone_tests__/rating-data-access/*',
       '__cyclone_tests__/edit-store-form/*.test.[jt]s',
       '__cyclone_tests__/edit-store-form/*.test.[jt]sx',

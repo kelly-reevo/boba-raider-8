@@ -7,12 +7,15 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
-    "@testing-library/jest-dom": "^6.1.0",
+    "@sveltejs/vite-plugin-svelte": "^4.0.4",
+    "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^14.0.0",
+    "@testing-library/svelte": "^5.3.1",
     "@testing-library/user-event": "^14.5.0",
     "@vitejs/plugin-react": "^4.2.0",
     "happy-dom": "^20.8.9",
     "jsdom": "^29.0.2",
+    "svelte": "^5.55.3",
     "vitest": "^1.0.0"
   },
   "dependencies": {

@@ -48,11 +48,33 @@ type ServiceState {
   )
 }
 
+/// Input for listing stores with pagination, search, and sorting
+pub type ListStoresInput {
+  ListStoresInput(
+    limit: Int,
+    offset: Int,
+    search: Option(String),
+    sort_by: data_access.SortBy,
+    sort_order: data_access.SortOrder,
+  )
+}
+
+/// Paginated response for stores
+pub type PaginatedStoresResponse {
+  PaginatedStoresResponse(
+    stores: List(StoreWithDrinkCount),
+    total: Int,
+    limit: Int,
+    offset: Int,
+  )
+}
+
 /// Actor message types
 pub type StoreServiceMsg {
   CreateStore(CreateStoreInput, Subject(Result(StoreWithDrinkCount, String)))
   GetStoreWithDrinkCount(String, Subject(Result(StoreWithDrinkCount, String)))
   SearchStores(String, Subject(Result(List(StoreWithDrinkCount), String)))
+  ListStores(ListStoresInput, Subject(Result(PaginatedStoresResponse, String)))
 }
 
 pub type StoreService =
@@ -191,6 +213,52 @@ fn handle_message(state: ServiceState, msg: StoreServiceMsg) -> actor.Next(Servi
         }
       }
     }
+
+    ListStores(input, reply_to) -> {
+      // Validate pagination parameters
+      let limit_valid = input.limit > 0 && input.limit <= 100
+      let offset_valid = input.offset >= 0
+
+      case limit_valid, offset_valid {
+        False, _ -> {
+          actor.send(reply_to, Error("Limit must be between 1 and 100"))
+          actor.continue(state)
+        }
+        _, False -> {
+          actor.send(reply_to, Error("Offset must be non-negative"))
+          actor.continue(state)
+        }
+        True, True -> {
+          // Convert to data access input format
+          let data_input = data_access.ListStoresInput(
+            limit: input.limit,
+            offset: input.offset,
+            search: input.search,
+            sort_by: input.sort_by,
+            sort_order: input.sort_order,
+          )
+
+          // Query data access layer
+          let result = data_access.list_with_params(state.data_access_state, data_input)
+
+          // Convert stores to include drink counts
+          let stores_with_count = list.map(result.stores, fn(store) {
+            let drink_count = count_drinks_for_store(store.id)
+            to_store_with_count(store, drink_count)
+          })
+
+          let response = PaginatedStoresResponse(
+            stores: stores_with_count,
+            total: result.total,
+            limit: result.limit,
+            offset: result.offset,
+          )
+
+          actor.send(reply_to, Ok(response))
+          actor.continue(state)
+        }
+      }
+    }
   }
 }
 
@@ -271,6 +339,20 @@ pub fn search_stores(
 ) -> Result(List(StoreWithDrinkCount), String) {
   let reply_subject = process.new_subject()
   actor.send(service, SearchStores(search_term, reply_subject))
+
+  case process.receive(reply_subject, within: 5000) {
+    Ok(result) -> result
+    Error(_) -> Error("Timeout waiting for store service")
+  }
+}
+
+/// List stores with pagination, search, and sorting
+pub fn list_stores(
+  service: StoreService,
+  input: ListStoresInput,
+) -> Result(PaginatedStoresResponse, String) {
+  let reply_subject = process.new_subject()
+  actor.send(service, ListStores(input, reply_subject))
 
   case process.receive(reply_subject, within: 5000) {
     Ok(result) -> result

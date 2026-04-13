@@ -1,6 +1,7 @@
 import gleam/dict.{type Dict}
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/order
 import gleam/string
 
 /// Store record representing a boba store
@@ -56,6 +57,30 @@ pub type StoreError {
   StoreNotFound(String)
   StoreInvalidInput(String)
   StoreInternalError(String)
+}
+
+/// Sort field options
+pub type SortBy {
+  SortByName
+  SortByCity
+  SortByCreatedAt
+}
+
+/// Sort order options
+pub type SortOrder {
+  Asc
+  Desc
+}
+
+/// List stores input parameters
+pub type ListStoresInput {
+  ListStoresInput(
+    limit: Int,
+    offset: Int,
+    search: Option(String),
+    sort_by: SortBy,
+    sort_order: SortOrder,
+  )
 }
 
 /// In-memory store state using Dict
@@ -230,4 +255,71 @@ pub fn delete(state: StoreState, id: String) -> #(StoreState, Result(Nil, StoreE
 /// List all stores without pagination (for search)
 pub fn list_all(state: StoreState) -> List(BobaStore) {
   dict.values(state.stores)
+}
+
+/// List stores with pagination, search, and sorting
+pub fn list_with_params(state: StoreState, params: ListStoresInput) -> PaginatedStores {
+  let all_stores = dict.values(state.stores)
+
+  // Apply search filter if provided
+  let filtered_stores = case params.search {
+    None -> all_stores
+    Some(search_term) -> filter_stores_by_search(all_stores, search_term)
+  }
+
+  let total = list.length(filtered_stores)
+
+  // Apply sorting
+  let sorted_stores = sort_stores(filtered_stores, params.sort_by, params.sort_order)
+
+  // Apply pagination
+  let paginated = sorted_stores
+    |> list.drop(params.offset)
+    |> list.take(params.limit)
+
+  PaginatedStores(
+    stores: paginated,
+    total: total,
+    limit: params.limit,
+    offset: params.offset,
+  )
+}
+
+/// Filter stores by search term (matches name or city, case-insensitive)
+fn filter_stores_by_search(stores: List(BobaStore), search_term: String) -> List(BobaStore) {
+  let trimmed_term = string.trim(search_term)
+  case string.is_empty(trimmed_term) {
+    True -> stores
+    False -> {
+      let lower_term = string.lowercase(trimmed_term)
+      list.filter(stores, fn(store) {
+        let name_match = string.contains(string.lowercase(store.name), lower_term)
+        let city_match = case store.city {
+          Some(city) -> string.contains(string.lowercase(city), lower_term)
+          None -> False
+        }
+        name_match || city_match
+      })
+    }
+  }
+}
+
+/// Sort stores by specified field and order
+fn sort_stores(stores: List(BobaStore), sort_by: SortBy, sort_order: SortOrder) -> List(BobaStore) {
+  let compare_fn: fn(BobaStore, BobaStore) -> order.Order = case sort_by {
+    SortByName -> fn(a: BobaStore, b: BobaStore) { string.compare(a.name, b.name) }
+    SortByCity -> fn(a: BobaStore, b: BobaStore) {
+      let city_a = option.unwrap(a.city, "")
+      let city_b = option.unwrap(b.city, "")
+      string.compare(city_a, city_b)
+    }
+    SortByCreatedAt -> fn(a: BobaStore, b: BobaStore) { string.compare(a.created_at, b.created_at) }
+  }
+
+  let sorted = list.sort(stores, compare_fn)
+
+  case sort_order {
+    Asc -> sorted
+    Desc -> list.reverse(sorted)
+  }
 }

@@ -6,8 +6,14 @@ pub fn main() {
   gleeunit.main()
 }
 
-pub fn default_model_test() {
-  let m = model.default()
-  m.count
-  |> should.equal(0)
+pub fn init_model_test() {
+  let m = model.init()
+  m.is_loading
+  |> should.equal(True)
+
+  m.loading_message
+  |> should.equal("Loading todos...")
+
+  m.submit_button_text
+  |> should.equal("Add Todo")
 }

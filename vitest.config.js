@@ -32,7 +32,8 @@ export default defineConfig({
       './test-db-setup': path.resolve(__dirname, '__cyclone_tests__/test-db-setup.js'),
       '../components/edit-store-form': path.resolve(__dirname, '__cyclone_tests__/components/edit-store-form.jsx'),
       '../src/components/create_drink_form_component': path.resolve(__dirname, 'src/components/create_drink_form_component.js'),
-      './BobaRatingForm': path.resolve(__dirname, 'src/components/BobaRatingForm.jsx')
+      './BobaRatingForm': path.resolve(__dirname, 'src/components/BobaRatingForm.jsx'),
+      '../../src/components/rating-display-component': path.resolve(__dirname, 'src/components/rating-display-component.js')
     }
   },
   test: {
@@ -46,7 +47,8 @@ export default defineConfig({
       '__cyclone_tests__/edit-drink-form/*.test.jsx',
       '__cyclone_tests__/boba-rating-form/*',
       '__cyclone_tests__/store-search-component/*',
-      '__cyclone_tests__/aggregate-ratings-display/*'
+      '__cyclone_tests__/aggregate-ratings-display/*',
+      '__cyclone_tests__/rating-display-component/*.js'
     ],
     exclude: [
       '__cyclone_tests__/test-db-setup.js',

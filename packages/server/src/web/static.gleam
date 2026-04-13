@@ -4,7 +4,7 @@ import simplifile
 import web/server.{type Response}
 
 pub fn serve_index() -> Response {
-  serve_file("priv/static/index.html", "text/html; charset=utf-8")
+  serve_file("priv/static/index.html", "text/html")
 }
 
 pub fn serve(path: String) -> Response {

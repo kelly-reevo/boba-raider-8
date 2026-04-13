@@ -4,6 +4,7 @@ import gleam/io
 import todo_store
 import web/http_server_actor
 import web/router
+import web/server.{type Request, type Response}
 
 pub fn start(cfg: Config) -> Result(Nil, String) {
   io.println("Starting supervisor...")
@@ -29,4 +30,11 @@ pub fn start(cfg: Config) -> Result(Nil, String) {
     }
     Error(err) -> Error("Failed to start HTTP server: " <> err)
   }
+}
+
+/// Build a router for testing purposes
+/// Returns a handler function that can be used with wisp/testing
+pub fn build_router() -> fn(Request) -> Response {
+  let assert Ok(store) = todo_store.start()
+  router.make_handler(store)
 }

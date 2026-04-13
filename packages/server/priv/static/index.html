@@ -7,7 +7,19 @@
   <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body>
-  <div id="app"></div>
-  <script type="module" src="/static/js/app.js"></script>
+  <div id="app">
+    <div id="todo-list"></div>
+    <form id="add-todo-form">
+      <input type="text" name="title" placeholder="Title">
+      <textarea name="description" placeholder="Description"></textarea>
+      <button type="submit">Add Todo</button>
+    </form>
+    <div id="filter-controls">
+      <button data-filter="all">all</button>
+      <button data-filter="active">active</button>
+      <button data-filter="completed">completed</button>
+    </div>
+  </div>
+  <script src="client.js"></script>
 </body>
 </html>

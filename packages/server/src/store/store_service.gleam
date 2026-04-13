@@ -4,7 +4,6 @@ import gleam/option.{type Option, Some, None}
 import gleam/otp/actor
 import gleam/string
 import store/store_data_access as data_access
-import store/store_validation as validation
 
 /// Store record with drink count
 pub type StoreWithDrinkCount {
@@ -86,20 +85,16 @@ fn count_drinks_for_store(_store_id: String) -> Int {
 fn handle_message(state: ServiceState, msg: StoreServiceMsg) -> actor.Next(ServiceState, StoreServiceMsg) {
   case msg {
     CreateStore(input, reply_to) -> {
-      // Validate input first
-      let validation_input = validation.CreateStoreInput(
-        name: input.name,
-        address: input.address,
-        city: input.city,
-        phone: input.phone,
-      )
+      // Validate input first - inline validation matching robustness branch contract
+      let name_trimmed = string.trim(input.name)
+      let name_valid = string.length(name_trimmed) > 0 && string.length(name_trimmed) <= 100
 
-      case validation.validate_create_input(validation_input) {
-        Error(err) -> {
-          actor.send(reply_to, Error(err))
+      case name_valid {
+        False -> {
+          actor.send(reply_to, Error("Store name is required and must be at most 100 characters"))
           actor.continue(state)
         }
-        Ok(_) -> {
+        True -> {
           // Convert input to data access format
           let data_input = data_access.CreateStoreInput(
             name: string.trim(input.name),
@@ -137,15 +132,16 @@ fn handle_message(state: ServiceState, msg: StoreServiceMsg) -> actor.Next(Servi
     }
 
     GetStoreWithDrinkCount(store_id, reply_to) -> {
-      // Validate UUID format
-      case validation.validate_store_id(store_id) {
-        Error(err) -> {
-          actor.send(reply_to, Error(err))
+      // Validate UUID format - basic check: non-empty and contains dashes
+      let is_valid_id = string.length(store_id) > 0 && string.contains(store_id, "-")
+      case is_valid_id {
+        False -> {
+          actor.send(reply_to, Error("Invalid store ID format"))
           actor.continue(state)
         }
-        Ok(valid_id) -> {
+        True -> {
           // Try to get store from data access layer
-          case data_access.get_by_id(state.data_access_state, valid_id) {
+          case data_access.get_by_id(state.data_access_state, store_id) {
             Error(data_access.StoreNotFound(_)) -> {
               actor.send(reply_to, Error("Store not found"))
               actor.continue(state)
@@ -171,15 +167,18 @@ fn handle_message(state: ServiceState, msg: StoreServiceMsg) -> actor.Next(Servi
     }
 
     SearchStores(search_term, reply_to) -> {
-      // Validate search term
-      case validation.validate_search_term(search_term) {
-        Error(err) -> {
-          actor.send(reply_to, Error(err))
+      // Validate search term - must be at least 2 characters after trimming
+      let trimmed_term = string.trim(search_term)
+      let term_valid = string.length(trimmed_term) >= 2
+
+      case term_valid {
+        False -> {
+          actor.send(reply_to, Error("Search term must be at least 2 characters"))
           actor.continue(state)
         }
-        Ok(valid_term) -> {
+        True -> {
           // Search in data access layer
-          let results = search_stores_in_state(state.data_access_state, valid_term)
+          let results = search_stores_in_state(state.data_access_state, trimmed_term)
 
           // Convert results to stores with drink counts
           let results_with_count = list.map(results, fn(store) {

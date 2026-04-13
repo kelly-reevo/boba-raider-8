@@ -1,7 +1,12 @@
 import gleam/dict.{type Dict}
 
 pub type Request {
-  Request(method: String, path: String, headers: Dict(String, String), body: String)
+  Request(
+    method: String,
+    path: String,
+    headers: Dict(String, String),
+    body: String,
+  )
 }
 
 pub type Response {

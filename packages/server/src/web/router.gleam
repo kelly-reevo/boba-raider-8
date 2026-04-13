@@ -28,7 +28,7 @@ fn health_handler() -> Response {
   server.json_response(
     200,
     json.object([#("status", json.string("ok"))])
-    |> json.to_string,
+      |> json.to_string,
   )
 }
 
@@ -36,6 +36,6 @@ fn not_found() -> Response {
   server.json_response(
     404,
     json.object([#("error", json.string("Not found"))])
-    |> json.to_string,
+      |> json.to_string,
   )
 }

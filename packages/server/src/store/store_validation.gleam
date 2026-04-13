@@ -50,10 +50,18 @@ fn validate_name(name: String) -> List(ValidationError) {
   let trimmed = string.trim(name)
   let length = string.length(trimmed)
 
-  case string.is_empty(trimmed), length < min_name_length, length > max_name_length {
+  case
+    string.is_empty(trimmed),
+    length < min_name_length,
+    length > max_name_length
+  {
     True, _, _ -> [ValidationError("name", "Name is required")]
-    False, True, _ -> [ValidationError("name", "Name must be at least 2 characters")]
-    False, False, True -> [ValidationError("name", "Name must not exceed 255 characters")]
+    False, True, _ -> [
+      ValidationError("name", "Name must be at least 2 characters"),
+    ]
+    False, False, True -> [
+      ValidationError("name", "Name must not exceed 255 characters"),
+    ]
     False, False, False -> []
   }
 }
@@ -67,7 +75,9 @@ fn validate_address(address: Option(String)) -> List(ValidationError) {
       let length = string.length(trimmed)
 
       case length > max_address_length {
-        True -> [ValidationError("address", "Address must not exceed 500 characters")]
+        True -> [
+          ValidationError("address", "Address must not exceed 500 characters"),
+        ]
         False -> []
       }
     }
@@ -86,7 +96,9 @@ fn validate_phone(phone: Option(String)) -> List(ValidationError) {
         False -> {
           case is_valid_phone(trimmed) {
             True -> []
-            False -> [ValidationError("phone", "Phone must be a valid phone number")]
+            False -> [
+              ValidationError("phone", "Phone must be a valid phone number"),
+            ]
           }
         }
       }
@@ -128,7 +140,10 @@ fn is_valid_phone(phone: String) -> Bool {
     True -> valid_e164
     False -> {
       // Check standard US format patterns
-      is_us_format(phone) || is_dashed_format(phone) || is_dotted_format(phone) || is_plain_format(phone)
+      is_us_format(phone)
+      || is_dashed_format(phone)
+      || is_dotted_format(phone)
+      || is_plain_format(phone)
     }
   }
 
@@ -162,7 +177,8 @@ fn is_us_format(phone: String) -> Bool {
       let rest_digits = extract_digits(rest)
       let area_valid = string.length(area_digits) == 3
       let rest_valid = string.length(rest_digits) == 7
-      let has_separators = string.contains(rest, "-") || string.contains(rest, " ")
+      let has_separators =
+        string.contains(rest, "-") || string.contains(rest, " ")
       area_valid && rest_valid && has_separators
     }
     _, _ -> False

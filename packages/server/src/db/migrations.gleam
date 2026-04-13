@@ -24,12 +24,16 @@ CREATE TABLE boba_drinks (
 "
 
 /// Execute the boba_stores table migration
-pub fn run_create_stores_migration(db: sqlight.Connection) -> Result(Nil, sqlight.Error) {
+pub fn run_create_stores_migration(
+  db: sqlight.Connection,
+) -> Result(Nil, sqlight.Error) {
   sqlight.exec(create_boba_stores_table, on: db)
 }
 
 /// Execute the boba_drinks table migration
-pub fn run_create_drinks_migration(db: sqlight.Connection) -> Result(Nil, sqlight.Error) {
+pub fn run_create_drinks_migration(
+  db: sqlight.Connection,
+) -> Result(Nil, sqlight.Error) {
   sqlight.exec(create_boba_drinks_table, on: db)
 }
 

@@ -1,6 +1,6 @@
 import gleam/erlang/process.{type Subject}
 import gleam/list
-import gleam/option.{type Option, Some, None}
+import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/string
 import store/store_data_access as data_access
@@ -82,32 +82,38 @@ fn count_drinks_for_store(_store_id: String) -> Int {
 }
 
 /// Actor message handler
-fn handle_message(state: ServiceState, msg: StoreServiceMsg) -> actor.Next(ServiceState, StoreServiceMsg) {
+fn handle_message(
+  state: ServiceState,
+  msg: StoreServiceMsg,
+) -> actor.Next(ServiceState, StoreServiceMsg) {
   case msg {
     CreateStore(input, reply_to) -> {
       // Validate input first - inline validation matching robustness branch contract
       let name_trimmed = string.trim(input.name)
-      let name_valid = string.length(name_trimmed) > 0 && string.length(name_trimmed) <= 100
+      let name_valid =
+        string.length(name_trimmed) > 0 && string.length(name_trimmed) <= 100
 
       case name_valid {
         False -> {
-          actor.send(reply_to, Error("Store name is required and must be at most 100 characters"))
+          actor.send(
+            reply_to,
+            Error("Store name is required and must be at most 100 characters"),
+          )
           actor.continue(state)
         }
         True -> {
           // Convert input to data access format
-          let data_input = data_access.CreateStoreInput(
-            name: string.trim(input.name),
-            address: input.address,
-            city: input.city,
-            phone: input.phone,
-          )
+          let data_input =
+            data_access.CreateStoreInput(
+              name: string.trim(input.name),
+              address: input.address,
+              city: input.city,
+              phone: input.phone,
+            )
 
           // Create in data access layer
-          let #(new_data_state, created_store) = data_access.create(
-            state.data_access_state,
-            data_input,
-          )
+          let #(new_data_state, created_store) =
+            data_access.create(state.data_access_state, data_input)
 
           // Convert to output format with drink count
           let store_with_count = to_store_with_count(created_store, 0)
@@ -121,10 +127,11 @@ fn handle_message(state: ServiceState, msg: StoreServiceMsg) -> actor.Next(Servi
           }
 
           // Update state and reply
-          let new_state = ServiceState(
-            data_access_state: new_data_state,
-            event_publisher: state.event_publisher,
-          )
+          let new_state =
+            ServiceState(
+              data_access_state: new_data_state,
+              event_publisher: state.event_publisher,
+            )
           actor.send(reply_to, Ok(store_with_count))
           actor.continue(new_state)
         }
@@ -133,7 +140,8 @@ fn handle_message(state: ServiceState, msg: StoreServiceMsg) -> actor.Next(Servi
 
     GetStoreWithDrinkCount(store_id, reply_to) -> {
       // Validate UUID format - basic check: non-empty and contains dashes
-      let is_valid_id = string.length(store_id) > 0 && string.contains(store_id, "-")
+      let is_valid_id =
+        string.length(store_id) > 0 && string.contains(store_id, "-")
       case is_valid_id {
         False -> {
           actor.send(reply_to, Error("Invalid store ID format"))
@@ -173,18 +181,23 @@ fn handle_message(state: ServiceState, msg: StoreServiceMsg) -> actor.Next(Servi
 
       case term_valid {
         False -> {
-          actor.send(reply_to, Error("Search term must be at least 2 characters"))
+          actor.send(
+            reply_to,
+            Error("Search term must be at least 2 characters"),
+          )
           actor.continue(state)
         }
         True -> {
           // Search in data access layer
-          let results = search_stores_in_state(state.data_access_state, trimmed_term)
+          let results =
+            search_stores_in_state(state.data_access_state, trimmed_term)
 
           // Convert results to stores with drink counts
-          let results_with_count = list.map(results, fn(store) {
-            let drink_count = count_drinks_for_store(store.id)
-            to_store_with_count(store, drink_count)
-          })
+          let results_with_count =
+            list.map(results, fn(store) {
+              let drink_count = count_drinks_for_store(store.id)
+              to_store_with_count(store, drink_count)
+            })
 
           actor.send(reply_to, Ok(results_with_count))
           actor.continue(state)
@@ -220,11 +233,14 @@ pub fn start() -> Result(StoreService, String) {
 }
 
 /// Start with an optional event publisher
-pub fn start_with_publisher(publisher: Option(EventPublisher)) -> Result(StoreService, String) {
-  let initial_state = ServiceState(
-    data_access_state: data_access.new_state(),
-    event_publisher: publisher,
-  )
+pub fn start_with_publisher(
+  publisher: Option(EventPublisher),
+) -> Result(StoreService, String) {
+  let initial_state =
+    ServiceState(
+      data_access_state: data_access.new_state(),
+      event_publisher: publisher,
+    )
 
   case
     actor.new(initial_state)

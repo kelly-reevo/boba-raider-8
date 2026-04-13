@@ -1,11 +1,25 @@
-import frontend/model.{type Model, Model}
+import frontend/effects
+import frontend/model.{type Model, Active, All, Completed, Model}
 import frontend/msg.{type Msg}
 import lustre/effect.{type Effect}
 
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
-    msg.Increment -> #(Model(..model, count: model.count + 1), effect.none())
-    msg.Decrement -> #(Model(..model, count: model.count - 1), effect.none())
-    msg.Reset -> #(Model(..model, count: 0), effect.none())
+    msg.FilterChanged(filter_str) -> {
+      let new_filter = case filter_str {
+        "active" -> Active
+        "completed" -> Completed
+        _ -> All
+      }
+      #(Model(..model, filter: new_filter), effects.get_todos(new_filter))
+    }
+
+    msg.TodosFetched(todos) -> {
+      #(Model(..model, todos: todos, loading: False), effect.none())
+    }
+
+    msg.FetchError(error) -> {
+      #(Model(..model, error: error, loading: False), effect.none())
+    }
   }
 }

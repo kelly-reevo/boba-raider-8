@@ -1,7 +1,9 @@
 /// Application messages
 
+import shared.{type Todo}
+
 pub type Msg {
-  Increment
-  Decrement
-  Reset
+  FilterChanged(String)
+  TodosFetched(List(Todo))
+  FetchError(String)
 }

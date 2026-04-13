@@ -1,6 +1,7 @@
 /// Application state for todo list UI
 
 import gleam/list
+import gleam/option.{type Option, None}
 import shared.{type Todo, type Priority, Medium}
 
 /// Filter options for todos
@@ -43,6 +44,7 @@ pub type Model {
     form: FormState,
     submit_state: LoadingState,
     error: String,
+    deleting_id: Option(String),
   )
 }
 
@@ -59,6 +61,7 @@ pub fn default() -> Model {
     ),
     submit_state: Idle,
     error: "",
+    deleting_id: None,
   )
 }
 
@@ -118,4 +121,18 @@ pub fn set_submitting(model: Model) -> Model {
 /// Update todos list
 pub fn update_todos(model: Model, todos: List(Todo)) -> Model {
   Model(..model, todos: todos)
+}
+
+/// Remove a todo by ID from the list
+pub fn remove_todo(model: Model, id: String) -> Model {
+  Model(
+    ..model,
+    todos: list.filter(model.todos, fn(item) { item.id != id }),
+    deleting_id: None,
+  )
+}
+
+/// Set the ID currently being deleted
+pub fn set_deleting(model: Model, id: String) -> Model {
+  Model(..model, deleting_id: option.Some(id))
 }

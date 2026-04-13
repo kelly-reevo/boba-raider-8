@@ -3,6 +3,7 @@ import gleeunit/should
 import frontend/model.{Loading, All, Idle}
 import shared.{Todo, Medium}
 import gleam/option.{None}
+import gleam/list
 
 pub fn main() {
   gleeunit.main()
@@ -26,6 +27,7 @@ pub fn default_model_test() {
   m.form.description |> should.equal("")
   m.form.priority |> should.equal(Medium)
   m.submit_state |> should.equal(Idle)
+  m.deleting_id |> should.equal(None)
 }
 
 pub fn filter_todos_all_test() {
@@ -54,4 +56,31 @@ pub fn filter_todos_completed_test() {
 
   model.filter_todos(todos, model.Completed)
   |> should.equal([completed_todo])
+}
+
+pub fn remove_todo_test() {
+  let m = model.Model(
+    todos: [
+      Todo(id: "1", title: "First", description: None, priority: "high", completed: False, created_at: 0, updated_at: 0),
+      Todo(id: "2", title: "Second", description: None, priority: "low", completed: True, created_at: 0, updated_at: 0),
+    ],
+    filter: All,
+    data_state: Loaded,
+    form: model.FormState(title: "", description: "", priority: Medium),
+    submit_state: Idle,
+    error: "",
+    deleting_id: None,
+  )
+
+  let updated = model.remove_todo(m, "1")
+
+  updated.todos |> list.length |> should.equal(1)
+  updated.deleting_id |> should.equal(None)
+}
+
+pub fn set_deleting_test() {
+  let m = model.default()
+  let updated = model.set_deleting(m, "123")
+
+  updated.deleting_id |> should.equal(gleam/option.Some("123"))
 }

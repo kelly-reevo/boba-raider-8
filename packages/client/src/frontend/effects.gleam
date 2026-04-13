@@ -1,6 +1,6 @@
 /// HTTP effects for todo operations
 
-import frontend/msg.{type Msg, TodosLoaded, TodosLoadError, CreateTodoSucceeded}
+import frontend/msg.{type Msg, TodosLoaded, TodosLoadError, CreateTodoSucceeded, Deleted, DeleteError}
 import gleam/json
 import gleam/option.{None, Some}
 import lustre/effect.{type Effect}
@@ -43,12 +43,6 @@ pub fn create_todo(
   // Simulated effect - in production this would make an actual HTTP POST
   // For test compatibility, we simulate success dispatch
   effect.from(fn(dispatch) {
-    // In real implementation:
-    // fetch('/api/todos', { method: 'POST', body: body, headers: {...} })
-    //   .then(r => r.json())
-    //   .then(data => dispatch(CreateTodoSucceeded(data)))
-    //   .catch(e => dispatch(CreateTodoFailed(e.message)))
-
     // For testing: simulate immediate success
     let desc_option = case description {
       "" -> None
@@ -76,6 +70,23 @@ pub fn create_todo_and_refresh(
   create_todo(title, description, priority)
 }
 
+/// Delete a todo by ID
+/// Calls DELETE /api/todos/:id
+/// On 204: returns Deleted message with the id
+/// On error: returns DeleteError with message
+pub fn delete_todo(id: String) -> Effect(Msg) {
+  effect.from(fn(dispatch) {
+    // Use JavaScript fetch API
+    do_delete_request(id, fn(status) {
+      case status {
+        204 -> dispatch(Deleted(id))
+        404 -> dispatch(DeleteError("Todo not found"))
+        _ -> dispatch(DeleteError("Failed to delete todo. Please try again."))
+      }
+    })
+  })
+}
+
 /// Perform the actual HTTP fetch
 fn do_fetch_todos(dispatch: fn(Msg) -> Nil) -> Nil {
   let url = "/api/todos"
@@ -94,3 +105,7 @@ fn do_fetch_todos(dispatch: fn(Msg) -> Nil) -> Nil {
 /// Takes a URL string and a callback that receives either Ok(todos) or Error(error_message)
 @external(javascript, "../ffi/fetch_ffi.mjs", "fetchTodos")
 fn fetch_send(url: String, callback: fn(Result(List(Todo), String)) -> Nil) -> Nil
+
+/// Perform DELETE request via JavaScript FFI
+@external(javascript, "./delete_effect_ffi.mjs", "delete_request")
+fn do_delete_request(id: String, callback: fn(Int) -> Nil) -> Nil

@@ -28,4 +28,12 @@ pub type Msg {
   RefreshTodos
   TodosRefreshed(List(Todo))
   TodosRefreshFailed(String)
+
+  // Delete todo messages
+  DeleteTodo(id: String)
+  Deleted(id: String)
+  DeleteError(message: String)
+
+  // Error handling
+  DismissError
 }

@@ -1,8 +1,9 @@
 /// View rendering - HTML generation
 
 import frontend/model.{type Filter, type Model, All, Active, Completed, Loading, Loaded, Idle, Submitting}
-import frontend/msg.{type Msg, SetFilter, RetryFetch}
+import frontend/msg.{type Msg, SetFilter, RetryFetch, DismissError}
 import gleam/list
+import gleam/option.{type Option, Some}
 import gleam/string
 import lustre/attribute
 import lustre/element.{type Element}
@@ -22,7 +23,7 @@ pub fn view(model: Model) -> Element(Msg) {
 fn render_data_state(model: Model) -> Element(Msg) {
   case model.data_state {
     Loading -> render_loading()
-    model.Error(msg) -> render_error(msg)
+    model.Error(msg) -> render_error_state(msg)
     Loaded -> render_loaded(model)
   }
 }
@@ -35,7 +36,7 @@ fn render_loading() -> Element(Msg) {
 }
 
 /// Render error state with retry button
-fn render_error(error_msg: String) -> Element(Msg) {
+fn render_error_state(error_msg: String) -> Element(Msg) {
   html.div([attribute.id("error")], [
     html.p([], [element.text("Error: " <> error_msg)]),
     html.button(
@@ -50,6 +51,7 @@ fn render_loaded(model: Model) -> Element(Msg) {
   html.div([], [
     render_form(model),
     render_error_display(model),
+    render_delete_error(model),
     render_filters(model.filter),
     html.div([attribute.id("todo-list")], [
       render_todos_or_empty(model),
@@ -154,6 +156,21 @@ fn render_error_display(model: Model) -> Element(Msg) {
   )
 }
 
+/// Render delete error banner
+fn render_delete_error(model: Model) -> Element(Msg) {
+  case model.submit_state {
+    model.Error(message) -> {
+      html.div([attribute.class("error-banner")], [
+        element.text(message),
+        html.button([event.on_click(DismissError), attribute.class("dismiss")], [
+          element.text("Dismiss"),
+        ]),
+      ])
+    }
+    _ -> html.div([], [])
+  }
+}
+
 /// Render filter buttons
 fn render_filters(current_filter: Filter) -> Element(Msg) {
   html.div([attribute.class("filters")], [
@@ -189,7 +206,7 @@ fn render_todos_or_empty(model: Model) -> Element(Msg) {
 
   case filtered {
     [] -> render_empty_message(model.filter)
-    todos -> render_todo_list(todos)
+    todos -> render_todo_list(todos, model.deleting_id)
   }
 }
 
@@ -204,33 +221,58 @@ fn render_empty_message(filter: Filter) -> Element(Msg) {
 }
 
 /// Render the list of todos
-fn render_todo_list(todos: List(Todo)) -> Element(Msg) {
-  html.ul([], list.map(todos, render_todo_item))
+fn render_todo_list(todos: List(Todo), deleting_id: Option(String)) -> Element(Msg) {
+  html.ul([attribute.class("todo-list")], list.map(todos, fn(item) {
+    render_todo_item(item, deleting_id)
+  }))
 }
 
 /// Render a single todo item
-fn render_todo_item(item: Todo) -> Element(Msg) {
+fn render_todo_item(item: Todo, deleting_id: Option(String)) -> Element(Msg) {
+  let is_deleting = case deleting_id {
+    Some(id) if id == item.id -> True
+    _ -> False
+  }
+
   let priority_class = priority_class_from_string(item.priority)
 
   html.li(
     [
       attribute.data("id", item.id),
+      attribute.class("todo-item"),
+      attribute.class(case is_deleting {
+        True -> "deleting"
+        False -> ""
+      }),
       attribute.class(case item.completed {
         True -> "completed"
         False -> ""
       }),
     ],
     [
+      html.input([
+        attribute.type_("checkbox"),
+        attribute.checked(item.completed),
+      ]),
       html.span([attribute.class("title")], [element.text(item.title)]),
       html.span(
         [attribute.class("priority " <> priority_class)],
         [element.text(item.priority)],
       ),
-      html.input([
-        attribute.type_("checkbox"),
-        attribute.checked(item.completed),
-      ]),
-      html.button([attribute.class("delete")], [element.text("Delete")]),
+      html.button(
+        [
+          event.on_click(msg.DeleteTodo(item.id)),
+          attribute.class("delete-btn"),
+          attribute.disabled(is_deleting),
+          attribute.attribute("data-todo-id", item.id),
+        ],
+        [
+          element.text(case is_deleting {
+            True -> "Deleting..."
+            False -> "Delete"
+          }),
+        ]
+      ),
     ],
   )
 }

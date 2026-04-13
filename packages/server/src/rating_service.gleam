@@ -14,10 +14,10 @@ pub type CreateRatingInput {
   CreateRatingInput(
     drink_id: String,
     reviewer_name: Option(String),
-    overall_rating: Float,
-    sweetness: Float,
-    boba_texture: Float,
-    tea_strength: Float,
+    overall_rating: Int,
+    sweetness: Int,
+    boba_texture: Int,
+    tea_strength: Int,
     review_text: Option(String),
   )
 }
@@ -28,10 +28,10 @@ pub type RatingRecord {
     id: String,
     drink_id: String,
     reviewer_name: Option(String),
-    overall_rating: Float,
-    sweetness: Float,
-    boba_texture: Float,
-    tea_strength: Float,
+    overall_rating: Int,
+    sweetness: Int,
+    boba_texture: Int,
+    tea_strength: Int,
     review_text: Option(String),
     created_at: Int,
   )
@@ -151,21 +151,21 @@ fn validate_create_input(input: CreateRatingInput) -> Result(Nil, String) {
   case string.length(string.trim(input.drink_id)) > 0 {
     False -> Error("drink_id is required")
     True -> {
-      // Validate overall_rating is between 1.0 and 5.0
-      case input.overall_rating >=. 1.0 && input.overall_rating <=. 5.0 {
+      // Validate overall_rating is between 1 and 5
+      case input.overall_rating >= 1 && input.overall_rating <= 5 {
         False -> Error("overall_rating must be between 1 and 5")
         True -> {
-          // Validate sweetness is between 1.0 and 5.0
-          case input.sweetness >=. 1.0 && input.sweetness <=. 5.0 {
-            False -> Error("sweetness must be between 1 and 5")
+          // Validate sweetness is between 1 and 10
+          case input.sweetness >= 1 && input.sweetness <= 10 {
+            False -> Error("sweetness must be between 1 and 10")
             True -> {
-              // Validate boba_texture is between 1.0 and 5.0
-              case input.boba_texture >=. 1.0 && input.boba_texture <=. 5.0 {
-                False -> Error("boba_texture must be between 1 and 5")
+              // Validate boba_texture is between 1 and 10
+              case input.boba_texture >= 1 && input.boba_texture <= 10 {
+                False -> Error("boba_texture must be between 1 and 10")
                 True -> {
-                  // Validate tea_strength is between 1.0 and 5.0
-                  case input.tea_strength >=. 1.0 && input.tea_strength <=. 5.0 {
-                    False -> Error("tea_strength must be between 1 and 5")
+                  // Validate tea_strength is between 1 and 10
+                  case input.tea_strength >= 1 && input.tea_strength <= 10 {
+                    False -> Error("tea_strength must be between 1 and 10")
                     True -> Ok(Nil)
                   }
                 }
@@ -204,19 +204,19 @@ fn recalculate_aggregate(
       total_reviews: 0,
     )
     _ -> {
-      let sum_overall = list.fold(drink_ratings, 0.0, fn(acc, r) { acc +. r.overall_rating })
-      let sum_sweetness = list.fold(drink_ratings, 0.0, fn(acc, r) { acc +. r.sweetness })
-      let sum_boba = list.fold(drink_ratings, 0.0, fn(acc, r) { acc +. r.boba_texture })
-      let sum_tea = list.fold(drink_ratings, 0.0, fn(acc, r) { acc +. r.tea_strength })
+      let sum_overall = list.fold(drink_ratings, 0, fn(acc, r) { acc + r.overall_rating })
+      let sum_sweetness = list.fold(drink_ratings, 0, fn(acc, r) { acc + r.sweetness })
+      let sum_boba = list.fold(drink_ratings, 0, fn(acc, r) { acc + r.boba_texture })
+      let sum_tea = list.fold(drink_ratings, 0, fn(acc, r) { acc + r.tea_strength })
 
       let total_float = int.to_float(total)
 
       RatingAggregate(
         drink_id: drink_id,
-        average_overall: sum_overall /. total_float,
-        average_sweetness: sum_sweetness /. total_float,
-        average_boba_texture: sum_boba /. total_float,
-        average_tea_strength: sum_tea /. total_float,
+        average_overall: int.to_float(sum_overall) /. total_float,
+        average_sweetness: int.to_float(sum_sweetness) /. total_float,
+        average_boba_texture: int.to_float(sum_boba) /. total_float,
+        average_tea_strength: int.to_float(sum_tea) /. total_float,
         total_reviews: total,
       )
     }

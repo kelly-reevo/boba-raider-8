@@ -9,6 +9,7 @@
     "vitest": "^1.0.0"
   },
   "dependencies": {
+    "happy-dom": "^20.8.9",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.6"
   }

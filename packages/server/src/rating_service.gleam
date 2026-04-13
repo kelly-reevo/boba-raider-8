@@ -49,11 +49,22 @@ pub type RatingAggregate {
   )
 }
 
+/// Paginated result for ratings
+pub type PaginatedRatings {
+  PaginatedRatings(
+    ratings: List(RatingRecord),
+    total: Int,
+    limit: Int,
+    offset: Int,
+  )
+}
+
 /// Actor message types
 pub type RatingServiceMsg {
   CreateRating(CreateRatingInput, Subject(Result(RatingRecord, String)))
   GetRatingById(String, Subject(Result(RatingRecord, String)))
   ListRatingsByDrink(String, Subject(List(RatingRecord)))
+  ListRatingsByDrinkPaginated(String, Int, Int, Subject(Result(PaginatedRatings, String)))
   GetRatingAggregate(String, Subject(Result(RatingAggregate, String)))
   DeleteRating(String, Subject(Result(Bool, String)))
 }
@@ -305,6 +316,38 @@ fn handle_message(state: ServiceState, msg: RatingServiceMsg) -> actor.Next(Serv
       actor.continue(state)
     }
 
+    ListRatingsByDrinkPaginated(drink_id, limit, offset, reply_to) -> {
+      // First verify drink exists
+      case drink_store.get_drink_by_id(state.drink_store, drink_id) {
+        Error(_) -> {
+          actor.send(reply_to, Error("Drink not found"))
+          actor.continue(state)
+        }
+        Ok(_) -> {
+          let all_ratings =
+            state.ratings
+            |> dict.values()
+            |> list.filter(fn(r) { r.drink_id == drink_id })
+          let total = list.length(all_ratings)
+
+          // Apply pagination
+          let paginated =
+            all_ratings
+            |> list.drop(offset)
+            |> list.take(limit)
+
+          let result = PaginatedRatings(
+            ratings: paginated,
+            total: total,
+            limit: limit,
+            offset: offset,
+          )
+          actor.send(reply_to, Ok(result))
+          actor.continue(state)
+        }
+      }
+    }
+
     GetRatingAggregate(drink_id, reply_to) -> {
       case dict.get(state.aggregates, drink_id) {
         Ok(aggregate) -> {
@@ -418,6 +461,21 @@ pub fn get_rating_aggregate(service: RatingService, drink_id: String) -> Result(
 pub fn delete_rating(service: RatingService, id: String) -> Result(Bool, String) {
   let reply_subject = process.new_subject()
   actor.send(service, DeleteRating(id, reply_subject))
+
+  case process.receive(reply_subject, within: 5000) {
+    Ok(result) -> result
+    Error(_) -> Error("Timeout waiting for rating service")
+  }
+}
+
+pub fn list_ratings_by_drink_paginated(
+  service: RatingService,
+  drink_id: String,
+  limit: Int,
+  offset: Int,
+) -> Result(PaginatedRatings, String) {
+  let reply_subject = process.new_subject()
+  actor.send(service, ListRatingsByDrinkPaginated(drink_id, limit, offset, reply_subject))
 
   case process.receive(reply_subject, within: 5000) {
     Ok(result) -> result

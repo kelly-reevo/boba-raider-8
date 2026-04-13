@@ -1,4 +1,5 @@
 import config.{type Config}
+import counter
 import gleam/erlang/process
 import gleam/io
 import web/http_server_actor
@@ -7,8 +8,12 @@ import web/router
 pub fn start(cfg: Config) -> Result(Nil, String) {
   io.println("Starting supervisor...")
 
-  // Create the HTTP handler
-  let handler = router.make_handler()
+  // Start counter actor
+  let assert Ok(counter_subject) = counter.start()
+  io.println("Counter actor started")
+
+  // Create the HTTP handler with counter access
+  let handler = router.make_handler(counter_subject)
 
   // Start HTTP server actor
   case http_server_actor.start(cfg.port, handler) {

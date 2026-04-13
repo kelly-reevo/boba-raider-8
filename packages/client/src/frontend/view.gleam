@@ -19,5 +19,9 @@ pub fn view(model: Model) -> Element(Msg) {
     html.button([event.on_click(msg.Reset), attribute.class("reset")], [
       element.text("Reset"),
     ]),
+    case model.error {
+      "" -> element.none()
+      err -> html.p([attribute.class("error")], [element.text(err)])
+    },
   ])
 }

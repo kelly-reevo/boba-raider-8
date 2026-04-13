@@ -1,14 +1,19 @@
 import gleam/json
+import gleam/list
+import gleam/option.{type Option, None, Some}
 import gleam/string
+import shared.{type TodoAttrs, High, Low, Medium, TodoAttrs, todo_to_json}
+import todo_store
 import web/server.{type Request, type Response}
 import web/static
 
-pub fn make_handler() -> fn(Request) -> Response {
+pub fn make_handler(_store: todo_store.TodoStore) -> fn(Request) -> Response {
   fn(request: Request) { route(request) }
 }
 
 fn route(request: Request) -> Response {
   case request.method, request.path {
+    "POST", "/api/todos" -> post_todos_handler(request)
     "GET", "/" -> static.serve_index()
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
@@ -30,6 +35,168 @@ fn health_handler() -> Response {
     json.object([#("status", json.string("ok"))])
     |> json.to_string,
   )
+}
+
+// Error field for validation response
+type ErrorField {
+  ErrorField(field: String, message: String)
+}
+
+// POST /api/todos handler - creates a new todo
+fn post_todos_handler(request: Request) -> Response {
+  // Parse request body and validate
+  case parse_create_request(request.body) {
+    Ok(attrs) -> {
+      // Create todo via storage layer
+      case todo_store.create(attrs) {
+        Ok(item) -> {
+          // Return 201 with created todo JSON
+          server.json_response(201, todo_to_json(item))
+        }
+        Error(_) -> {
+          // Internal error during creation
+          server.json_response(
+            500,
+            json.object([#("error", json.string("Failed to create todo"))])
+            |> json.to_string,
+          )
+        }
+      }
+    }
+    Error(errors) -> {
+      // Return 422 with validation errors
+      let error_json = encode_validation_errors(errors)
+      server.json_response(422, error_json)
+    }
+  }
+}
+
+// Parse and validate the create request body
+fn parse_create_request(body: String) -> Result(TodoAttrs, List(ErrorField)) {
+  let errors = []
+
+  // Extract fields from JSON
+  let title_result = extract_string_field(body, "title")
+  let description_opt = extract_optional_string_field(body, "description")
+  let priority_result = extract_optional_string_field(body, "priority")
+  let completed_result = extract_optional_bool_field(body, "completed")
+
+  // Validate title (required, non-empty)
+  let errors = case title_result {
+    Error(_) -> [ErrorField("title", "is required"), ..errors]
+    Ok(title) -> {
+      case string.trim(title) {
+        "" -> [ErrorField("title", "is required"), ..errors]
+        _ -> errors
+      }
+    }
+  }
+
+  // Determine priority value and validate
+  let priority_value_result = case priority_result {
+    None -> Ok(Medium)
+    Some("low") -> Ok(Low)
+    Some("medium") -> Ok(Medium)
+    Some("high") -> Ok(High)
+    Some(_invalid) -> Error("must be low, medium, or high")
+  }
+
+  // Add priority error if invalid
+  let errors = case priority_value_result {
+    Error(msg) -> [ErrorField("priority", msg), ..errors]
+    Ok(_) -> errors
+  }
+
+  // Get the priority value for construction (default to Medium if error)
+  let priority_value = case priority_value_result {
+    Ok(p) -> p
+    Error(_) -> Medium
+  }
+
+  // Handle completed field (we don't validate it, just use default if not provided)
+  let _completed = case completed_result {
+    Ok(c) -> c
+    Error(_) -> False
+  }
+
+  case errors {
+    [] -> {
+      // All validations passed, construct TodoAttrs
+      let assert Ok(title) = title_result
+      Ok(TodoAttrs(title: title, description: description_opt, priority: priority_value))
+    }
+    _ -> Error(errors)
+  }
+}
+
+// Extract a required string field from JSON
+fn extract_string_field(json: String, field: String) -> Result(String, Nil) {
+  let pattern = "\"" <> field <> "\":"
+  case string.split(json, pattern) {
+    [_, rest] -> {
+      let rest = string.trim_start(rest)
+      case rest {
+        "\"" <> quoted -> {
+          case string.split(quoted, "\"") {
+            [value, ..] -> Ok(value)
+            _ -> Error(Nil)
+          }
+        }
+        _ -> Error(Nil)
+      }
+    }
+    _ -> Error(Nil)
+  }
+}
+
+// Extract an optional string field (handles null or missing)
+fn extract_optional_string_field(json: String, field: String) -> Option(String) {
+  let pattern = "\"" <> field <> "\":"
+  case string.split(json, pattern) {
+    [_, rest] -> {
+      let rest = string.trim_start(rest)
+      case rest {
+        "null" <> _ -> None
+        "\"" <> quoted -> {
+          case string.split(quoted, "\"") {
+            [value, ..] -> Some(value)
+            _ -> None
+          }
+        }
+        _ -> None
+      }
+    }
+    _ -> None
+  }
+}
+
+// Extract an optional boolean field
+fn extract_optional_bool_field(json: String, field: String) -> Result(Bool, Nil) {
+  let pattern = "\"" <> field <> "\":"
+  case string.split(json, pattern) {
+    [_, rest] -> {
+      let rest = string.trim_start(rest)
+      case rest {
+        "true" <> _ -> Ok(True)
+        "false" <> _ -> Ok(False)
+        _ -> Error(Nil)
+      }
+    }
+    _ -> Error(Nil)
+  }
+}
+
+// Encode validation errors to JSON string
+fn encode_validation_errors(errors: List(ErrorField)) -> String {
+  let error_objects = list.map(errors, fn(e) {
+    json.object([
+      #("field", json.string(e.field)),
+      #("message", json.string(e.message)),
+    ])
+  })
+
+  json.object([#("errors", json.array(error_objects, fn(x) { x }))])
+  |> json.to_string
 }
 
 fn not_found() -> Response {

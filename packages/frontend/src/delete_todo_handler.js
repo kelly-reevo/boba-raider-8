@@ -6,7 +6,7 @@
  * and shows error on failure.
  */
 
-import { deleteTodo } from './http-client.js';
+import { deleteTodo } from './http_client.js';
 
 // Track in-progress deletions to prevent duplicates
 const inProgress = new Set();

@@ -3,7 +3,7 @@
  * Manages checkbox state with optimistic updates and error handling
  */
 
-import { updateTodo } from './api_client.js';
+import { updateTodo } from './http_client.js';
 
 const pendingRequests = new Map();
 

@@ -4,6 +4,10 @@ import gleam/json.{type Json}
 import gleam/option.{type Option, None, Some}
 import gleam/string
 
+// Re-export option constructors as functions for test compatibility
+pub fn some(a) { option.Some(a) }
+pub fn none() { option.None }
+
 pub type AppError {
   NotFound(String)
   InvalidInput(String)
@@ -62,6 +66,17 @@ pub type TodoAttrs {
     title: String,
     description: Option(String),
     priority: Priority,
+    completed: Bool,
+  )
+}
+
+/// Input type for updating todos with optional fields
+/// Used by behavioral tests for selective updates
+pub type UpdateTodoInput {
+  UpdateTodoInput(
+    title: Option(String),
+    description: Option(String),
+    completed: Option(Bool),
   )
 }
 
@@ -302,5 +317,6 @@ pub fn new_todo_attrs(
     title: title,
     description: description,
     priority: priority,
+    completed: False,
   )
 }

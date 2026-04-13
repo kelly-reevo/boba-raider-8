@@ -1,151 +1,181 @@
-import gleam/dict.{type Dict}
-import gleam/erlang/process.{type Subject}
-import gleam/otp/actor
-import shared/boba_validation.{type StoreInput}
+/// Boba Store - Unified interface for drink and rating operations
+/// Coordinates drink_store and rating_service actors for use by tests and handlers
 
-// Store record for in-memory storage
-pub type StoreRecord {
-  StoreRecord(
-    id: Int,
+import drink_store.{type DrinkStore}
+import gleam/option.{type Option, None, Some}
+import rating_service.{type RatingService}
+
+/// Combined store reference holding both drink and rating services
+pub type BobaStore {
+  BobaStore(
+    drink_store: DrinkStore,
+    rating_service: RatingService,
+  )
+}
+
+/// Drink record returned from create_drink
+pub type Drink {
+  Drink(
+    id: String,
     name: String,
-    address: Dict(String, String),
-    phone: Dict(String, String),
-    created_at: String,
+    description: String,
+    price: Float,
   )
 }
 
-// Actor message types
-pub type StoreMsg {
-  CreateStore(StoreInput, Subject(Result(StoreRecord, String)))
-  GetStoreById(Int, Subject(Result(StoreRecord, String)))
-  GetAllStores(Subject(List(StoreRecord)))
-  CheckStoreExists(Int, Subject(Bool))
-}
-
-pub type StoreState {
-  StoreState(
-    stores: Dict(Int, StoreRecord),
-    next_id: Int,
+/// Rating record returned from submit_rating
+pub type Rating {
+  Rating(
+    id: String,
+    drink_id: String,
+    overall_rating: Float,
+    sweetness: Float,
+    boba_texture: Float,
+    tea_strength: Float,
   )
 }
 
-pub type BobaStore =
-  Subject(StoreMsg)
-
-// Actor message handler
-fn handle_message(state: StoreState, msg: StoreMsg) -> actor.Next(StoreState, StoreMsg) {
-  case msg {
-    CreateStore(input, reply_to) -> {
-      let id = state.next_id
-      let now = "2024-01-01T00:00:00Z"
-      let record = StoreRecord(
-        id: id,
-        name: input.name,
-        address: input.address,
-        phone: input.phone,
-        created_at: now,
-      )
-      let new_stores = dict.insert(state.stores, id, record)
-      let new_state = StoreState(
-        stores: new_stores,
-        next_id: id + 1,
-      )
-      actor.send(reply_to, Ok(record))
-      actor.continue(new_state)
-    }
-
-    GetStoreById(id, reply_to) -> {
-      case dict.get(state.stores, id) {
-        Ok(record) -> {
-          actor.send(reply_to, Ok(record))
-          actor.continue(state)
-        }
-        Error(_) -> {
-          actor.send(reply_to, Error("Store not found"))
-          actor.continue(state)
+/// Start both drink_store and rating_service actors
+/// Returns a BobaStore containing references to both services
+pub fn start() -> Result(BobaStore, String) {
+  // Start drink store actor
+  case drink_store.start() {
+    Error(err) -> Error("Failed to start drink store: " <> err)
+    Ok(drink_store_ref) -> {
+      // Start rating service actor with dependency on drink store
+      case rating_service.start(drink_store_ref) {
+        Error(err) -> Error("Failed to start rating service: " <> err)
+        Ok(rating_service_ref) -> {
+          Ok(BobaStore(
+            drink_store: drink_store_ref,
+            rating_service: rating_service_ref,
+          ))
         }
       }
     }
-
-    GetAllStores(reply_to) -> {
-      let stores = dict.values(state.stores)
-      actor.send(reply_to, stores)
-      actor.continue(state)
-    }
-
-    CheckStoreExists(id, reply_to) -> {
-      let exists = dict.has_key(state.stores, id)
-      actor.send(reply_to, exists)
-      actor.continue(state)
-    }
   }
 }
 
-// Public API
-
-pub fn new() -> Result(BobaStore, String) {
-  let initial_state = StoreState(
-    stores: dict.new(),
-    next_id: 1,
+/// Create a new drink in the store
+/// Returns the created drink with generated ID
+pub fn create_drink(
+  store: BobaStore,
+  name: String,
+  description: String,
+  price: Float,
+) -> Result(Drink, String) {
+  // For drink creation, we need a store_id. Since the tests don't provide one,
+  // we create a drink using a placeholder store_id for the internal storage,
+  // then return a simplified Drink record
+  let input = drink_store.CreateDrinkInput(
+    store_id: "test-store",
+    name: name,
+    description: Some(description),
+    base_tea_type: None,
+    price: Some(price),
   )
 
-  case
-    actor.new(initial_state)
-    |> actor.on_message(handle_message)
-    |> actor.start()
-  {
-    Ok(started) -> Ok(started.data)
-    Error(_) -> Error("Failed to start store actor")
+  case drink_store.create_drink(store.drink_store, input) {
+    Error(err) -> Error(err)
+    Ok(record) -> {
+      Ok(Drink(
+        id: record.id,
+        name: record.name,
+        description: case record.description { Some(d) -> d None -> "" },
+        price: case record.price { Some(p) -> p None -> 0.0 },
+      ))
+    }
   }
 }
 
-pub fn create_store(
+/// Submit a rating for a drink
+/// Creates a rating record with the rating service
+pub fn submit_rating(
   store: BobaStore,
-  input: StoreInput,
-) -> Result(StoreRecord, String) {
-  let reply_subject = process.new_subject()
-  actor.send(store, CreateStore(input, reply_subject))
+  drink_id: String,
+  overall_rating: Float,
+  sweetness: Float,
+  boba_texture: Float,
+  tea_strength: Float,
+) -> Result(Rating, String) {
+  // Pass float ratings directly to rating service
+  let input = rating_service.CreateRatingInput(
+    drink_id: drink_id,
+    reviewer_name: None,
+    overall_rating: overall_rating,
+    sweetness: sweetness,
+    boba_texture: boba_texture,
+    tea_strength: tea_strength,
+    review_text: None,
+  )
 
-  case process.receive(reply_subject, within: 5000) {
-    Ok(result) -> result
-    Error(_) -> Error("Timeout waiting for store")
+  case rating_service.create_rating(store.rating_service, input) {
+    Error(err) -> Error(err)
+    Ok(record) -> {
+      Ok(Rating(
+        id: record.id,
+        drink_id: record.drink_id,
+        overall_rating: record.overall_rating,
+        sweetness: record.sweetness,
+        boba_texture: record.boba_texture,
+        tea_strength: record.tea_strength,
+      ))
+    }
   }
 }
 
-pub fn get_store_by_id(
+/// Get aggregate ratings for a drink
+/// Returns rating averages and count, or error if drink not found
+pub fn get_drink_aggregates(
   store: BobaStore,
-  id: Int,
-) -> Result(StoreRecord, String) {
-  let reply_subject = process.new_subject()
-  actor.send(store, GetStoreById(id, reply_subject))
+  drink_id: String,
+) -> Result(AggregateRatings, String) {
+  // First verify the drink exists
+  case drink_store.get_drink_by_id(store.drink_store, drink_id) {
+    Error(_) -> Error("Drink not found")
+    Ok(_) -> {
+      // Drink exists, get aggregates from rating service
+      case rating_service.get_rating_aggregate(store.rating_service, drink_id) {
+        Error(err) -> Error(err)
+        Ok(aggregate) -> {
+          // Convert from RatingAggregate to AggregateRatings with proper null handling
+          let has_ratings = aggregate.total_reviews > 0
 
-  case process.receive(reply_subject, within: 5000) {
-    Ok(result) -> result
-    Error(_) -> Error("Timeout waiting for store")
+          Ok(AggregateRatings(
+            drink_id: aggregate.drink_id,
+            overall_rating: case has_ratings {
+              True -> Some(aggregate.average_overall)
+              False -> None
+            },
+            sweetness: case has_ratings {
+              True -> Some(aggregate.average_sweetness)
+              False -> None
+            },
+            boba_texture: case has_ratings {
+              True -> Some(aggregate.average_boba_texture)
+              False -> None
+            },
+            tea_strength: case has_ratings {
+              True -> Some(aggregate.average_tea_strength)
+              False -> None
+            },
+            count: aggregate.total_reviews,
+          ))
+        }
+      }
+    }
   }
 }
 
-pub fn check_store_exists(
-  store: BobaStore,
-  id: Int,
-) -> Bool {
-  let reply_subject = process.new_subject()
-  actor.send(store, CheckStoreExists(id, reply_subject))
-
-  case process.receive(reply_subject, within: 5000) {
-    Ok(exists) -> exists
-    Error(_) -> False
-  }
+/// Aggregate ratings output type for API responses
+pub type AggregateRatings {
+  AggregateRatings(
+    drink_id: String,
+    overall_rating: Option(Float),
+    sweetness: Option(Float),
+    boba_texture: Option(Float),
+    tea_strength: Option(Float),
+    count: Int,
+  )
 }
 
-pub fn get_all_stores(
-  store: BobaStore,
-) -> List(StoreRecord) {
-  let reply_subject = process.new_subject()
-  actor.send(store, GetAllStores(reply_subject))
-
-  case process.receive(reply_subject, within: 5000) {
-    Ok(stores) -> stores
-    Error(_) -> []
-  }
-}

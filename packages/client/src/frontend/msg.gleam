@@ -1,36 +1,46 @@
-/// Application messages for todo management with empty state UI
+/// Application messages for todo management with empty state UI and error handling
 
 import frontend/model.{type Filter}
-import gleam/option.{type Option}
+import gleam/dict.{type Dict}
 import shared.{type Todo, type Priority}
 
-/// Messages that can be sent to update the application state
+/// API response types
+pub type ApiError {
+  NetworkError
+  ServerError(status: Int)
+  ValidationError(field_errors: Dict(String, String))
+}
+
 pub type Msg {
-  // Todo list lifecycle
-  LoadTodos
-  TodosLoaded(List(Todo))
-  TodosLoadFailed(String)
+  // Form interactions
+  FormTitleChanged(String)
+  FormDescriptionChanged(String)
+  FormPriorityChanged(Priority)
+  FormSubmit
+  FormReset
 
-  // Todo creation
-  CreateTodo
-  TodoCreated(Todo)
-  TodoCreateFailed(String)
-  UpdateNewTodoTitle(String)
-  UpdateNewTodoDescription(String)
+  // Todo actions
+  FetchTodos
+  CreateTodo(title: String, description: String, priority: Priority)
+  UpdateTodo(id: String, title: String, description: String, completed: Bool)
+  DeleteTodo(id: String)
+  ToggleTodo(id: String, completed: Bool)
 
-  // Todo updates
-  ToggleTodo(String, Bool)
-  TodoUpdated(Todo)
-  TodoUpdateFailed(String)
+  // Filter actions
+  FilterChanged(filter: Filter)
 
-  // Todo deletion
-  DeleteTodo(String)
-  TodoDeleted(String)
-  TodoDeleteFailed(String)
+  // API responses
+  FetchTodosSuccess(todos: List(Todo))
+  FetchTodosError(error: ApiError)
+  CreateTodoSuccess(todo_item: Todo)
+  CreateTodoError(error: ApiError)
+  UpdateTodoSuccess(todo_item: Todo)
+  UpdateTodoError(error: ApiError)
+  DeleteTodoSuccess(id: String)
+  DeleteTodoError(error: ApiError, id: String)
 
-  // Filter selection
-  SetFilter(Filter)
-
-  // Form handling
-  SubmitNewTodo
+  // Error handling
+  RetryAction
+  ClearError
+  DismissFieldError(field: String)
 }

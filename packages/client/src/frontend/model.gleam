@@ -32,7 +32,7 @@ pub type LoadingState {
   Idle
   Submitting
   Success
-  Error(String)
+  SubmitError(String)
 }
 
 /// Application model
@@ -105,7 +105,7 @@ pub fn update_form_priority(model: Model, priority: Priority) -> Model {
 
 /// Set error message
 pub fn set_error(model: Model, error: String) -> Model {
-  Model(..model, error: error, submit_state: Error(error))
+  Model(..model, error: error, submit_state: SubmitError(error))
 }
 
 /// Clear error message

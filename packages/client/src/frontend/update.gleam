@@ -1,7 +1,7 @@
 /// Application update logic - state transitions and side effects
 
 import frontend/effects
-import frontend/model.{type Model, Loading, Loaded, All, Active, Completed}
+import frontend/model.{type Model, Model, Loading, Loaded, All, Active, Completed}
 import frontend/msg.{type Msg}
 import gleam/string
 import lustre/effect.{type Effect}

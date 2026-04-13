@@ -155,7 +155,7 @@ fn render_error_display(model: Model) -> Element(Msg) {
 /// Render delete error banner
 fn render_delete_error(model: Model) -> Element(Msg) {
   case model.submit_state {
-    model.Error(message) -> {
+    model.SubmitError(message) -> {
       html.div([attribute.class("error-banner")], [
         element.text(message),
         html.button([event.on_click(DismissError), attribute.class("dismiss")], [

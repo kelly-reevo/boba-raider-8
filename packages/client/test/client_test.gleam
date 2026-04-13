@@ -1,8 +1,8 @@
 import gleeunit
 import gleeunit/should
-import frontend/model.{Loading, All, Idle, Active, Completed}
+import frontend/model.{Loading, Loaded, All, Idle, Active, Completed}
 import shared.{Todo, Medium}
-import gleam/option.{None}
+import gleam/option.{None, Some}
 import gleam/list
 
 pub fn main() {
@@ -75,7 +75,7 @@ pub fn set_deleting_test() {
   let m = model.default()
   let updated = model.set_deleting(m, "123")
 
-  updated.deleting_id |> should.equal(gleam/option.Some("123"))
+  updated.deleting_id |> should.equal(Some("123"))
 }
 
 pub fn update_todo_completed_test() {

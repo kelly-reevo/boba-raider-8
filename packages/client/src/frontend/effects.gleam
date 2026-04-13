@@ -1,6 +1,6 @@
 /// HTTP effects for todo operations
 
-import frontend/model.{type Filter}
+import frontend/model.{type Filter, All, Active, Completed}
 import frontend/msg.{type Msg, TodosLoaded, TodosLoadError, CreateTodoSucceeded, CreateTodoFailed, Deleted, DeleteError, TodoToggledOk, TodoToggledError, SetError, TodosFetched, FetchError}
 import gleam/dynamic/decode
 import gleam/http

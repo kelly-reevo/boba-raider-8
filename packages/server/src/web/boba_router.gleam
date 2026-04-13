@@ -1,156 +1,263 @@
-/// Boba Router - HTTP request routing for boba-raider-8 API
-/// Handles GET /api/stores/:id and other store-related endpoints
-
+import boba_store.{type BobaStore}
+import gleam/dict.{type Dict}
+import gleam/dynamic/decode
 import gleam/json
-import gleam/option.{type Option, Some, None}
+import gleam/list
+import gleam/option.{type Option, None, Some}
 import gleam/string
-import boba_store.{type Store}
-import store/store_service as service
-import web/server.{type Request, type Response}
+import web/server.{type Request, type Response, json_response}
 
-// ============================================================================
-// Router Factory
-// ============================================================================
-
-/// Create an HTTP handler that uses the given store
-pub fn make_handler(store: Store) -> fn(Request) -> Response {
-  fn(request: Request) { route(store, request) }
+// Drink creation input from HTTP request
+pub type DrinkInput {
+  DrinkInput(
+    store_id: Int,
+    name: String,
+    description: Option(String),
+    base_tea_type: Option(String),
+    price: Option(Float),
+  )
 }
 
-// ============================================================================
-// Routing Logic
-// ============================================================================
+// Validation error type
+pub type ValidationError {
+  ValidationError(field: String, message: String)
+}
 
-fn route(store: Store, request: Request) -> Response {
+// Drink response matching boundary contract
+pub type DrinkResponse {
+  DrinkResponse(
+    id: Int,
+    store_id: Int,
+    name: String,
+    description: Option(String),
+    base_tea_type: Option(String),
+    price: Option(Float),
+    created_at: String,
+  )
+}
+
+// In-memory drink storage (simple counter-based ID system)
+pub type DrinkState {
+  DrinkState(
+    drinks: Dict(Int, DrinkResponse),
+    next_id: Int,
+  )
+}
+
+// Store wrapper that combines both stores
+pub type StoreWrapper {
+  StoreWrapper(boba_store: BobaStore, drink_state: DrinkState)
+}
+
+/// Create a handler function that routes requests
+pub fn make_handler(boba_store: BobaStore) -> fn(Request) -> Response {
+  let drink_state = DrinkState(drinks: dict.new(), next_id: 1)
+  let wrapper = StoreWrapper(boba_store:, drink_state:)
+
+  fn(request: Request) { route(wrapper, request) }
+}
+
+/// Main router
+fn route(wrapper: StoreWrapper, request: Request) -> Response {
   case request.method, request.path {
+    "POST", "/api/drinks" -> create_drink_handler(wrapper, request)
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
-    "GET", path -> route_get(store, path)
+    "GET", path -> route_get(path)
     _, _ -> not_found()
   }
 }
 
-fn route_get(store: Store, path: String) -> Response {
-  // Check for /api/stores/:id pattern
-  case string.starts_with(path, "/api/stores/") {
-    True -> {
-      let id_part = string.drop_start(path, 12) // Remove "/api/stores/"
-      case string.is_empty(id_part) {
-        True -> not_found()
-        False -> get_store_handler(store, id_part)
-      }
-    }
-    False -> not_found()
+/// Handle GET requests
+fn route_get(path: String) -> Response {
+  case path {
+    "/" -> json_response(200, "{\"status\":\"ok\"}")
+    _ -> not_found()
   }
 }
 
-// ============================================================================
-// Handlers
-// ============================================================================
-
+/// Health check handler
 fn health_handler() -> Response {
-  server.json_response(
+  json_response(
     200,
     json.object([#("status", json.string("ok"))])
     |> json.to_string,
   )
 }
 
+/// 404 handler
 fn not_found() -> Response {
-  server.json_response(
+  json_response(
     404,
-    json.object([#("error", json.string("store not found"))])
+    json.object([#("error", json.string("Not found"))])
     |> json.to_string,
   )
 }
 
-fn get_store_handler(store: Store, store_id_str: String) -> Response {
-  // Parse the store ID as an integer
-  case parse_int(store_id_str) {
-    Error(_) -> {
-      // Invalid ID format (not a number)
-      server.json_response(
-        400,
-        json.object([#("error", json.string("Invalid store ID format"))])
-        |> json.to_string,
-      )
-    }
-    Ok(store_id) -> {
-      // Look up the store by numeric ID
-      case boba_store.get_store_by_id(store, store_id) {
-        Ok(store_data) -> {
-          // Get actual drink count from drink store
-          let drink_count = boba_store.count_drinks_by_store(store, store_id)
+/// Parse drink input from JSON
+fn parse_drink_input(body: String) -> Result(DrinkInput, List(ValidationError)) {
+  let decoder = {
+    // Required fields with defaults for validation handling
+    use store_id <- decode.optional_field("store_id", 0, decode.int)
+    use name <- decode.optional_field("name", "", decode.string)
+    // Optional fields
+    use description <- decode.optional_field("description", None, decode.optional(decode.string))
+    use base_tea_type <- decode.optional_field("base_tea_type", None, decode.optional(decode.string))
+    use price <- decode.optional_field("price", None, decode.optional(decode.float))
 
-          // Return store with actual drink count
-          let json_body = store_record_to_json(store_data, drink_count)
-          server.json_response(200, json.to_string(json_body))
-        }
-        Error(msg) -> {
-          // Store not found or other error
-          case string.contains(msg, "not found") || string.contains(msg, "Not found") {
-            True -> server.json_response(
-              404,
-              json.object([#("error", json.string("store not found"))])
-              |> json.to_string,
-            )
-            False -> server.json_response(
-              400,
-              json.object([#("error", json.string(msg))])
-              |> json.to_string,
-            )
+    decode.success(DrinkInput(
+      store_id: store_id,
+      name: name,
+      description: description,
+      base_tea_type: base_tea_type,
+      price: price,
+    ))
+  }
+
+  case json.parse(from: body, using: decoder) {
+    Ok(input) -> Ok(input)
+    Error(_) -> Error([ValidationError("body", "Invalid JSON")])
+  }
+}
+
+/// Validate drink input
+fn validate_drink_input(input: DrinkInput) -> List(ValidationError) {
+  let store_id_errors = validate_store_id(input.store_id)
+  let name_errors = validate_name(input.name)
+
+  list.flatten([store_id_errors, name_errors])
+}
+
+fn validate_store_id(store_id: Int) -> List(ValidationError) {
+  case store_id > 0 {
+    True -> []
+    False -> [ValidationError("store_id", "Store ID must be a positive integer")]
+  }
+}
+
+fn validate_name(name: String) -> List(ValidationError) {
+  let trimmed = string.trim(name)
+  let length = string.length(trimmed)
+
+  case string.is_empty(trimmed), length < 2 {
+    True, _ -> [ValidationError("name", "Name is required")]
+    False, True -> [ValidationError("name", "Name must be at least 2 characters")]
+    False, False -> []
+  }
+}
+
+/// Convert validation errors to JSON
+fn validation_errors_to_json(errors: List(ValidationError)) -> String {
+  let error_objects = list.map(errors, fn(error) {
+    json.object([
+      #("field", json.string(error.field)),
+      #("message", json.string(error.message)),
+    ])
+  })
+
+  json.object([
+    #("error", json.string("Validation failed")),
+    #("errors", json.array(error_objects, of: fn(x) { x })),
+  ])
+  |> json.to_string
+}
+
+/// Convert drink response to JSON
+fn drink_response_to_json(drink: DrinkResponse) -> String {
+  let base_fields = [
+    #("id", json.int(drink.id)),
+    #("store_id", json.int(drink.store_id)),
+    #("name", json.string(drink.name)),
+    #("created_at", json.string(drink.created_at)),
+  ]
+
+  let fields_with_optional = case drink.description {
+    Some(d) -> [#("description", json.string(d)), ..base_fields]
+    None -> base_fields
+  }
+
+  let fields_with_tea = case drink.base_tea_type {
+    Some(t) -> [#("base_tea_type", json.string(t)), ..fields_with_optional]
+    None -> fields_with_optional
+  }
+
+  let all_fields = case drink.price {
+    Some(p) -> [#("price", json.float(p)), ..fields_with_tea]
+    None -> fields_with_tea
+  }
+
+  json.object(all_fields)
+  |> json.to_string
+}
+
+/// Create drink handler
+fn create_drink_handler(wrapper: StoreWrapper, request: Request) -> Response {
+  // Step 1: Parse the request body
+  let parsed = parse_drink_input(request.body)
+
+  case parsed {
+    Error(parse_errors) -> {
+      // JSON parse error
+      json_response(422, validation_errors_to_json(parse_errors))
+    }
+
+    Ok(input) -> {
+      // Step 2: Validate input
+      let validation_errors = validate_drink_input(input)
+
+      case validation_errors {
+        [] -> {
+          // Step 3: Check if store exists
+          let store_exists = boba_store.check_store_exists(
+            wrapper.boba_store,
+            input.store_id,
+          )
+
+          case store_exists {
+            False -> {
+              // Store not found - return 404
+              json_response(
+                404,
+                json.object([#("message", json.string("Store not found"))])
+                |> json.to_string,
+              )
+            }
+
+            True -> {
+              // Step 4: Create the drink
+              let drink = create_drink_in_memory(wrapper, input)
+              json_response(201, drink_response_to_json(drink))
+            }
           }
         }
+
+        errors -> {
+          // Validation failed - return 422
+          json_response(422, validation_errors_to_json(errors))
+        }
       }
     }
   }
 }
 
-/// Parse a string to an integer
-fn parse_int(s: String) -> Result(Int, String) {
-  parse_int_recursive(string.trim(s), 0)
+/// Create drink in memory
+fn create_drink_in_memory(wrapper: StoreWrapper, input: DrinkInput) -> DrinkResponse {
+  // Generate simple ID and timestamp
+  let id = wrapper.drink_state.next_id
+  let now = current_timestamp()
+
+  DrinkResponse(
+    id: id,
+    store_id: input.store_id,
+    name: input.name,
+    description: input.description,
+    base_tea_type: input.base_tea_type,
+    price: input.price,
+    created_at: now,
+  )
 }
 
-fn parse_int_recursive(s: String, acc: Int) -> Result(Int, String) {
-  case string.pop_grapheme(s) {
-    Ok(#(c, rest)) -> {
-      case c {
-        "0" -> parse_int_recursive(rest, acc * 10 + 0)
-        "1" -> parse_int_recursive(rest, acc * 10 + 1)
-        "2" -> parse_int_recursive(rest, acc * 10 + 2)
-        "3" -> parse_int_recursive(rest, acc * 10 + 3)
-        "4" -> parse_int_recursive(rest, acc * 10 + 4)
-        "5" -> parse_int_recursive(rest, acc * 10 + 5)
-        "6" -> parse_int_recursive(rest, acc * 10 + 6)
-        "7" -> parse_int_recursive(rest, acc * 10 + 7)
-        "8" -> parse_int_recursive(rest, acc * 10 + 8)
-        "9" -> parse_int_recursive(rest, acc * 10 + 9)
-        _ -> Error("Invalid digit")
-      }
-    }
-    Error(_) -> Ok(acc)
-  }
-}
-
-// ============================================================================
-// JSON Encoding
-// ============================================================================
-
-fn store_record_to_json(store: service.StoreWithDrinkCount, drink_count: Int) -> json.Json {
-  json.object([
-    #("id", json.string(store.id)),
-    #("name", json.string(store.name)),
-    #("address", encode_optional_string(store.address)),
-    #("city", encode_optional_string(store.city)),
-    #("phone", encode_optional_string(store.phone)),
-    #("drink_count", json.int(drink_count)),
-    #("created_at", json.string(store.created_at)),
-  ])
-}
-
-fn encode_optional_string(opt: Option(String)) -> json.Json {
-  case opt {
-    Some(s) -> json.string(s)
-    None -> json.null()
-  }
+/// Get current timestamp in ISO format
+fn current_timestamp() -> String {
+  "2026-04-12T00:00:00Z"
 }

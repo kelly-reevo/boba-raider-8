@@ -1,5 +1,6 @@
 import gleam/dict.{type Dict}
 
+// Re-export types as both types and value constructors for compatibility
 /// Request type for HTTP requests
 pub type Request {
   Request(
@@ -22,6 +23,7 @@ pub type HttpRequest =
 pub type HttpResponse =
   Response
 
+// Constructor functions for tests
 /// Constructor function with named arguments for test compatibility
 pub fn request(
   method method: String,
@@ -29,7 +31,7 @@ pub fn request(
   headers headers: Dict(String, String),
   body body: String,
 ) -> Request {
-  Request(method, path, headers, body)
+  Request(method:, path:, headers:, body:)
 }
 
 /// Constructor function for responses
@@ -38,7 +40,7 @@ pub fn response(
   headers headers: Dict(String, String),
   body body: String,
 ) -> Response {
-  Response(status, headers, body)
+  Response(status:, headers:, body:)
 }
 
 /// Create a JSON response with the given status

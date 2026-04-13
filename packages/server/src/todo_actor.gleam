@@ -73,10 +73,15 @@ fn handle_message(state: State, msg: TodoMsg) {
       let id = generate_id()
       let created_at = current_timestamp_string()
       let priority_val = todo_item.parse_priority(priority)
+      // Store None for empty description, Some(description) for non-empty
+      let description_val = case description {
+        "" -> None
+        d -> Some(d)
+      }
       let new_todo = todo_item.Todo(
         id: id,
         title: title,
-        description: Some(description),
+        description: description_val,
         priority: priority_val,
         completed: False,
         created_at: created_at,

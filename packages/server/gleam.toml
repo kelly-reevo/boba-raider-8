@@ -4,13 +4,14 @@ target = "erlang"
 description = "raid! - Backend"
 
 [dependencies]
-gleam_stdlib = ">= 0.34.0 and < 2.0.0"
+gleam_stdlib = ">= 0.55.0 and < 2.0.0"
 gleam_erlang = ">= 1.0.0 and < 2.0.0"
 gleam_json = ">= 3.0.0 and < 4.0.0"
 gleam_otp = ">= 1.2.0 and < 2.0.0"
 gleam_http = ">= 4.3.0 and < 5.0.0"
 simplifile = ">= 2.0.0 and < 3.0.0"
 envoy = ">= 1.0.0 and < 2.0.0"
+sqlight = ">= 1.0.0 and < 2.0.0"
 shared = { path = "../shared" }
 
 [dev-dependencies]

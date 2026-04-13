@@ -1,65 +1,96 @@
-/// Update functions for state transitions
-
+import frontend/create_drink_form
 import frontend/effects
-import frontend/model.{type Model, Model, Error, Loaded, Loading, NotFound}
+import frontend/model.{type Model, Model}
 import frontend/msg.{type Msg}
-import gleam/option.{Some}
 import lustre/effect.{type Effect}
 
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
-    // Navigation - triggers data loading
-    msg.NavigateToStore(store_id) -> #(
-      model.init_store_detail(store_id),
-      effects.fetch_store_data(store_id),
-    )
-
-    // Store API success - update store info
-    msg.StoreLoaded(store_info) -> {
-      let updated_model = case model.page_state {
-        Loading -> Model(..model, page_state: Loaded, store: Some(store_info))
-        _ -> Model(..model, store: Some(store_info))
-      }
-      #(updated_model, effect.none())
-    }
-
-    // Store API 404 - show not found page
-    msg.StoreLoadFailed(404) -> #(
-      Model(..model, page_state: NotFound),
-      effect.none(),
-    )
-
-    // Store API other error
-    msg.StoreLoadFailed(_) -> #(
-      Model(..model, page_state: Error("Failed to load store")),
-      effect.none(),
-    )
-
-    // Drinks API success - update drinks list
-    msg.DrinksLoaded(drinks) -> {
-      let updated_model = case model.page_state {
-        Loading -> Model(..model, page_state: Loaded, drinks: drinks)
-        _ -> Model(..model, drinks: drinks)
-      }
-      #(updated_model, effect.none())
-    }
-
-    // Drinks API error
-    msg.DrinksLoadFailed(error_msg) -> #(
-      Model(..model, page_state: Error(error_msg)),
-      effect.none(),
-    )
-
-    // User clicks add drink button
-    msg.ClickAddDrink -> {
-      // Navigation to add drink form would happen here
-      #(model, effect.none())
-    }
-
-    // Legacy counter messages - maintained for backward compatibility
+    // Counter messages
     msg.Increment -> #(Model(..model, count: model.count + 1), effect.none())
     msg.Decrement -> #(Model(..model, count: model.count - 1), effect.none())
     msg.Reset -> #(Model(..model, count: 0), effect.none())
+
+    // Create Drink Form field updates
+    msg.CreateDrinkFormFieldUpdate(field, value) -> {
+      let current_form = model.create_drink_form
+      let updated_form = case field {
+        msg.StoreId -> create_drink_form.CreateDrinkForm(..current_form, store_id: value)
+        msg.DrinkName -> create_drink_form.CreateDrinkForm(..current_form, name: value)
+        msg.Description -> create_drink_form.CreateDrinkForm(..current_form, description: value)
+        msg.BaseTeaType -> create_drink_form.CreateDrinkForm(..current_form, base_tea_type: value)
+        msg.Price -> create_drink_form.CreateDrinkForm(..current_form, price: value)
+      }
+      #(Model(..model, create_drink_form: updated_form), effect.none())
+    }
+
+    // Form submission
+    msg.CreateDrinkFormSubmit -> {
+      let current_form = model.create_drink_form
+
+      // Validate form before submission
+      let validation_errors = create_drink_form.validate_form(current_form)
+      let form_is_valid = create_drink_form.is_valid(current_form)
+
+      case validation_errors {
+        [] -> {
+          case form_is_valid {
+            True -> {
+              // Valid form - submit to API
+              let form_with_state = create_drink_form.CreateDrinkForm(
+                ..current_form,
+                state: create_drink_form.Submitting,
+                field_errors: [],
+              )
+              let updated_model = Model(..model, create_drink_form: form_with_state)
+              let effect = effects.submit_create_drink(
+                current_form.store_id,
+                current_form.name,
+                current_form.description,
+                current_form.base_tea_type,
+                current_form.price,
+              )
+              #(updated_model, effect)
+            }
+            False -> {
+              // Invalid form - show validation errors
+              let form_with_errors = create_drink_form.CreateDrinkForm(
+                ..current_form,
+                field_errors: validation_errors,
+              )
+              #(Model(..model, create_drink_form: form_with_errors), effect.none())
+            }
+          }
+        }
+        _ -> {
+          // Invalid form - show validation errors
+          let form_with_errors = create_drink_form.CreateDrinkForm(
+            ..current_form,
+            field_errors: validation_errors,
+          )
+          #(Model(..model, create_drink_form: form_with_errors), effect.none())
+        }
+      }
+    }
+
+    // API success response
+    msg.CreateDrinkFormSubmitSuccess(drink_id) -> {
+      let current_form = model.create_drink_form
+      let updated_form = create_drink_form.CreateDrinkForm(
+        ..current_form,
+        state: create_drink_form.Succeeded(drink_id),
+      )
+      #(Model(..model, create_drink_form: updated_form), effect.none())
+    }
+
+    // API error response
+    msg.CreateDrinkFormSubmitError(error) -> {
+      let current_form = model.create_drink_form
+      let updated_form = create_drink_form.CreateDrinkForm(
+        ..current_form,
+        state: create_drink_form.Failed(error),
+      )
+      #(Model(..model, create_drink_form: updated_form), effect.none())
+    }
   }
 }
-

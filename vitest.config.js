@@ -13,14 +13,16 @@ export default defineConfig({
     alias: {
       '../src/data/rating-data-access': path.resolve(__dirname, 'src/data/rating-data-access.js'),
       './test-db-setup': path.resolve(__dirname, '__cyclone_tests__/test-db-setup.js'),
-      '../components/edit-store-form': path.resolve(__dirname, '__cyclone_tests__/components/edit-store-form.jsx')
+      '../components/edit-store-form': path.resolve(__dirname, '__cyclone_tests__/components/edit-store-form.jsx'),
+      '../src/components/create_drink_form_component': path.resolve(__dirname, 'src/components/create_drink_form_component.js')
     }
   },
   test: {
     include: [
       '__cyclone_tests__/rating-data-access/*',
       '__cyclone_tests__/edit-store-form/*.test.[jt]s',
-      '__cyclone_tests__/edit-store-form/*.test.[jt]sx'
+      '__cyclone_tests__/edit-store-form/*.test.[jt]sx',
+      '__cyclone_tests__/create-drink-form/*'
     ],
     exclude: [
       '__cyclone_tests__/test-db-setup.js',

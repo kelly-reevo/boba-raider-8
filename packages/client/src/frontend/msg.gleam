@@ -1,36 +1,31 @@
-/// Application messages for boba-raider-8 client
-
-/// Form field types
-pub type Field {
-  NameField
-  AddressField
-  CityField
-  PhoneField
-}
-
 /// Application messages
+
+import frontend/model.{type Drink, type Rating, type Store}
+
+/// Application messages for MVU cycle
 pub type Msg {
-  // Legacy counter messages (preserved for existing functionality)
-  Increment
-  Decrement
-  Reset
+  // Store list messages
+  LoadStoresRequest
+  LoadStoresSuccess(stores: List(Store))
+  LoadStoresError(error: String)
 
-  // Create Store Form messages
-  /// Update a form field value
-  UpdateField(Field, String)
+  // Drink detail messages
+  LoadDrinkRequest(drink_id: String)
+  LoadDrinkSuccess(drink: Drink, ratings: List(Rating))
+  LoadDrinkError(error: String)
 
-  /// Submit the form
-  SubmitForm
+  // Rating form messages
+  UpdateSweetness(value: Int)
+  UpdateBobaTexture(value: Int)
+  UpdateTeaStrength(value: Int)
+  SubmitRatingRequest
+  SubmitRatingSuccess
+  SubmitRatingError(error: String)
 
-  /// Form submission succeeded
-  CreateStoreSuccess(store_id: String, name: String)
+  // Accessibility messages
+  SetReducedMotion(prefers_reduced_motion: Bool)
 
-  /// Form submission failed
-  CreateStoreError(error: String)
-
-  /// Navigate to a page
-  NavigateTo(String)
-
-  /// Page changed
-  PageChanged(String)
+  // Retry actions
+  RetryLoadStores
+  RetryLoadDrink
 }

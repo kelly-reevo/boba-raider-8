@@ -2,10 +2,9 @@ import config.{type Config}
 import gleam/erlang/process.{type Subject}
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
-import shared.{type Todo}
-import todo_store.{type Store}
+import todo_store.{type Store, type Todo}
 import web/http_server_actor
-import web/router.{type ListTodosFn}
+import web/router
 
 pub type CreateResult {
   CreateOk(Todo)

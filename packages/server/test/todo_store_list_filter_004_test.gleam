@@ -5,8 +5,7 @@ import gleeunit/should
 import gleam/list
 import gleam/option.{Some}
 import gleam/string
-import todo_store
-import shared.{type Todo}
+import todo_store.{type Todo}
 
 // BOUNDARY CONTRACT VALIDATION: list_all returns {:ok, Todo[]} result type
 // Test type: integration (tests return type contract at store boundary)

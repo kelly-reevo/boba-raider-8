@@ -6,8 +6,8 @@ import gleam/list
 import gleam/int
 import gleam/order
 import gleam/option.{Some, None}
-import todo_store
-import shared.{type Todo, UpdateTodoInput}
+import todo_store.{type Todo}
+import shared.{UpdateTodoInput}
 
 // Helper: Create a completed todo by creating then updating
 fn create_completed_todo(store, title, description) {

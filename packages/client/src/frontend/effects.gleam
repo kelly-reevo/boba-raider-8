@@ -1,6 +1,7 @@
 /// Fetch todos from GET /api/todos
 import frontend/msg.{type Msg}
 import lustre/effect.{type Effect}
+import shared.{type Todo, Todo}
 
 /// Fetch all todos from API
 pub fn fetch_todos() -> Effect(Msg) {

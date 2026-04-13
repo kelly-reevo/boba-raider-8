@@ -131,3 +131,22 @@ button:hover {
   margin-top: 1rem;
   min-height: 1.5rem;
 }
+
+/* Loading State */
+#loading-state {
+  padding: 2rem;
+  text-align: center;
+  color: #666;
+  font-size: 1rem;
+}
+
+/* Error State */
+#error-state {
+  padding: 2rem;
+  text-align: center;
+  color: #e53935;
+  font-size: 1rem;
+  background: #ffebee;
+  border-radius: 4px;
+  margin: 1rem 0;
+}

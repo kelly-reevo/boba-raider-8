@@ -12,6 +12,7 @@
 
 /**
  * Renders an array of todos to the DOM element with id 'todo-list'
+ * Hides loading state and shows todo list when called.
  * @param {Array<{id: string, title: string, description: string|null, priority: string, completed: boolean}>} todos
  * @returns {void}
  * @throws {Error} If DOM element with id 'todo-list' is not found
@@ -21,6 +22,18 @@ export function renderTodos(todos) {
   if (!container) {
     throw new Error('Required DOM element #todo-list not found');
   }
+
+  // Hide loading state and show todo list
+  const loadingState = document.getElementById('loading-state');
+  const errorState = document.getElementById('error-state');
+
+  if (loadingState) {
+    loadingState.style.display = 'none';
+  }
+  if (errorState) {
+    errorState.style.display = 'none';
+  }
+  container.style.display = 'block';
 
   container.innerHTML = '';
 
@@ -70,4 +83,27 @@ function createTodoElement(todo) {
   todoEl.appendChild(deleteBtn);
 
   return todoEl;
+}
+
+/**
+ * Shows error state in the UI
+ * Hides loading state and todo list, shows error message.
+ * @param {string} [errorMessage] - Optional custom error message
+ * @returns {void}
+ */
+export function showErrorState(errorMessage) {
+  const loadingState = document.getElementById('loading-state');
+  const todoList = document.getElementById('todo-list');
+  const errorState = document.getElementById('error-state');
+
+  if (loadingState) {
+    loadingState.style.display = 'none';
+  }
+  if (todoList) {
+    todoList.style.display = 'none';
+  }
+  if (errorState) {
+    errorState.style.display = 'block';
+    errorState.textContent = errorMessage || 'Failed to load todos. Please try again.';
+  }
 }

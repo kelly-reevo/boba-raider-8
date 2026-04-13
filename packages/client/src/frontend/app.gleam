@@ -1,5 +1,7 @@
+import frontend/effects
 import frontend/model.{type Model}
 import frontend/msg.{type Msg}
+import frontend/todo_types
 import frontend/update
 import frontend/view
 import lustre
@@ -12,5 +14,6 @@ pub fn main() {
 }
 
 fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
-  #(model.default(), effect.none())
+  // Load todos on initial render with "all" filter
+  #(model.default(), effects.list_todos(todo_types.All))
 }

@@ -180,11 +180,43 @@ fn health_handler() -> Response {
   )
 }
 
-fn list_todos_handler(store: Store, _request: Request) -> Response {
-  let todos = todo_store.list_all_api(store)
-  let todo_jsons = list.map(todos, todo_to_json)
-  let body = json.array(todo_jsons, fn(x) { x }) |> json.to_string()
-  server.json_response(200, body)
+fn list_todos_handler(store: Store, request: Request) -> Response {
+  let filter = extract_query_param(request.path, "filter")
+    |> option.unwrap("all")
+
+  case todo_store.list_all(store, filter) {
+    Ok(todos) -> {
+      let todo_jsons = list.map(todos, todo_to_json)
+      let body = json.array(todo_jsons, fn(x) { x }) |> json.to_string()
+      server.json_response(200, body)
+    }
+    Error(_) -> {
+      server.json_response(500, json.object([#("error", json.string("Failed to list todos"))]) |> json.to_string())
+    }
+  }
+}
+
+fn extract_query_param(path: String, key: String) -> Option(String) {
+  case string.split(path, "?") {
+    [_, query_string] -> {
+      let pairs = string.split(query_string, "&")
+      case list.find(pairs, fn(pair) {
+        case string.split(pair, "=") {
+          [k, _] if k == key -> True
+          _ -> False
+        }
+      }) {
+        Ok(pair) -> {
+          case string.split(pair, "=") {
+            [_, value] -> Some(value)
+            _ -> None
+          }
+        }
+        Error(_) -> None
+      }
+    }
+    _ -> None
+  }
 }
 
 fn create_todo_handler(store: Store, request: Request) -> Response {

@@ -8,6 +8,9 @@ pub fn main() {
 
 pub fn default_model_test() {
   let m = model.default()
-  m.count
-  |> should.equal(0)
+  // Model should have empty todos, All filter, not loading, no error
+  m.todos |> should.equal([])
+  m.filter |> should.equal(model.All)
+  m.loading |> should.equal(False)
+  m.error |> should.equal("")
 }

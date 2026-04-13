@@ -1,4 +1,5 @@
-import frontend/model.{type Model}
+import frontend/effects
+import frontend/model.{type Model, All}
 import frontend/msg.{type Msg}
 import frontend/update
 import frontend/view
@@ -12,5 +13,7 @@ pub fn main() {
 }
 
 fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
-  #(model.default(), effect.none())
+  let initial_model = model.default()
+  // Load todos with default filter (All) on init
+  #(initial_model, effects.fetch_todos(All))
 }

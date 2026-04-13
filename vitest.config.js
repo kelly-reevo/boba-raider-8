@@ -4,6 +4,6 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    include: ['__cyclone_tests__/**/*'],
+    include: ['**/*.test.js', '__cyclone_tests__/**/*'],
   },
 });

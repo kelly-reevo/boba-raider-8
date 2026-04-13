@@ -12,8 +12,10 @@ export default defineConfig({
     }
   },
   test: {
-    include: ['__cyclone_tests__/rating-data-access/*'],
-    exclude: ['__cyclone_tests__/test-db-setup.js'],
-    testTimeout: 30000
+    include: ['__cyclone_tests__/**/*.test.js'],
+    exclude: ['__cyclone_tests__/test-db-setup.js', '__cyclone_tests__/test-setup.js'],
+    testTimeout: 30000,
+    environment: 'jsdom',
+    setupFiles: ['./__cyclone_tests__/test-setup.js']
   }
 });

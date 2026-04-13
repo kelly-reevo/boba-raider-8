@@ -1,5 +1,5 @@
 -module(server_ffi).
--export([start/2, stop/1]).
+-export([start/2, stop/1, format_timestamp_millis/1]).
 
 start(Port, Handler) ->
     ErlHandler = fun(ErlRequest) ->
@@ -41,3 +41,8 @@ gleam_to_erl_response({response, Status, Headers, Body}) ->
 to_binary(V) when is_binary(V) -> V;
 to_binary(V) when is_list(V) -> list_to_binary(V);
 to_binary(V) when is_atom(V) -> atom_to_binary(V).
+
+%% Format current time to ISO8601/RFC3339 string
+format_timestamp_millis(_) ->
+    Millis = erlang:system_time(millisecond),
+    calendar:system_time_to_rfc3339(Millis, [{unit, millisecond}]).

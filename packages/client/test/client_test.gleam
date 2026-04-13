@@ -12,16 +12,9 @@ pub fn main() {
 pub fn default_model_test() {
   let m = model.default()
 
-  m.todos
-  |> should.equal([])
-
-  m.filter
-  |> should.equal(All)
-
-  m.data_state
-  |> should.equal(Loading)
-
-  // Verify model has expected default state
+  m.todos |> should.equal([])
+  m.filter |> should.equal(All)
+  m.data_state |> should.equal(Loading)
   m.error |> should.equal("")
   m.form.title |> should.equal("")
   m.form.description |> should.equal("")
@@ -83,4 +76,25 @@ pub fn set_deleting_test() {
   let updated = model.set_deleting(m, "123")
 
   updated.deleting_id |> should.equal(gleam/option.Some("123"))
+}
+
+pub fn update_todo_completed_test() {
+  let m = model.Model(
+    todos: [
+      Todo(id: "1", title: "First", description: None, priority: "high", completed: False, created_at: 0, updated_at: 0),
+    ],
+    filter: All,
+    data_state: Loaded,
+    form: model.FormState(title: "", description: "", priority: Medium),
+    submit_state: Idle,
+    error: "",
+    deleting_id: None,
+  )
+
+  let updated = model.update_todo_completed(m, "1", True)
+
+  case updated.todos {
+    [item] -> item.completed |> should.equal(True)
+    _ -> should.fail()
+  }
 }

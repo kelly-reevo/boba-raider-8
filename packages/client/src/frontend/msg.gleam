@@ -34,6 +34,12 @@ pub type Msg {
   Deleted(id: String)
   DeleteError(message: String)
 
+  // Toggle completion messages
+  ToggleTodo(id: String, completed: Bool)
+  TodoToggledOk(Todo)
+  TodoToggledError(id: String, original_completed: Bool)
+
   // Error handling
   DismissError
+  SetError(String)
 }

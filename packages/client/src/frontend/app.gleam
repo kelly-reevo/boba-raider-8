@@ -13,6 +13,5 @@ pub fn main() {
 }
 
 fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
-  // Initialize with loading state and fetch todos
   #(default(), effects.fetch_todos())
 }

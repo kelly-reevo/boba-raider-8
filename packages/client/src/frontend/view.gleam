@@ -1,7 +1,7 @@
 /// View rendering - HTML generation
 
 import frontend/model.{type Filter, type Model, All, Active, Completed, Loading, Loaded, Idle, Submitting}
-import frontend/msg.{type Msg, SetFilter, RetryFetch, DismissError}
+import frontend/msg.{type Msg, SetFilter, RetryFetch, DismissError, ToggleTodo}
 import gleam/list
 import gleam/option.{type Option, Some}
 import gleam/string
@@ -67,7 +67,6 @@ fn render_form(model: Model) -> Element(Msg) {
       attribute.attribute("onsubmit", "event.preventDefault(); return false;"),
     ],
     [
-      // Title input
       html.div([attribute.class("form-group")], [
         html.label([attribute.for("todo-title")], [element.text("Title")]),
         html.input([
@@ -78,7 +77,6 @@ fn render_form(model: Model) -> Element(Msg) {
         ]),
       ]),
 
-      // Description textarea
       html.div([attribute.class("form-group")], [
         html.label([attribute.for("todo-description")], [element.text("Description")]),
         html.textarea(
@@ -91,7 +89,6 @@ fn render_form(model: Model) -> Element(Msg) {
         ),
       ]),
 
-      // Priority select
       html.div([attribute.class("form-group")], [
         html.label([attribute.for("todo-priority")], [element.text("Priority")]),
         html.select(
@@ -123,7 +120,6 @@ fn render_form(model: Model) -> Element(Msg) {
         ),
       ]),
 
-      // Submit button
       html.button(
         [
           attribute.type_("button"),
@@ -235,6 +231,10 @@ fn render_todo_item(item: Todo, deleting_id: Option(String)) -> Element(Msg) {
   }
 
   let priority_class = priority_class_from_string(item.priority)
+  let completed_class = case item.completed {
+    True -> "todo-title completed"
+    False -> "todo-title"
+  }
 
   html.li(
     [
@@ -252,9 +252,11 @@ fn render_todo_item(item: Todo, deleting_id: Option(String)) -> Element(Msg) {
     [
       html.input([
         attribute.type_("checkbox"),
+        attribute.class("todo-checkbox"),
         attribute.checked(item.completed),
+        event.on_check(fn(checked) { ToggleTodo(item.id, checked) }),
       ]),
-      html.span([attribute.class("title")], [element.text(item.title)]),
+      html.span([attribute.class(completed_class)], [element.text(item.title)]),
       html.span(
         [attribute.class("priority " <> priority_class)],
         [element.text(item.priority)],

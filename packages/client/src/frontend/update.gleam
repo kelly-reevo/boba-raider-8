@@ -35,12 +35,12 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       effect.none()
     )
 
-    // Form field updates - update model state directly
+    // Form field updates
     msg.TitleChanged(title) -> #(model.update_form_title(model, title), effect.none())
     msg.DescriptionChanged(desc) -> #(model.update_form_description(model, desc), effect.none())
     msg.PriorityChanged(priority) -> #(model.update_form_priority(model, priority), effect.none())
 
-    // Form submission - validate and make API call
+    // Form submission
     msg.SubmitForm -> {
       let title = string.trim(model.form.title)
       case string.is_empty(title) {
@@ -53,7 +53,6 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       }
     }
 
-    // Create succeeded - clear form and trigger list refresh
     msg.CreateTodoSucceeded(_todo) -> {
       let cleared_model = model.reset_form(model)
       #(cleared_model, effect.from(fn(dispatch) {
@@ -61,59 +60,70 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       }))
     }
 
-    // Create failed - show error, keep form values
     msg.CreateTodoFailed(error_msg) -> {
       #(model.set_error(model, error_msg), effect.none())
     }
 
-    // Refresh todos list - fetch from API
     msg.RefreshTodos -> {
       #(model, effects.fetch_todos())
     }
 
-    // Todos refreshed - update model with new list
     msg.TodosRefreshed(todos) -> {
       #(model.update_todos(model, todos), effect.none())
     }
 
-    // Todos refresh failed - show error
     msg.TodosRefreshFailed(error_msg) -> {
       #(model.set_error(model, error_msg), effect.none())
     }
 
     // Delete todo flow
     msg.DeleteTodo(id) -> {
-      // Optional confirmation dialog
       case confirm_delete() {
         True -> {
-          // User confirmed - mark as deleting and send request
           #(model.set_deleting(model, id), effects.delete_todo(id))
         }
         False -> {
-          // User cancelled - no change
           #(model, effect.none())
         }
       }
     }
 
-    // Successfully deleted - remove from model
     msg.Deleted(id) -> {
       #(model.remove_todo(model, id), effect.none())
     }
 
-    // Delete failed - show error, clear deleting state
     msg.DeleteError(message) -> {
       #(model.set_error(model, message), effect.none())
     }
 
-    // Dismiss error banner
+    // Toggle completion - optimistically update UI, then call API
+    msg.ToggleTodo(id, completed) -> {
+      let new_model = model.update_todo_completed(model, id, completed)
+      #(new_model, effects.patch_todo(id, completed))
+    }
+
+    // API success: Update todo with server response
+    msg.TodoToggledOk(toggled_item) -> {
+      #(model.update_todo(model, toggled_item), effect.none())
+    }
+
+    // API error: Revert to original state
+    msg.TodoToggledError(id, original_completed) -> {
+      let new_model = model.update_todo_completed(model, id, original_completed)
+      #(Model(..new_model, error: "Failed to update todo"), effect.none())
+    }
+
+    // Error handling
     msg.DismissError -> {
       #(model.clear_error(model), effect.none())
+    }
+
+    msg.SetError(message) -> {
+      #(model.set_error(model, message), effect.none())
     }
   }
 }
 
 /// Show browser confirmation dialog
-/// Returns true if user confirms deletion
 @external(javascript, "./update_ffi.mjs", "confirm_delete")
 fn confirm_delete() -> Bool

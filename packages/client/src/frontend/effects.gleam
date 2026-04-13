@@ -1,6 +1,9 @@
 /// HTTP effects for todo operations
 
-import frontend/msg.{type Msg, TodosLoaded, TodosLoadError, CreateTodoSucceeded, Deleted, DeleteError}
+import frontend/msg.{type Msg, TodosLoaded, TodosLoadError, CreateTodoSucceeded, Deleted, DeleteError, TodoToggledOk, TodoToggledError, SetError}
+import gleam/dynamic/decode
+import gleam/http
+import gleam/http/request
 import gleam/json
 import gleam/option.{None, Some}
 import lustre/effect.{type Effect}
@@ -15,11 +18,64 @@ fn priority_to_string(priority: Priority) -> String {
   }
 }
 
-/// Fetch todos from the API
+/// Effect to fetch all todos from GET /api/todos
 pub fn fetch_todos() -> Effect(Msg) {
   effect.from(fn(dispatch) {
-    do_fetch_todos(dispatch)
+    case request.to("http://localhost:3000/api/todos") {
+      Error(_) -> dispatch(TodosLoadError("Failed to load todos"))
+      Ok(req) -> {
+        do_fetch(req, fn(response) {
+          case response {
+            Ok(json_string) -> {
+              case decode_todo_list(json_string) {
+                Ok(todos) -> dispatch(TodosLoaded(todos))
+                Error(_) -> dispatch(TodosLoadError("Failed to parse todos"))
+              }
+            }
+            Error(_) -> dispatch(TodosLoadError("Failed to load todos"))
+          }
+        })
+      }
+    }
   })
+}
+
+/// Decode a list of Todos from JSON string
+fn decode_todo_list(json_string: String) -> Result(List(Todo), Nil) {
+  let todo_decoder = {
+    use id <- decode.field("id", decode.string)
+    use title <- decode.field("title", decode.string)
+    use completed <- decode.field("completed", decode.bool)
+    use priority <- decode.optional_field("priority", "medium", decode.string)
+    use description <- decode.optional_field("description", None, decode.optional(decode.string))
+    use created_at <- decode.optional_field("created_at", 0, decode.int)
+    decode.success(Todo(id, title, description, priority, completed, created_at, created_at))
+  }
+
+  let decoder = decode.list(of: todo_decoder)
+
+  case json.parse(json_string, decoder) {
+    Ok(todos) -> Ok(todos)
+    Error(_) -> Error(Nil)
+  }
+}
+
+/// Decode a Todo from JSON string
+fn decode_todo(json_string: String) -> Result(Todo, Nil) {
+  let todo_decoder = {
+    use id <- decode.field("id", decode.string)
+    use title <- decode.field("title", decode.string)
+    use completed <- decode.field("completed", decode.bool)
+    use priority <- decode.optional_field("priority", "medium", decode.string)
+    use description <- decode.optional_field("description", None, decode.optional(decode.string))
+    use created_at <- decode.optional_field("created_at", 0, decode.int)
+    decode.success(Todo(id, title, description, priority, completed, created_at, created_at))
+  }
+
+  case json.parse(json_string, todo_decoder) {
+    Ok(todo_item) -> Ok(todo_item)
+    Error(_) -> Error(Nil)
+  }
 }
 
 /// Create a new todo via API
@@ -30,7 +86,6 @@ pub fn create_todo(
 ) -> Effect(Msg) {
   let priority_str = priority_to_string(priority)
 
-  // Build JSON body matching the expected API format
   let body_obj =
     json.object([
       #("title", json.string(title)),
@@ -38,25 +93,29 @@ pub fn create_todo(
       #("priority", json.string(priority_str)),
       #("completed", json.bool(False)),
     ])
-  let _body = json.to_string(body_obj)
+  let body = json.to_string(body_obj)
 
-  // Simulated effect - in production this would make an actual HTTP POST
-  // For test compatibility, we simulate success dispatch
   effect.from(fn(dispatch) {
-    // For testing: simulate immediate success
-    let desc_option = case description {
-      "" -> None
-      d -> Some(d)
+    case request.to("http://localhost:3000/api/todos") {
+      Error(_) -> dispatch(CreateTodoFailed("Failed to create todo"))
+      Ok(req) -> {
+        let req_with_method = request.set_method(req, http.Post)
+        let req_with_header = request.set_header(req_with_method, "Content-Type", "application/json")
+        let final_req = request.set_body(req_with_header, body)
+
+        do_fetch(final_req, fn(response) {
+          case response {
+            Ok(json_string) -> {
+              case decode_todo(json_string) {
+                Ok(todo_item) -> dispatch(CreateTodoSucceeded(todo_item))
+                Error(_) -> dispatch(CreateTodoFailed("Failed to parse created todo"))
+              }
+            }
+            Error(_) -> dispatch(CreateTodoFailed("Failed to create todo"))
+          }
+        })
+      }
     }
-    dispatch(CreateTodoSucceeded(Todo(
-      id: "todo-" <> title,
-      title: title,
-      description: desc_option,
-      priority: priority_str,
-      completed: False,
-      created_at: 0,
-      updated_at: 0,
-    )))
   })
 }
 
@@ -66,46 +125,65 @@ pub fn create_todo_and_refresh(
   description: String,
   priority: Priority,
 ) -> Effect(Msg) {
-  // First create the todo, then the update handler will trigger refresh
   create_todo(title, description, priority)
 }
 
 /// Delete a todo by ID
-/// Calls DELETE /api/todos/:id
-/// On 204: returns Deleted message with the id
-/// On error: returns DeleteError with message
 pub fn delete_todo(id: String) -> Effect(Msg) {
   effect.from(fn(dispatch) {
-    // Use JavaScript fetch API
-    do_delete_request(id, fn(status) {
-      case status {
-        204 -> dispatch(Deleted(id))
-        404 -> dispatch(DeleteError("Todo not found"))
-        _ -> dispatch(DeleteError("Failed to delete todo. Please try again."))
+    case request.to("http://localhost:3000/api/todos/" <> id) {
+      Error(_) -> dispatch(DeleteError("Failed to delete todo"))
+      Ok(req) -> {
+        let req_with_method = request.set_method(req, http.Delete)
+        do_fetch(req_with_method, fn(response) {
+          case response {
+            Ok(_) -> dispatch(Deleted(id))
+            Error(_) -> dispatch(DeleteError("Failed to delete todo"))
+          }
+        })
       }
-    })
-  })
-}
-
-/// Perform the actual HTTP fetch
-fn do_fetch_todos(dispatch: fn(Msg) -> Nil) -> Nil {
-  let url = "/api/todos"
-
-  fetch_send(url, fn(todos_result) {
-    case todos_result {
-      Ok(todos) -> dispatch(TodosLoaded(todos))
-      Error(err) -> dispatch(TodosLoadError(err))
     }
   })
-
-  Nil
 }
 
-/// FFI: Send fetch request
-/// Takes a URL string and a callback that receives either Ok(todos) or Error(error_message)
-@external(javascript, "../ffi/fetch_ffi.mjs", "fetchTodos")
-fn fetch_send(url: String, callback: fn(Result(List(Todo), String)) -> Nil) -> Nil
+/// Effect to PATCH /api/todos/:id to update completion status
+pub fn patch_todo(id: String, completed: Bool) -> Effect(Msg) {
+  effect.from(fn(dispatch) {
+    let body = json.object([#("completed", json.bool(completed))])
+      |> json.to_string()
 
-/// Perform DELETE request via JavaScript FFI
-@external(javascript, "./delete_effect_ffi.mjs", "delete_request")
-fn do_delete_request(id: String, callback: fn(Int) -> Nil) -> Nil
+    case request.to("http://localhost:3000/api/todos/" <> id) {
+      Error(_) -> {
+        dispatch(TodoToggledError(id, !completed))
+        dispatch(SetError("Failed to update todo"))
+      }
+      Ok(req) -> {
+        let req_with_method = request.set_method(req, http.Patch)
+        let req_with_header = request.set_header(req_with_method, "Content-Type", "application/json")
+        let final_req = request.set_body(req_with_header, body)
+
+        do_fetch(final_req, fn(response) {
+          case response {
+            Ok(json_string) -> {
+              case decode_todo(json_string) {
+                Ok(todo_item) -> dispatch(TodoToggledOk(todo_item))
+                Error(_) -> {
+                  dispatch(TodoToggledError(id, !completed))
+                  dispatch(SetError("Failed to update todo"))
+                }
+              }
+            }
+            Error(_) -> {
+              dispatch(TodoToggledError(id, !completed))
+              dispatch(SetError("Failed to update todo"))
+            }
+          }
+        })
+      }
+    }
+  })
+}
+
+/// FFI: Perform HTTP fetch
+@external(javascript, "./effects_ffi.mjs", "do_fetch")
+fn do_fetch(req: request.Request(String), callback: fn(Result(String, Nil)) -> Nil) -> Nil

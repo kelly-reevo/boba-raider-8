@@ -136,3 +136,25 @@ pub fn remove_todo(model: Model, id: String) -> Model {
 pub fn set_deleting(model: Model, id: String) -> Model {
   Model(..model, deleting_id: option.Some(id))
 }
+
+/// Update todo completion status
+pub fn update_todo_completed(model: Model, id: String, completed: Bool) -> Model {
+  let new_todos = list.map(model.todos, fn(item) {
+    case item.id == id {
+      True -> shared.Todo(..item, completed: completed)
+      False -> item
+    }
+  })
+  Model(..model, todos: new_todos)
+}
+
+/// Update a specific todo with new data
+pub fn update_todo(model: Model, updated: Todo) -> Model {
+  let new_todos = list.map(model.todos, fn(item) {
+    case item.id == updated.id {
+      True -> updated
+      False -> item
+    }
+  })
+  Model(..model, todos: new_todos)
+}

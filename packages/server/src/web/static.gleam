@@ -8,7 +8,19 @@ pub fn serve_index() -> Response {
 }
 
 pub fn serve(path: String) -> Response {
-  let file_path = "priv" <> path
+  // Check if this is a JS file that should be served from client build
+  let is_js = string.ends_with(path, ".js") || string.ends_with(path, ".mjs")
+  let is_client_js = is_js && string.starts_with(path, "/static/js/")
+
+  let file_path = case is_client_js {
+    True -> {
+      // Map /static/js/app.js to client build directory
+      let js_file = string.drop_start(path, 11) // Remove "/static/js/"
+      "../client/build/dev/javascript/client/frontend/" <> js_file
+    }
+    False -> "priv" <> path
+  }
+
   let content_type = get_content_type(path)
   serve_file(file_path, content_type)
 }

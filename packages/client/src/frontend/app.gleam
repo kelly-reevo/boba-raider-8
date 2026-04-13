@@ -1,4 +1,7 @@
-import frontend/model.{type Model}
+/// Application entry point with initial load
+
+import frontend/effects
+import frontend/model as model
 import frontend/msg.{type Msg}
 import frontend/update
 import frontend/view
@@ -11,6 +14,7 @@ pub fn main() {
   Nil
 }
 
-fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
-  #(model.default(), effect.none())
+fn init(_flags: Nil) -> #(model.AppModel, Effect(Msg)) {
+  // Initialize with loading state and trigger fetch
+  #(model.default(), effects.load_todos())
 }

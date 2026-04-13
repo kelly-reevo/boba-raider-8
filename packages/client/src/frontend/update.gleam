@@ -1,96 +1,136 @@
-import frontend/create_drink_form
+import frontend/model.{
+  type Model, type Page,
+  Model, CreateStoreForm, CreateStorePage, StoreDetailPage,
+  update_field, validate_form, has_errors,
+}
+import frontend/msg.{type Msg, type Field,
+  Increment, Decrement, Reset,
+  UpdateField, SubmitForm, CreateStoreSuccess, CreateStoreError,
+  NavigateTo, PageChanged,
+  NameField, AddressField, CityField, PhoneField,
+}
 import frontend/effects
-import frontend/model.{type Model, Model}
-import frontend/msg.{type Msg}
 import lustre/effect.{type Effect}
+import gleam/option.{type Option, None, Some}
+import gleam/string
 
+/// Main update function
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
-    // Counter messages
-    msg.Increment -> #(Model(..model, count: model.count + 1), effect.none())
-    msg.Decrement -> #(Model(..model, count: model.count - 1), effect.none())
-    msg.Reset -> #(Model(..model, count: 0), effect.none())
+    // Legacy counter messages
+    Increment -> #(Model(..model, count: model.count + 1), effect.none())
+    Decrement -> #(Model(..model, count: model.count - 1), effect.none())
+    Reset -> #(Model(..model, count: 0), effect.none())
 
-    // Create Drink Form field updates
-    msg.CreateDrinkFormFieldUpdate(field, value) -> {
-      let current_form = model.create_drink_form
-      let updated_form = case field {
-        msg.StoreId -> create_drink_form.CreateDrinkForm(..current_form, store_id: value)
-        msg.DrinkName -> create_drink_form.CreateDrinkForm(..current_form, name: value)
-        msg.Description -> create_drink_form.CreateDrinkForm(..current_form, description: value)
-        msg.BaseTeaType -> create_drink_form.CreateDrinkForm(..current_form, base_tea_type: value)
-        msg.Price -> create_drink_form.CreateDrinkForm(..current_form, price: value)
-      }
-      #(Model(..model, create_drink_form: updated_form), effect.none())
+    // Form field updates
+    UpdateField(field, value) -> {
+      let field_name = field_to_string(field)
+      let new_form = update_field(model.create_store_form, field_name, value)
+      #(Model(..model, create_store_form: new_form), effect.none())
     }
 
     // Form submission
-    msg.CreateDrinkFormSubmit -> {
-      let current_form = model.create_drink_form
+    SubmitForm -> handle_submit(model)
 
-      // Validate form before submission
-      let validation_errors = create_drink_form.validate_form(current_form)
-      let form_is_valid = create_drink_form.is_valid(current_form)
-
-      case validation_errors {
-        [] -> {
-          case form_is_valid {
-            True -> {
-              // Valid form - submit to API
-              let form_with_state = create_drink_form.CreateDrinkForm(
-                ..current_form,
-                state: create_drink_form.Submitting,
-                field_errors: [],
-              )
-              let updated_model = Model(..model, create_drink_form: form_with_state)
-              let effect = effects.submit_create_drink(
-                current_form.store_id,
-                current_form.name,
-                current_form.description,
-                current_form.base_tea_type,
-                current_form.price,
-              )
-              #(updated_model, effect)
-            }
-            False -> {
-              // Invalid form - show validation errors
-              let form_with_errors = create_drink_form.CreateDrinkForm(
-                ..current_form,
-                field_errors: validation_errors,
-              )
-              #(Model(..model, create_drink_form: form_with_errors), effect.none())
-            }
-          }
-        }
-        _ -> {
-          // Invalid form - show validation errors
-          let form_with_errors = create_drink_form.CreateDrinkForm(
-            ..current_form,
-            field_errors: validation_errors,
-          )
-          #(Model(..model, create_drink_form: form_with_errors), effect.none())
-        }
-      }
+    // Create store API response handlers
+    CreateStoreSuccess(store_id, _name) -> {
+      // Navigate to the new store page
+      let new_model = Model(..model, page: StoreDetailPage(store_id))
+      #(new_model, effect.from(fn(_) { navigate_to_store(store_id) }))
     }
 
-    // API success response
-    msg.CreateDrinkFormSubmitSuccess(drink_id) -> {
-      let current_form = model.create_drink_form
-      let updated_form = create_drink_form.CreateDrinkForm(
-        ..current_form,
-        state: create_drink_form.Succeeded(drink_id),
+    CreateStoreError(error) -> {
+      let new_form = CreateStoreForm(
+        ..model.create_store_form,
+        is_submitting: False,
+        submission_error: Some(error),
       )
-      #(Model(..model, create_drink_form: updated_form), effect.none())
+      #(Model(..model, create_store_form: new_form), effect.none())
     }
 
-    // API error response
-    msg.CreateDrinkFormSubmitError(error) -> {
-      let current_form = model.create_drink_form
-      let updated_form = create_drink_form.CreateDrinkForm(
-        ..current_form,
-        state: create_drink_form.Failed(error),
-      )
-      #(Model(..model, create_drink_form: updated_form), effect.none())
+    // Navigation
+    NavigateTo(path) -> {
+      let new_page = parse_page(path)
+      #(Model(..model, page: new_page), effect.from(fn(_) { navigate_js(path) }))
+    }
+
+    PageChanged(path) -> {
+      let new_page = parse_page(path)
+      #(Model(..model, page: new_page), effect.none())
     }
   }
 }
+
+/// Handle form submission
+fn handle_submit(model: Model) -> #(Model, Effect(Msg)) {
+  let form = model.create_store_form
+
+  // Validate form
+  let errors = validate_form(form)
+
+  case has_errors(errors) {
+    True -> {
+      // Validation failed - show errors, don't submit
+      let new_form = CreateStoreForm(
+        ..form,
+        errors: errors,
+        is_submitting: False,
+        submission_error: None,
+      )
+      #(Model(..model, create_store_form: new_form), effect.none())
+    }
+    False -> {
+      // Validation passed - submit to API
+      let new_form = CreateStoreForm(
+        ..form,
+        is_submitting: True,
+        submission_error: None,
+      )
+      let effect = effects.submit_create_store(
+        form.fields.name |> string.trim,
+        form.fields.address |> string.trim,
+        form.fields.city |> string.trim,
+        form.fields.phone |> string.trim,
+      )
+      #(Model(..model, create_store_form: new_form), effect)
+    }
+  }
+}
+
+/// Convert field type to string
+fn field_to_string(field: Field) -> String {
+  case field {
+    NameField -> "name"
+    AddressField -> "address"
+    CityField -> "city"
+    PhoneField -> "phone"
+  }
+}
+
+/// Parse URL path to page
+fn parse_page(path: String) -> Page {
+  case path {
+    "/stores/new" -> CreateStorePage
+    "/" -> CreateStorePage  // Default to create store for now
+    _ -> {
+      // Check if it's a store detail page
+      case string.starts_with(path, "/stores/") {
+        True -> {
+          let store_id = string.slice(path, 8, string.length(path) - 8)
+          StoreDetailPage(store_id)
+        }
+        False -> CreateStorePage
+      }
+    }
+  }
+}
+
+/// Navigate to store detail page via JavaScript
+fn navigate_to_store(store_id: String) {
+  let path = "/stores/" <> store_id
+  navigate_js(path)
+}
+
+/// JavaScript FFI for navigation
+@external(javascript, "./effects_ffi.mjs", "navigate")
+fn navigate_js(path: String) -> Nil

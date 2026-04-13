@@ -1,107 +1,206 @@
-/// Effects for API calls and side effects
-
-import frontend/model.{type DrinkCard, type StoreInfo, DrinkCard, StoreInfo}
-import frontend/msg.{type Msg}
-import gleam/dynamic/decode.{type Decoder}
+import gleam/option.{type Option, None, Some}
+import frontend/msg.{type Msg, CreateStoreSuccess, CreateStoreError}
 import lustre/effect.{type Effect}
 
-/// Fetch store details and drinks on page load
-pub fn fetch_store_data(store_id: String) -> Effect(Msg) {
-  effect.batch([
-    fetch_store_details(store_id),
-    fetch_store_drinks(store_id),
-  ])
-}
-
-/// Fetch store details from GET /api/stores/:id
-fn fetch_store_details(store_id: String) -> Effect(Msg) {
-  effect.from(fn(dispatch) {
-    // In a real app, this would dispatch the HTTP request
-    // For now, we simulate the structure
-    dispatch(msg.StoreLoaded(StoreInfo(
-      id: store_id,
-      name: "",  // Will be populated by actual API
-      location: "",
-    )))
-  })
-}
-
-/// Fetch drinks from GET /api/stores/:id/drinks
-fn fetch_store_drinks(store_id: String) -> Effect(Msg) {
-  effect.from(fn(dispatch) {
-    // In a real app with proper HTTP client, we would:
-    // 1. Send the request
-    // 2. Decode JSON response using drink_response_decoder
-    // 3. Dispatch DrinksLoaded or DrinksLoadFailed
-
-    // For now, simulate empty list (will be populated by actual API)
-    dispatch(msg.DrinksLoaded([]))
-  })
-}
-
-/// Decoder for the aggregates sub-object: {overall_rating: float}
-fn aggregates_decoder() -> Decoder(Float) {
-  use overall_rating <- decode.field("overall_rating", decode.float)
-  decode.success(overall_rating)
-}
-
-/// Decoder for DrinkCard from API response
-/// Handles JSON shape: {id, name, base_tea_type, price, aggregates: {overall_rating}}
-fn drink_card_decoder() -> Decoder(DrinkCard) {
-  use id <- decode.field("id", decode.string)
-  use name <- decode.field("name", decode.string)
-  use base_tea_type <- decode.field("base_tea_type", decode.string)
-  use price <- decode.field("price", decode.float)
-  use overall_rating <- decode.field("aggregates", aggregates_decoder())
-
-  decode.success(DrinkCard(
-    id: id,
-    name: name,
-    base_tea_type: base_tea_type,
-    price: price,
-    overall_rating: overall_rating,
-  ))
-}
-
-/// Decoder for drinks list response {drinks: [...]}
-fn drinks_response_decoder() -> Decoder(List(DrinkCard)) {
-  use drinks <- decode.field("drinks", decode.list(drink_card_decoder()))
-  decode.success(drinks)
-}
-
-/// Decoder for store info from GET /api/stores/:id
-fn store_info_decoder() -> Decoder(StoreInfo) {
-  use id <- decode.field("id", decode.string)
-  use name <- decode.field("name", decode.string)
-
-  // Location may be constructed from address + city fields
-  decode.success(StoreInfo(
-    id: id,
-    name: name,
-    location: "",  // Can be extended to decode address/city
-  ))
-}
-
-/// Submit create drink form via FFI to JavaScript fetch
-pub fn submit_create_drink(
-  store_id: String,
+/// Submit create store form to API
+pub fn submit_create_store(
   name: String,
-  description: String,
-  base_tea_type: String,
-  price: String,
+  address: String,
+  city: String,
+  phone: String,
 ) -> Effect(Msg) {
   effect.from(fn(dispatch) {
-    // Use FFI to call JavaScript fetch
-    do_submit_create_drink(store_id, name, description, base_tea_type, price, dispatch)
+    // Build payload - omit empty optional fields or send as null
+    let payload = build_payload(name, address, city, phone)
+
+    // Call JavaScript FFI to make API request
+    do_api_post(
+      "/api/stores",
+      payload,
+      fn(result) {
+        case result {
+          Ok(json) -> {
+            case extract_store_id(json) {
+              Ok(store_id) -> dispatch(CreateStoreSuccess(store_id, name))
+              Error(err) -> dispatch(CreateStoreError(err))
+            }
+          }
+          Error(err) -> dispatch(CreateStoreError(err))
+        }
+      },
+    )
   })
 }
 
-@external(javascript, "../ffi/create_drink_form_ffi.mjs", "submitCreateDrink")
-fn do_submit_create_drink(
-  store_id: String,
+/// Build request payload from form fields
+fn build_payload(
   name: String,
-  description: String,
-  base_tea_type: String,
-  price: String,
-  dispatch: fn(Msg) -> Nil,
+  address: String,
+  city: String,
+  phone: String,
+) -> String {
+  // Use gleam_json to build proper JSON
+  let fields = ["\"name\": \"" <> json_escape(name) <> "\""]
+
+  // Add optional fields if they have values
+  let fields = case address {
+    "" -> ["\"address\": null", ..fields]
+    _ -> ["\"address\": \"" <> json_escape(address) <> "\"", ..fields]
+  }
+
+  let fields = case city {
+    "" -> ["\"city\": null", ..fields]
+    _ -> ["\"city\": \"" <> json_escape(city) <> "\"", ..fields]
+  }
+
+  let fields = case phone {
+    "" -> ["\"phone\": null", ..fields]
+    _ -> ["\"phone\": \"" <> json_escape(phone) <> "\"", ..fields]
+  }
+
+  "{" <> join_fields(fields, ", ") <> "}"
+}
+
+/// Join fields with separator
+fn join_fields(fields: List(String), sep: String) -> String {
+  case fields {
+    [] -> ""
+    [first, ..rest] -> do_join(rest, first, sep)
+  }
+}
+
+fn do_join(fields: List(String), acc: String, sep: String) -> String {
+  case fields {
+    [] -> acc
+    [next, ..rest] -> do_join(rest, acc <> sep <> next, sep)
+  }
+}
+
+/// Escape special characters in JSON string
+fn json_escape(s: String) -> String {
+  s
+  |> replace_all("\\", "\\\\")
+  |> replace_all("\"", "\\\"")
+  |> replace_all("\n", "\\n")
+  |> replace_all("\r", "\\r")
+  |> replace_all("\t", "\\t")
+}
+
+/// Replace all occurrences in string
+fn replace_all(s: String, pattern: String, replacement: String) -> String {
+  // Using JavaScript FFI for string replacement
+  js_replace_all(s, pattern, replacement)
+}
+
+@external(javascript, "./validation_ffi.mjs", "replace_all")
+fn js_replace_all(s: String, pattern: String, replacement: String) -> String
+
+/// Make API POST request via JavaScript FFI
+type ApiResult = Result(String, String)
+
+@external(javascript, "./effects_ffi.mjs", "api_post")
+fn do_api_post(
+  url: String,
+  payload: String,
+  callback: fn(ApiResult) -> Nil,
 ) -> Nil
+
+/// Extract store ID from API response JSON
+fn extract_store_id(json: String) -> Result(String, String) {
+  // Simple JSON parsing to extract id field
+  // Looking for: "id": "some-value"
+  case find_value(json, "\"id\"") {
+    Some(id) -> Ok(id)
+    None -> Error("Failed to extract store ID from response")
+  }
+}
+
+/// Find a string value for a key in JSON
+fn find_value(json: String, key: String) -> Option(String) {
+  case string_contains(json, key) {
+    False -> None
+    True -> {
+      let key_pos = string_index_of(json, key)
+      case key_pos {
+        -1 -> None
+        pos -> {
+          let after_key = string_slice_from(json, pos + string_length(key))
+          // Skip colon and whitespace
+          let after_colon = skip_to_value(after_key)
+          extract_string_value(after_colon)
+        }
+      }
+    }
+  }
+}
+
+/// Skip whitespace and colon to get to value
+fn skip_to_value(s: String) -> String {
+  s
+  |> string_trim_left()
+  |> skip_colon()
+  |> string_trim_left()
+}
+
+fn skip_colon(s: String) -> String {
+  case string_starts_with(s, ":") {
+    True -> string_slice_from(s, 1)
+    False -> s
+  }
+}
+
+/// Extract quoted string value
+fn extract_string_value(s: String) -> Option(String) {
+  case string_starts_with(s, "\"") {
+    False -> None
+    True -> {
+      let rest = string_slice_from(s, 1)
+      case find_closing_quote(rest, 0) {
+        -1 -> None
+        end -> Some(string_slice(rest, 0, end))
+      }
+    }
+  }
+}
+
+/// Find position of unescaped closing quote
+fn find_closing_quote(s: String, pos: Int) -> Int {
+  case pos >= string_length(s) {
+    True -> -1
+    False -> {
+      let char = string_slice(s, pos, 1)
+      case char {
+        "\"" -> {
+          // Check if escaped
+          case pos > 0 && string_slice(s, pos - 1, 1) == "\\" {
+            True -> find_closing_quote(s, pos + 1)
+            False -> pos
+          }
+        }
+        _ -> find_closing_quote(s, pos + 1)
+      }
+    }
+  }
+}
+
+// FFI imports for string operations
+@external(javascript, "./effects_ffi.mjs", "string_contains")
+fn string_contains(s: String, pattern: String) -> Bool
+
+@external(javascript, "./effects_ffi.mjs", "string_index_of")
+fn string_index_of(s: String, pattern: String) -> Int
+
+@external(javascript, "./effects_ffi.mjs", "string_slice")
+fn string_slice(s: String, start: Int, end: Int) -> String
+
+@external(javascript, "./effects_ffi.mjs", "string_slice_from")
+fn string_slice_from(s: String, start: Int) -> String
+
+@external(javascript, "./effects_ffi.mjs", "string_length")
+fn string_length(s: String) -> Int
+
+@external(javascript, "./effects_ffi.mjs", "string_trim_left")
+fn string_trim_left(s: String) -> String
+
+@external(javascript, "./effects_ffi.mjs", "string_starts_with")
+fn string_starts_with(s: String, prefix: String) -> Bool

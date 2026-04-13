@@ -393,10 +393,14 @@ pub fn delete_drinks_by_store(store: DrinkStore, store_id: String) -> List(Strin
   }
 }
 
-/// Check if any drinks exist for a store (used to verify store existence)
-/// Returns True if at least one drink exists for this store_id
+/// Check if any drinks exist for a store
+/// Returns True if drinks exist for the store, False otherwise
 pub fn check_store_exists(store: DrinkStore, store_id: String) -> Result(Bool, String) {
-  // List drinks for this store and check if any exist
-  let drinks = list_drinks_by_store(store, store_id)
-  Ok(!list.is_empty(drinks))
+  let reply_subject = process.new_subject()
+  actor.send(store, ListDrinksByStore(store_id, reply_subject))
+
+  case process.receive(reply_subject, within: 5000) {
+    Ok(drinks) -> Ok(!list.is_empty(drinks))
+    Error(_) -> Error("Timeout waiting for drink store")
+  }
 }

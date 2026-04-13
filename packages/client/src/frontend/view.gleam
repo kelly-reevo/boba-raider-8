@@ -1,47 +1,152 @@
-/// View rendering functions
+/// View rendering for todo application with empty states
 
-import frontend/model.{type Model}
-import frontend/msg.{type Msg}
+import frontend/model.{type Filter, type Model, type Todo, All, Active, Completed, filter_name, filter_todos}
+import frontend/msg.{type Msg, SetFilter, SetTitle, SetDescription, SetPriority, SubmitForm, ToggleTodo, DeleteTodo}
 import gleam/list
-import gleam/string
+import gleam/option.{Some, None}
 import lustre/attribute
-import lustre/element.{type Element}
+import lustre/element.{type Element, text}
 import lustre/element/html
 import lustre/event
-import shared.{type Todo}
 
-/// Main view function rendering the app
+/// Main view function
 pub fn view(model: Model) -> Element(Msg) {
   html.div([attribute.class("app")], [
-    html.h1([], [element.text("boba-raider-8")]),
-    error_view(model.error),
-    todo_list_view(model.todos),
+    html.h1([], [text("boba-raider-8")]),
+    render_add_form(model),
+    render_filter_buttons(model.filter),
+    render_error(model.error),
+    render_todo_list(model),
   ])
 }
 
-fn error_view(error: String) -> Element(Msg) {
-  case string.is_empty(error) {
-    True -> html.div([], [])
-    False -> html.div(
-      [attribute.id("error-message"), attribute.class("error"), attribute.style("display", "block")],
-      [element.text(error)],
-    )
+/// Render the add todo form
+fn render_add_form(model: Model) -> Element(Msg) {
+  html.form(
+    [
+      attribute.class("add-todo-form"),
+      event.on_submit(fn(_) { SubmitForm }),
+    ],
+    [
+      html.input([
+        attribute.type_("text"),
+        attribute.name("title"),
+        attribute.id("todo-title"),
+        attribute.placeholder("Enter todo title"),
+        attribute.required(True),
+        attribute.value(model.form.title),
+        event.on_input(SetTitle),
+      ]),
+      html.input([
+        attribute.type_("text"),
+        attribute.name("description"),
+        attribute.placeholder("Enter description (optional)"),
+        attribute.value(model.form.description),
+        event.on_input(SetDescription),
+      ]),
+      html.select(
+        [attribute.name("priority"), event.on_input(SetPriority)],
+        [
+          html.option(
+            [attribute.value("low"), selected_if(model.form.priority == "low")],
+            "Low"
+          ),
+          html.option(
+            [attribute.value("medium"), selected_if(model.form.priority == "medium")],
+            "Medium"
+          ),
+          html.option(
+            [attribute.value("high"), selected_if(model.form.priority == "high")],
+            "High"
+          ),
+        ]
+      ),
+      html.button([attribute.type_("submit")], [text("Add")]),
+    ]
+  )
+}
+
+fn selected_if(condition: Bool) -> attribute.Attribute(Msg) {
+  case condition {
+    True -> attribute.selected(True)
+    False -> attribute.attribute("", "")
   }
 }
 
-fn todo_list_view(todos: List(Todo)) -> Element(Msg) {
-  case list.is_empty(todos) {
-    True -> html.div([attribute.class("empty-state")], [
-      element.text("No items yet. Add one above!"),
-    ])
-    False -> html.ul(
-      [attribute.id("todo-list")],
-      list.map(todos, todo_item_view),
-    )
+/// Render filter selection buttons
+fn render_filter_buttons(current_filter: Filter) -> Element(Msg) {
+  html.div([attribute.class("filter-buttons")], [
+    render_filter_button("All", All, current_filter),
+    render_filter_button("Active", Active, current_filter),
+    render_filter_button("Completed", Completed, current_filter),
+  ])
+}
+
+fn render_filter_button(label: String, filter: Filter, current: Filter) -> Element(Msg) {
+  let is_active = current == filter
+
+  html.button(
+    [
+      attribute.class(case is_active {
+        True -> "filter-button active"
+        False -> "filter-button"
+      }),
+      attribute.attribute("data-filter", filter_name(filter)),
+      event.on_click(SetFilter(filter)),
+    ],
+    [text(label)]
+  )
+}
+
+/// Render error message if present
+fn render_error(error: option.Option(String)) -> Element(Msg) {
+  case error {
+    Some(msg) -> html.div([attribute.class("error-message")], [text(msg)])
+    None -> html.div([], [])
   }
 }
 
-fn todo_item_view(item: Todo) -> Element(Msg) {
+/// Render the todo list container with empty state handling
+fn render_todo_list(model: Model) -> Element(Msg) {
+  let filtered = filter_todos(model)
+  let has_todos = case filtered {
+    [] -> False
+    _ -> True
+  }
+
+  html.div(
+    [
+      attribute.class("todo-list"),
+      attribute.attribute("data-testid", "todo-list"),
+    ],
+    case has_todos {
+      True -> list.map(filtered, render_todo_item)
+      False -> [render_empty_state(model.filter, model.todos)]
+    }
+  )
+}
+
+/// Render empty state message based on context
+/// Boundary contract: No todos at all: 'No todos yet. Add one above!'
+/// Boundary contract: No matching filter: 'No {filter} todos.' (e.g., 'No active todos.')
+fn render_empty_state(filter: Filter, _all_todos: List(Todo)) -> Element(Msg) {
+  let message = case filter {
+    All -> "No todos yet. Add one above!"
+    Active -> "No active todos."
+    Completed -> "No completed todos."
+  }
+
+  html.div(
+    [
+      attribute.class("empty-state"),
+      attribute.attribute("data-testid", "empty-state"),
+    ],
+    [text(message)]
+  )
+}
+
+/// Render a single todo item with toggle checkbox and delete button
+fn render_todo_item(item: Todo) -> Element(Msg) {
   let completed_class = case item.completed {
     True -> "todo-item completed"
     False -> "todo-item"
@@ -56,6 +161,7 @@ fn todo_item_view(item: Todo) -> Element(Msg) {
     [
       attribute.class(completed_class),
       attribute.attribute("data-id", item.id),
+      attribute.attribute("data-todo-id", item.id),
     ],
     [
       html.input([
@@ -63,17 +169,25 @@ fn todo_item_view(item: Todo) -> Element(Msg) {
         attribute.class("toggle"),
         attribute.checked(item.completed),
         attribute.attribute("data-completed", data_completed),
-        event.on_check(fn(checked) { msg.ToggleTodo(item.id, checked) }),
+        event.on_check(fn(checked) { ToggleTodo(item.id, checked) }),
       ]),
-      html.span([attribute.class("title")], [element.text(item.title)]),
+      html.div([attribute.class("todo-content")], [
+        html.span([attribute.class("title")], [text(item.title)]),
+        case item.description {
+          Some(desc) if desc != "" ->
+            html.span([attribute.class("todo-description")], [text(desc)])
+          _ -> html.span([], [])
+        },
+        html.span([attribute.class("todo-priority")], [text(item.priority)]),
+      ]),
       html.button(
         [
           attribute.class("delete"),
           attribute.attribute("data-id", item.id),
-          event.on_click(msg.DeleteTodo(item.id)),
+          event.on_click(DeleteTodo(item.id)),
         ],
-        [element.text("Delete")],
+        [text("Delete")],
       ),
-    ],
+    ]
   )
 }

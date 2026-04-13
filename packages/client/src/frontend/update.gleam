@@ -1,15 +1,95 @@
-/// State update logic
+/// Update logic for todo application
 
 import frontend/effects
-import frontend/model.{type Model, Model}
+import frontend/model.{type Model, Model, type Todo, FormState}
 import frontend/msg.{type Msg}
 import gleam/list
+import gleam/option.{type Option, Some, None}
 import lustre/effect.{type Effect}
-import shared.{Todo}
 
-/// Update function handling all message types
+/// Main update function handling all messages
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
+    // Load todos on init
+    msg.LoadTodos -> #(model, effects.fetch_todos())
+
+    // Todos loaded from API
+    msg.TodosLoaded(todos) -> {
+      #(Model(..model, todos: todos, loading: False, error: None), effect.none())
+    }
+
+    // Failed to load todos
+    msg.TodosLoadFailed(error) -> {
+      #(Model(..model, loading: False, error: Some(error)), effect.none())
+    }
+
+    // Filter changed
+    msg.SetFilter(filter) -> {
+      #(Model(..model, filter: filter), effect.none())
+    }
+
+    // Form input changes
+    msg.SetTitle(title) -> {
+      let new_form = FormState(..model.form, title: title)
+      #(Model(..model, form: new_form), effect.none())
+    }
+
+    msg.SetDescription(desc) -> {
+      let new_form = FormState(..model.form, description: desc)
+      #(Model(..model, form: new_form), effect.none())
+    }
+
+    msg.SetPriority(priority) -> {
+      let new_form = FormState(..model.form, priority: priority)
+      #(Model(..model, form: new_form), effect.none())
+    }
+
+    // Submit form to create todo
+    msg.SubmitForm -> {
+      let title = model.form.title
+      let desc = model.form.description
+      let priority = model.form.priority
+
+      case title {
+        "" -> #(Model(..model, error: Some("Title is required")), effect.none())
+        _ -> {
+          let new_model = Model(
+            ..model,
+            form: FormState("", "", "medium"),
+            error: None,
+          )
+          #(new_model, effects.create_todo(title, desc, priority))
+        }
+      }
+    }
+
+    // Todo created successfully
+    msg.TodoCreated(item) -> {
+      let new_todos = [item, ..model.todos]
+      #(Model(..model, todos: new_todos), effect.none())
+    }
+
+    // Failed to create todo
+    msg.TodoCreateFailed(error) -> {
+      #(Model(..model, error: Some(error)), effect.none())
+    }
+
+    // Delete todo requested
+    msg.DeleteTodo(id) -> {
+      #(model, effects.delete_todo(id))
+    }
+
+    // Todo deleted successfully
+    msg.TodoDeleted(id) -> {
+      let new_todos = list.filter(model.todos, fn(t) { t.id != id })
+      #(Model(..model, todos: new_todos), effect.none())
+    }
+
+    // Failed to delete todo
+    msg.TodoDeleteFailed(error) -> {
+      #(Model(..model, error: Some(error)), effect.none())
+    }
+
     // Toggle todo completion - optimistic update
     msg.ToggleTodo(id, completed) -> {
       let updated_todos =
@@ -23,7 +103,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         ..model,
         todos: updated_todos,
         toggling_id: id,
-        error: "",
+        error: None,
       )
       #(new_model, effects.patch_todo(id, completed))
     }
@@ -49,37 +129,23 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             False -> item
           }
         })
-      #(Model(..model, todos: reverted_todos, toggling_id: "", error: error), effect.none())
+      #(Model(..model, todos: reverted_todos, toggling_id: "", error: Some(error)), effect.none())
     }
 
-    // Delete item initiated - set loading and make API call
-    msg.DeleteTodo(id) -> #(
-      Model(..model, loading: True, error: ""),
-      effects.delete_todo(id),
-    )
+    // Generic todo update (from toggle)
+    msg.TodoUpdated(updated) -> {
+      let new_todos = list.map(model.todos, fn(t) {
+        case t.id == updated.id {
+          True -> updated
+          False -> t
+        }
+      })
+      #(Model(..model, todos: new_todos, toggling_id: ""), effect.none())
+    }
 
-    // Delete successful - remove from model.todos
-    msg.DeleteTodoSuccess(id) -> #(
-      Model(
-        todos: list.filter(model.todos, fn(item) { item.id != id }),
-        loading: False,
-        error: "",
-        toggling_id: model.toggling_id,
-      ),
-      effect.none(),
-    )
-
-    // Delete error - show error message, keep todos
-    msg.DeleteTodoError(error_msg) -> #(
-      Model(..model, loading: False, error: error_msg),
-      effect.none(),
-    )
-
-    // Data loading
-    msg.LoadTodos -> #(model, effects.fetch_todos())
-    msg.LoadTodosSuccess(items) -> #(Model(..model, todos: items), effect.none())
-    msg.LoadTodosError(error) -> #(Model(..model, error: error), effect.none())
-    msg.TodosLoaded(todos) -> #(Model(..model, todos: todos, loading: False), effect.none())
-    msg.TodosLoadError(error_msg) -> #(Model(..model, error: error_msg, loading: False), effect.none())
+    // Failed to update todo
+    msg.TodoUpdateFailed(error) -> {
+      #(Model(..model, error: Some(error), toggling_id: ""), effect.none())
+    }
   }
 }

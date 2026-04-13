@@ -18,13 +18,20 @@ stop({server, _Pid, Socket}) ->
     http_server:stop(Socket),
     nil.
 
-erl_to_gleam_request(#{method := Method, path := Path, headers := Headers, body := Body}) ->
+erl_to_gleam_request(#{method := Method, path := Path, headers := Headers, body := Body} = Request) ->
     GleamHeaders = maps:fold(fun(K, V, Acc) ->
         gleam@dict:insert(Acc, to_binary(K), to_binary(V))
     end, gleam@dict:new(), Headers),
+    Query = maps:get(query, Request, undefined),
+    GleamQuery = case Query of
+        undefined -> none;
+        <<>> -> none;
+        Q -> {some, to_binary(Q)}
+    end,
     {request,
         to_binary(Method),
         to_binary(Path),
+        GleamQuery,
         GleamHeaders,
         to_binary(Body)}.
 

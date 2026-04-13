@@ -1,9 +1,21 @@
-/// Application state
+import shared.{type Todo}
 
+/// Fetch status for loading state tracking
+pub type FetchStatus {
+  Idle
+  Loading
+  Success
+  Error(String)
+}
+
+/// Application state
 pub type Model {
-  Model(count: Int, error: String)
+  Model(
+    todos: List(Todo),
+    status: FetchStatus,
+  )
 }
 
 pub fn default() -> Model {
-  Model(count: 0, error: "")
+  Model(todos: [], status: Idle)
 }

@@ -1,7 +1,7 @@
-/// Application messages
+import shared.{type Todo}
 
+/// Application messages
 pub type Msg {
-  Increment
-  Decrement
-  Reset
+  FetchTodos
+  GotTodos(Result(List(Todo), String))
 }

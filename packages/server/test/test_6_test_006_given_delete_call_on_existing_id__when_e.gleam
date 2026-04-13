@@ -12,7 +12,7 @@ pub fn main() {
 // Test: delete returns :ok and removes todo from storage
 pub fn delete_returns_ok_and_removes_todo_test() {
   // Given: An existing todo
-  let attrs = shared.new_todo(title: "Delete Me", description: None, priority: Medium)
+  let attrs = shared.new_todo_attrs(title: "Delete Me", description: None, priority: Medium)
   let assert Ok(created) = todo_store.create(attrs)
   let target_id = created.id
   

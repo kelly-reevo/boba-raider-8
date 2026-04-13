@@ -15,11 +15,11 @@ pub fn get_all_returns_todos_in_creation_order_test() {
   todo_store.clear()
 
   // Given: 5 stored todos created in sequence
-  let attrs1 = shared.new_todo(title: "Task 1", description: None, priority: Low)
-  let attrs2 = shared.new_todo(title: "Task 2", description: None, priority: Medium)
-  let attrs3 = shared.new_todo(title: "Task 3", description: None, priority: High)
-  let attrs4 = shared.new_todo(title: "Task 4", description: None, priority: Low)
-  let attrs5 = shared.new_todo(title: "Task 5", description: None, priority: Medium)
+  let attrs1 = shared.new_todo_attrs(title: "Task 1", description: None, priority: Low)
+  let attrs2 = shared.new_todo_attrs(title: "Task 2", description: None, priority: Medium)
+  let attrs3 = shared.new_todo_attrs(title: "Task 3", description: None, priority: High)
+  let attrs4 = shared.new_todo_attrs(title: "Task 4", description: None, priority: Low)
+  let attrs5 = shared.new_todo_attrs(title: "Task 5", description: None, priority: Medium)
   
   let assert Ok(todo1) = todo_store.create(attrs1)
   let assert Ok(todo2) = todo_store.create(attrs2)

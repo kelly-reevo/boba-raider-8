@@ -12,8 +12,8 @@ pub fn main() {
 // Test: create returns todo with generated id and created_at timestamp
 pub fn create_generates_id_and_timestamp_test() {
   // Given: A create call with title 'Task'
-  let attrs = shared.new_todo(title: "Task", description: None, priority: Medium)
-  
+  let attrs = shared.new_todo_attrs(title: "Task", description: None, priority: Medium)
+
   // When: Executed through the storage interface
   let result = todo_store.create(attrs)
   

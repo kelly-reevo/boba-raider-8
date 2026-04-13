@@ -11,7 +11,7 @@ pub fn main() {
 // Test: get_by_id returns matching todo for existing ID
 pub fn get_by_id_returns_todo_for_existing_id_test() {
   // Given: An existing todo in storage
-  let attrs = shared.new_todo(title: "Find Me", description: None, priority: Medium)
+  let attrs = shared.new_todo_attrs(title: "Find Me", description: None, priority: Medium)
   let assert Ok(created) = todo_store.create(attrs)
   let target_id = created.id
   

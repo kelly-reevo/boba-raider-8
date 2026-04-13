@@ -12,7 +12,7 @@ pub fn main() {
 pub fn update_returns_null_for_nonexistent_id_test() {
   // Given: A non-existent ID
   let non_existent_id = "non-existent-id-12345"
-  let update_attrs = shared.new_todo(title: "New Title", description: None, priority: Medium)
+  let update_attrs = shared.new_todo_attrs(title: "New Title", description: None, priority: Medium)
 
   // When: update is called with non-existent ID
   let result = todo_store.update(non_existent_id, update_attrs)

@@ -35,7 +35,8 @@ pub fn parse_priority(s: String) -> Priority {
 /// - description: Optional string (None represents null)
 /// - priority: Low | Medium | High
 /// - completed: Boolean
-/// - created_at: ISO8601 datetime string
+/// - created_at: Unix timestamp (milliseconds)
+/// - updated_at: Unix timestamp (milliseconds)
 pub type Todo {
   Todo(
     id: String,
@@ -43,17 +44,19 @@ pub type Todo {
     description: Option(String),
     priority: Priority,
     completed: Bool,
-    created_at: String,
+    created_at: Int,
+    updated_at: Int,
   )
 }
 
 /// Create a new todo with the given fields
-/// Uses current time for created_at
+/// Uses current timestamp for created_at and updated_at
 pub fn new(
   id: String,
   title: String,
   description: Option(String),
   priority: Priority,
+  created_at: Int,
 ) -> Todo {
   Todo(
     id: id,
@@ -61,8 +64,8 @@ pub fn new(
     description: description,
     priority: priority,
     completed: False,
-    // ISO8601 format: YYYY-MM-DDTHH:MM:SSZ
-    created_at: "2024-01-15T10:30:00Z",
+    created_at: created_at,
+    updated_at: created_at,
   )
 }
 

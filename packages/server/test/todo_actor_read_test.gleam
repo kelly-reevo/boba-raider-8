@@ -35,7 +35,7 @@ pub fn read_existing_todo_returns_todo_test() {
   should.equal(found_todo.description, Some(description))
   should.equal(found_todo.priority, High)
   should.equal(found_todo.completed, False)
-  should.be_true(string.length(found_todo.created_at) > 0)
+  should.be_true(found_todo.created_at > 0)
 
   // Cleanup
   todo_actor.shutdown(actor_pid)
@@ -97,7 +97,7 @@ pub fn read_returns_todo_with_required_schema_fields_test() {
   // Verify completed is a boolean (False for new todos)
   should.be_false(found_todo.completed)
   // Verify created_at is non-empty string
-  should.be_true(string.length(found_todo.created_at) > 0)
+  should.be_true(found_todo.created_at > 0)
 
   // Cleanup
   todo_actor.shutdown(actor_pid)

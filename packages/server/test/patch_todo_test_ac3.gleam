@@ -30,9 +30,9 @@ fn decode_404_error_response(json_string: String) -> String {
 
 pub fn patch_nonexistent_todo_returns_404_test() {
   let _ = todo_store.stop()
-  let assert Ok(_) = todo_store.start()
+  let assert Ok(store) = todo_store.start()
   let fake_id = "00000000-0000-0000-0000-000000000000"
-  let handler = router.make_handler()
+  let handler = router.make_handler(store)
 
   let patch_body = json.object([#("title", json.string("Updated Title"))]) |> json.to_string()
   let req = build_patch_request(fake_id, patch_body)

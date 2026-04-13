@@ -44,10 +44,10 @@ fn decode_422_errors_response(json_string: String) -> List(#(String, String)) {
 
 pub fn patch_todo_empty_title_returns_422_test() {
   let _ = todo_store.stop()
-  let assert Ok(_) = todo_store.start()
+  let assert Ok(store) = todo_store.start()
   let existing = create_test_todo()
   let id = existing.id
-  let handler = router.make_handler()
+  let handler = router.make_handler(store)
 
   let patch_body = json.object([#("title", json.string(""))]) |> json.to_string()
   let req = build_patch_request(id, patch_body)

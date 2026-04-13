@@ -51,10 +51,10 @@ fn decode_todo_response(json_string: String) {
 
 pub fn patch_todo_empty_body_returns_unchanged_test() {
   let _ = todo_store.stop()
-  let assert Ok(_) = todo_store.start()
+  let assert Ok(store) = todo_store.start()
   let existing = create_test_todo()
   let id = existing.id
-  let handler = router.make_handler()
+  let handler = router.make_handler(store)
 
   let original_title = existing.title
   let original_description = existing.description

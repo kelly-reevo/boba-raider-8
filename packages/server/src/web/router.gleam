@@ -347,26 +347,110 @@ fn update_todo_handler(id: String, request: Request) -> Response {
           )
         }
         Ok(json_str) -> {
-          let #(title, description, priority, completed) = extract_update_fields(json_str, existing)
-          let attrs = shared.TodoAttrs(
-            title: title,
-            description: description,
-            priority: priority,
-            completed: completed,
-          )
-          case todo_store.update(id, attrs) {
-            Ok(updated) -> server.json_response(200, todo_to_json_string(updated))
-            Error(_) -> {
+          // Validate patch fields and collect errors
+          let validation_result = validate_patch_fields(json_str, existing)
+          case validation_result {
+            Error(errors) -> {
+              // Return 422 with validation errors
+              let error_objects = list.map(errors, fn(e) {
+                json.object([
+                  #("field", json.string(e.0)),
+                  #("message", json.string(e.1)),
+                ])
+              })
               server.json_response(
-                404,
-                json.object([#("error", json.string("Todo not found"))])
+                422,
+                json.object([#("errors", json.array(error_objects, fn(x) { x }))])
                 |> json.to_string,
               )
+            }
+            Ok(#(title, description, priority, completed)) -> {
+              let attrs = shared.TodoAttrs(
+                title: title,
+                description: description,
+                priority: priority,
+                completed: completed,
+              )
+              case todo_store.update(id, attrs) {
+                Ok(updated) -> server.json_response(200, todo_to_json_string(updated))
+                Error(_) -> {
+                  server.json_response(
+                    404,
+                    json.object([#("error", json.string("Todo not found"))])
+                    |> json.to_string,
+                  )
+                }
+              }
             }
           }
         }
       }
     }
+  }
+}
+
+/// Validate patch fields and return errors or validated values
+fn validate_patch_fields(json: String, existing: Todo) -> Result(#(String, Option(String), Priority, Bool), List(#(String, String))) {
+  let errors = []
+
+  // Extract and validate title
+  let title_result = case extract_string_field(json, "title") {
+    Ok(t) -> {
+      case string.trim(t) {
+        "" -> {
+          // Empty title is an error
+          Error(#("title", "Title cannot be empty"))
+        }
+        trimmed -> Ok(trimmed)
+      }
+    }
+    Error(_) -> Ok(existing.title)  // Title not provided, use existing
+  }
+  let errors = case title_result {
+    Error(e) -> [e, ..errors]
+    Ok(_) -> errors
+  }
+
+  // Extract description (no validation needed, can be None)
+  let description = case extract_optional_string_field(json, "description") {
+    Some(d) -> Some(d)
+    None -> existing.description
+  }
+
+  // Extract and validate priority
+  let priority_result = case extract_string_field(json, "priority") {
+    Ok(p) -> {
+      case priority_from_string(p) {
+        Ok(pr) -> Ok(pr)
+        Error(_) -> Error(#("priority", "Invalid priority value"))
+      }
+    }
+    Error(_) -> Ok(existing.priority)  // Priority not provided, use existing
+  }
+  let errors = case priority_result {
+    Error(e) -> [e, ..errors]
+    Ok(_) -> errors
+  }
+
+  // Extract completed (no validation needed)
+  let completed = case extract_bool_field(json, "completed") {
+    True -> True
+    False -> {
+      // Check if it was explicitly set to false
+      case string.contains(json, "\"completed\":") {
+        True -> False
+        False -> existing.completed
+      }
+    }
+  }
+
+  case errors {
+    [] -> {
+      let assert Ok(title) = title_result
+      let assert Ok(priority) = priority_result
+      Ok(#(title, description, priority, completed))
+    }
+    _ -> Error(errors)
   }
 }
 

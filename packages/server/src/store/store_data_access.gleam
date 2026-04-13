@@ -226,3 +226,8 @@ pub fn delete(state: StoreState, id: String) -> #(StoreState, Result(Nil, StoreE
     }
   }
 }
+
+/// List all stores without pagination (for search)
+pub fn list_all(state: StoreState) -> List(BobaStore) {
+  dict.values(state.stores)
+}

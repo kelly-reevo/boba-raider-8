@@ -1,37 +1,54 @@
-/// Shared domain types for boba-raider-8
+/// Boba Types - Shared domain types for boba-raider-8
+/// Used across frontend, backend, and validation layers
 
-/// Store entity representing a boba shop
+import gleam/option.{type Option, Some, None}
+import gleam/json.{type Json}
+
+/// Store record representing a boba store
 pub type Store {
   Store(
-    id: Int,
+    id: String,
     name: String,
-    address: String,
+    address: Option(String),
+    city: Option(String),
+    phone: Option(String),
+    drink_count: Int,
     created_at: String,
   )
 }
 
-/// Drink entity representing a boba drink
+/// Drink record representing a boba drink
 pub type Drink {
   Drink(
-    id: Int,
+    id: String,
     store_id: Int,
     name: String,
-    description: String,
-    base_tea_type: String,
-    price: Float,
-    created_at: String,
   )
 }
 
-/// Rating entity representing a drink review
-pub type Rating {
-  Rating(
-    id: Int,
-    drink_id: Int,
-    overall_rating: Int,
-    sweetness: Int,
-    boba_texture: Int,
-    tea_strength: Int,
-    created_at: String,
-  )
+/// Encode a Store to JSON
+pub fn store_to_json(store: Store) -> Json {
+  json.object([
+    #("id", json.string(store.id)),
+    #("name", json.string(store.name)),
+    #("address", case store.address {
+      Some(a) -> json.string(a)
+      None -> json.null()
+    }),
+    #("city", case store.city {
+      Some(c) -> json.string(c)
+      None -> json.null()
+    }),
+    #("phone", case store.phone {
+      Some(p) -> json.string(p)
+      None -> json.null()
+    }),
+    #("drink_count", json.int(store.drink_count)),
+    #("created_at", json.string(store.created_at)),
+  ])
+}
+
+/// Encode a list of stores to JSON
+pub fn stores_to_json(stores: List(Store)) -> Json {
+  json.array(stores, store_to_json)
 }

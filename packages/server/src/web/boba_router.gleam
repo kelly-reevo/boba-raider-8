@@ -1,96 +1,104 @@
-/// Boba Router - HTTP request router for boba API endpoints
-/// Handles drink CRUD operations with store integration
-import drink_store.{type DrinkStore}
-import gleam/dict
-import gleam/dynamic/decode
+/// Boba Router - HTTP request routing for boba-raider-8 API
+/// Handles GET /api/stores/:id and other store-related endpoints
+
 import gleam/json
-import gleam/list
-import gleam/option.{type Option, None, Some}
+import gleam/option.{type Option, Some, None}
 import gleam/string
-import services/drink_service
-import store/store_data_access as store_access
+import boba_store.{type Store}
+import store/store_service as service
 import web/server.{type Request, type Response}
 
-/// Create a request handler with store access
-pub fn make_handler(store: DrinkStore) -> fn(Request) -> Response {
-  fn(request: Request) { route(request, store) }
+// ============================================================================
+// Router Factory
+// ============================================================================
+
+/// Create an HTTP handler that uses the given store
+pub fn make_handler(store: Store) -> fn(Request) -> Response {
+  fn(request: Request) { route(store, request) }
 }
 
-/// Main routing logic
-fn route(request: Request, store: DrinkStore) -> Response {
+// ============================================================================
+// Routing Logic
+// ============================================================================
+
+fn route(store: Store, request: Request) -> Response {
   case request.method, request.path {
-    "PUT", path -> route_put(path, request, store)
+    "GET", "/health" -> health_handler()
+    "GET", "/api/health" -> health_handler()
+    "GET", path -> route_get(store, path)
     _, _ -> not_found()
   }
 }
 
-/// Handle PUT requests
-fn route_put(path: String, request: Request, store: DrinkStore) -> Response {
-  case string.starts_with(path, "/api/drinks/") {
+fn route_get(store: Store, path: String) -> Response {
+  // Check for /api/stores/:id pattern
+  case string.starts_with(path, "/api/stores/") {
     True -> {
-      let id = string.drop_start(path, 12)
-      put_drink_handler(id, request, store)
+      let id_part = string.drop_start(path, 12) // Remove "/api/stores/"
+      case string.is_empty(id_part) {
+        True -> not_found()
+        False -> get_store_handler(store, id_part)
+      }
     }
     False -> not_found()
   }
 }
 
-/// PUT /api/drinks/:id handler
-/// Updates drink fields with partial update support
-fn put_drink_handler(
-  id: String,
-  request: Request,
-  store: DrinkStore,
-) -> Response {
-  // Parse the request body using a decoder
-  case parse_update_request(request.body) {
-    Error(_) ->
-      json_response(
-        400,
-        json.object([#("error", json.string("Invalid JSON body"))]),
-      )
-    Ok(parsed) -> {
-      // Build update input with Option(Option(T)) for null handling
-      let input =
-        drink_service.UpdateDrinkServiceInput(
-          name: parsed.name,
-          description: parsed.description,
-          base_tea_type: parsed.base_tea_type,
-          price: parsed.price,
-        )
+// ============================================================================
+// Handlers
+// ============================================================================
 
-      // Call service layer
-      let store_state = store_access.global_state()
-      case drink_service.update_drink(store, store_state, id, input) {
-        Ok(drink_output) -> {
-          // Serialize drink output to JSON
-          let body = encode_drink_output(drink_output)
-          json_response(200, body)
+fn health_handler() -> Response {
+  server.json_response(
+    200,
+    json.object([#("status", json.string("ok"))])
+    |> json.to_string,
+  )
+}
+
+fn not_found() -> Response {
+  server.json_response(
+    404,
+    json.object([#("error", json.string("store not found"))])
+    |> json.to_string,
+  )
+}
+
+fn get_store_handler(store: Store, store_id_str: String) -> Response {
+  // Parse the store ID as an integer
+  case parse_int(store_id_str) {
+    Error(_) -> {
+      // Invalid ID format (not a number)
+      server.json_response(
+        400,
+        json.object([#("error", json.string("Invalid store ID format"))])
+        |> json.to_string,
+      )
+    }
+    Ok(store_id) -> {
+      // Look up the store by numeric ID
+      case boba_store.get_store_by_id(store, store_id) {
+        Ok(store_data) -> {
+          // Get actual drink count from drink store
+          let drink_count = boba_store.count_drinks_by_store(store, store_id)
+
+          // Return store with actual drink count
+          let json_body = store_record_to_json(store_data, drink_count)
+          server.json_response(200, json.to_string(json_body))
         }
-        Error(errors) -> {
-          // Check if this is a "not found" error vs validation errors
-          case
-            list.find(errors, fn(e) {
-              e.field == "id" && e.message == "Drink not found"
-            })
-          {
-            Ok(_) -> not_found()
-            Error(_) -> {
-              // Return 422 with validation errors
-              let errors_json =
-                list.map(errors, fn(e) {
-                  json.object([
-                    #("field", json.string(e.field)),
-                    #("message", json.string(e.message)),
-                  ])
-                })
-              json_response(
-                422,
-                json.object([
-                  #("errors", json.array(errors_json, of: fn(x) { x })),
-                ]),
-              )
-            }
+        Error(msg) -> {
+          // Store not found or other error
+          case string.contains(msg, "not found") || string.contains(msg, "Not found") {
+            True -> server.json_response(
+              404,
+              json.object([#("error", json.string("store not found"))])
+              |> json.to_string,
+            )
+            False -> server.json_response(
+              400,
+              json.object([#("error", json.string(msg))])
+              |> json.to_string,
+            )
           }
         }
       }
@@ -98,83 +106,51 @@ fn put_drink_handler(
   }
 }
 
-/// Parsed update request fields - all optional for partial updates
-/// Uses Option(Option(T)) to distinguish between:
-/// - None: field not provided (keep existing)
-/// - Some(None): field set to null (clear field)
-/// - Some(Some(T)): field set to new value
-type ParsedUpdateRequest {
-  ParsedUpdateRequest(
-    name: Option(String),
-    description: Option(Option(String)),
-    base_tea_type: Option(Option(String)),
-    price: Option(Option(Float)),
-  )
+/// Parse a string to an integer
+fn parse_int(s: String) -> Result(Int, String) {
+  parse_int_recursive(string.trim(s), 0)
 }
 
-/// Parse JSON body for update request
-fn parse_update_request(
-  body: String,
-) -> Result(ParsedUpdateRequest, json.DecodeError) {
-  // Decoder for each field type:
-  // - name: Option(String) - absent=None, present=Some(value)
-  // - description/base_tea_type/price: Option(Option(T)) - absent=None, null=Some(None), value=Some(Some(v))
-  let decoder = {
-    use name <- decode.field("name", decode.optional(decode.string))
-    use description <- decode.field(
-      "description",
-      decode.optional(decode.optional(decode.string)),
-    )
-    use base_tea_type <- decode.field(
-      "base_tea_type",
-      decode.optional(decode.optional(decode.string)),
-    )
-    use price <- decode.field(
-      "price",
-      decode.optional(decode.optional(decode.float)),
-    )
-    decode.success(ParsedUpdateRequest(
-      name:,
-      description:,
-      base_tea_type:,
-      price:,
-    ))
+fn parse_int_recursive(s: String, acc: Int) -> Result(Int, String) {
+  case string.pop_grapheme(s) {
+    Ok(#(c, rest)) -> {
+      case c {
+        "0" -> parse_int_recursive(rest, acc * 10 + 0)
+        "1" -> parse_int_recursive(rest, acc * 10 + 1)
+        "2" -> parse_int_recursive(rest, acc * 10 + 2)
+        "3" -> parse_int_recursive(rest, acc * 10 + 3)
+        "4" -> parse_int_recursive(rest, acc * 10 + 4)
+        "5" -> parse_int_recursive(rest, acc * 10 + 5)
+        "6" -> parse_int_recursive(rest, acc * 10 + 6)
+        "7" -> parse_int_recursive(rest, acc * 10 + 7)
+        "8" -> parse_int_recursive(rest, acc * 10 + 8)
+        "9" -> parse_int_recursive(rest, acc * 10 + 9)
+        _ -> Error("Invalid digit")
+      }
+    }
+    Error(_) -> Ok(acc)
   }
-
-  json.parse(from: body, using: decoder)
 }
 
-/// Encode DrinkOutput to JSON object
-fn encode_drink_output(drink: drink_service.DrinkOutput) -> json.Json {
+// ============================================================================
+// JSON Encoding
+// ============================================================================
+
+fn store_record_to_json(store: service.StoreWithDrinkCount, drink_count: Int) -> json.Json {
   json.object([
-    #("id", json.string(drink.id)),
-    #("name", json.string(drink.name)),
-    #("description", case drink.description {
-      Some(d) -> json.string(d)
-      None -> json.null()
-    }),
-    #("base_tea_type", case drink.base_tea_type {
-      Some(t) -> json.string(t)
-      None -> json.null()
-    }),
-    #("price", case drink.price {
-      Some(p) -> json.float(p)
-      None -> json.null()
-    }),
-    #("updated_at", json.string(drink.updated_at)),
+    #("id", json.string(store.id)),
+    #("name", json.string(store.name)),
+    #("address", encode_optional_string(store.address)),
+    #("city", encode_optional_string(store.city)),
+    #("phone", encode_optional_string(store.phone)),
+    #("drink_count", json.int(drink_count)),
+    #("created_at", json.string(store.created_at)),
   ])
 }
 
-/// Helper: Create JSON response
-fn json_response(status: Int, body: json.Json) -> Response {
-  server.Response(
-    status: status,
-    headers: dict.from_list([#("Content-Type", "application/json")]),
-    body: json.to_string(body),
-  )
-}
-
-/// Helper: 404 not found response
-fn not_found() -> Response {
-  json_response(404, json.object([#("error", json.string("Not found"))]))
+fn encode_optional_string(opt: Option(String)) -> json.Json {
+  case opt {
+    Some(s) -> json.string(s)
+    None -> json.null()
+  }
 }

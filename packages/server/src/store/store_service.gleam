@@ -53,6 +53,7 @@ pub type StoreServiceMsg {
   CreateStore(CreateStoreInput, Subject(Result(StoreWithDrinkCount, String)))
   GetStoreWithDrinkCount(String, Subject(Result(StoreWithDrinkCount, String)))
   SearchStores(String, Subject(Result(List(StoreWithDrinkCount), String)))
+  DeleteStore(String, Subject(Result(Nil, String)))
 }
 
 pub type StoreService =
@@ -191,6 +192,51 @@ fn handle_message(state: ServiceState, msg: StoreServiceMsg) -> actor.Next(Servi
         }
       }
     }
+
+    DeleteStore(store_id, reply_to) -> {
+      // Validate UUID format - basic check: non-empty and contains dashes
+      let is_valid_id = string.length(store_id) > 0 && string.contains(store_id, "-")
+      case is_valid_id {
+        False -> {
+          actor.send(reply_to, Error("Invalid store ID format"))
+          actor.continue(state)
+        }
+        True -> {
+          // Try to delete store from data access layer
+          case data_access.delete(state.data_access_state, store_id) {
+            #(_, Error(data_access.StoreNotFound(_))) -> {
+              actor.send(reply_to, Error("Store not found"))
+              actor.continue(state)
+            }
+            #(_, Error(data_access.StoreInvalidInput(msg))) -> {
+              actor.send(reply_to, Error(msg))
+              actor.continue(state)
+            }
+            #(_, Error(data_access.StoreInternalError(msg))) -> {
+              actor.send(reply_to, Error(msg))
+              actor.continue(state)
+            }
+            #(new_data_state, Ok(_)) -> {
+              // Publish event if publisher exists
+              case state.event_publisher {
+                Some(publisher) -> {
+                  publisher.publish("store.deleted", StoreDeleted(store_id))
+                }
+                None -> Nil
+              }
+
+              // Update state and reply
+              let new_state = ServiceState(
+                data_access_state: new_data_state,
+                event_publisher: state.event_publisher,
+              )
+              actor.send(reply_to, Ok(Nil))
+              actor.continue(new_state)
+            }
+          }
+        }
+      }
+    }
   }
 }
 
@@ -271,6 +317,20 @@ pub fn search_stores(
 ) -> Result(List(StoreWithDrinkCount), String) {
   let reply_subject = process.new_subject()
   actor.send(service, SearchStores(search_term, reply_subject))
+
+  case process.receive(reply_subject, within: 5000) {
+    Ok(result) -> result
+    Error(_) -> Error("Timeout waiting for store service")
+  }
+}
+
+/// Delete a store by ID
+pub fn delete_store(
+  service: StoreService,
+  store_id: String,
+) -> Result(Nil, String) {
+  let reply_subject = process.new_subject()
+  actor.send(service, DeleteStore(store_id, reply_subject))
 
   case process.receive(reply_subject, within: 5000) {
     Ok(result) -> result

@@ -1,9 +1,13 @@
-import frontend/model.{type Model}
+/// State updates with loading states and error handling
+
+import frontend/model.{type ErrorState, type Model, Error, NoError}
 import frontend/msg.{
-  type Msg, type Status, AddTodo, DeleteTodo, Error as ErrorStatus, FetchTodos,
-  SetFilter, Start, Success, ToggleTodo, UpdateDescription, UpdateTitle,
+  type Msg, type Status, AddTodo, ClearTransientError, DeleteTodo, DismissError,
+  Error as ErrorStatus, FetchTodos, SetFilter, Start, Success, ToggleTodo,
+  UpdateDescription, UpdateTitle,
 }
 import lustre/effect.{type Effect}
+import shared
 
 /// Main update function handling all messages with loading state management
 pub fn update(m: Model, msg: Msg) -> #(Model, Effect(Msg)) {
@@ -32,6 +36,31 @@ pub fn update(m: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       model.Model(..m, new_todo_description: description),
       effect.none(),
     )
+
+    // Error management
+    ClearTransientError -> {
+      let new_list_error = case m.list_error {
+        Error(_, True) -> NoError
+        other -> other
+      }
+      #(
+        model.Model(
+          ..m,
+          list_error: new_list_error,
+          transient_error_active: False,
+        ),
+        effect.none(),
+      )
+    }
+
+    DismissError(container) -> {
+      let new_model = case container {
+        msg.ListErrorContainer -> model.Model(..m, list_error: NoError, transient_error_active: False)
+        msg.FormErrorContainer -> model.Model(..m, form_error: NoError)
+        msg.GlobalErrorContainer -> model.Model(..m, global_error: NoError)
+      }
+      #(new_model, effect.none())
+    }
   }
 }
 
@@ -47,7 +76,7 @@ fn handle_fetch_todos(
         ..m,
         is_loading: True,
         loading_message: "Loading todos...",
-        error: "",
+        global_error: NoError,
       ),
       effect.none(),
     )
@@ -63,7 +92,8 @@ fn handle_fetch_todos(
           todos: items,
           is_loading: False,
           loading_message: "",
-          error: "",
+          global_error: NoError,
+          list_error: NoError,
         ),
         effect.none(),
       )
@@ -74,7 +104,7 @@ fn handle_fetch_todos(
         ..m,
         is_loading: False,
         loading_message: "",
-        error: error_msg,
+        global_error: Error(error_msg, False),
       ),
       effect.none(),
     )
@@ -93,7 +123,7 @@ fn handle_add_todo(
         ..m,
         is_adding: True,
         submit_button_text: "Adding...",
-        error: "",
+        form_error: NoError,
       ),
       effect.none(),
     )
@@ -111,7 +141,7 @@ fn handle_add_todo(
           submit_button_text: "Add Todo",
           new_todo_title: "",
           new_todo_description: "",
-          error: "",
+          form_error: NoError,
         ),
         effect.none(),
       )
@@ -122,7 +152,7 @@ fn handle_add_todo(
         ..m,
         is_adding: False,
         submit_button_text: "Add Todo",
-        error: error_msg,
+        form_error: Error(error_msg, False),
       ),
       effect.none(),
     )
@@ -145,10 +175,8 @@ fn handle_toggle_todo(
     Start -> #(
       model.Model(
         ..m,
-        is_loading: True,
-        loading_message: "Saving...",
         saving_todo_ids: list_append(m.saving_todo_ids, [item_id]),
-        error: "",
+        list_error: NoError,
       ),
       effect.none(),
     )
@@ -175,10 +203,9 @@ fn handle_toggle_todo(
         model.Model(
           ..m,
           todos: updated_todos,
-          is_loading: False,
-          loading_message: "",
           saving_todo_ids: list_remove(m.saving_todo_ids, item_id),
-          error: "",
+          list_error: NoError,
+          transient_error_active: False,
         ),
         effect.none(),
       )
@@ -187,10 +214,9 @@ fn handle_toggle_todo(
     ErrorStatus(error_msg) -> #(
       model.Model(
         ..m,
-        is_loading: False,
-        loading_message: "",
         saving_todo_ids: list_remove(m.saving_todo_ids, item_id),
-        error: error_msg,
+        list_error: Error(error_msg, True),
+        transient_error_active: True,
       ),
       effect.none(),
     )
@@ -214,7 +240,7 @@ fn handle_delete_todo(
       model.Model(
         ..m,
         deleting_todo_ids: list_append(m.deleting_todo_ids, [item_id]),
-        error: "",
+        list_error: NoError,
       ),
       effect.none(),
     )
@@ -226,7 +252,7 @@ fn handle_delete_todo(
           ..m,
           todos: remaining_todos,
           deleting_todo_ids: list_remove(m.deleting_todo_ids, item_id),
-          error: "",
+          list_error: NoError,
         ),
         effect.none(),
       )
@@ -236,7 +262,7 @@ fn handle_delete_todo(
       model.Model(
         ..m,
         deleting_todo_ids: list_remove(m.deleting_todo_ids, item_id),
-        error: error_msg,
+        list_error: Error(error_msg, False),
       ),
       effect.none(),
     )
@@ -251,7 +277,7 @@ fn handle_set_filter(m: Model, f: shared.Filter) -> #(Model, Effect(Msg)) {
     filter: f,
     is_loading: True,
     loading_message: "Loading todos...",
-    error: "",
+    global_error: NoError,
   )
 
   // In a real implementation, this would trigger an effect to fetch filtered todos
@@ -308,4 +334,4 @@ fn list_filter(list: List(a), predicate: fn(a) -> Bool) -> List(a) {
   }
 }
 
-import shared
+import frontend/model

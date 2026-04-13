@@ -1,6 +1,13 @@
-/// Application messages with operation lifecycle statuses
+/// Application messages with operation lifecycle statuses and error handling
 
 import shared.{type Filter, type Todo}
+
+/// Error container types for targeted dismissal
+pub type ErrorContainer {
+  ListErrorContainer
+  FormErrorContainer
+  GlobalErrorContainer
+}
 
 /// Operation status for async operations
 pub type Status {
@@ -29,6 +36,10 @@ pub type Msg {
   // Form input updates
   UpdateTitle(title: String)
   UpdateDescription(description: String)
+
+  // Error management
+  ClearTransientError
+  DismissError(container: ErrorContainer)
 }
 
 /// Payload types for each operation

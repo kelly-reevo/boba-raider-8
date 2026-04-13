@@ -18,7 +18,5 @@ fn init(_flags: Nil) -> #(model.Model, Effect(Msg)) {
   let initial_model = model.init()
 
   // Trigger initial data fetch with loading state
-  // In a real implementation, this would dispatch an effect
-  // For now, we initialize with loading state already set in model.init()
   #(initial_model, effects.fetch_todos())
 }

@@ -1,36 +1,87 @@
-/// View rendering with loading states and disabled controls
+/// View rendering with loading states, disabled controls, and error handling
 
-import frontend/model.{type Model, is_globally_loading, is_todo_deleting, is_todo_saving}
+import frontend/model.{type ErrorState, type Model, Error, NoError, is_globally_loading, is_todo_deleting, is_todo_saving}
 import frontend/msg.{
-  type Msg, AddTodo, DeleteData, DeleteTodo, SetFilter, Start, ToggleData,
-  ToggleTodo, UpdateDescription, UpdateTitle,
+  type Msg, AddTodo, ClearTransientError, DeleteData, DeleteTodo, DismissError,
+  SetFilter, Start, ToggleData, ToggleTodo, UpdateDescription, UpdateTitle,
 }
 import lustre/attribute
 import lustre/element.{type Element, text}
 import lustre/element/html
 import lustre/event
-import shared.{type Todo, Active, All, Completed}
+import shared.{type Filter, type Todo, Active, All, Completed}
 
 /// Main view function
 pub fn view(m: Model) -> Element(Msg) {
   html.div([attribute.class("app")], [
     html.h1([], [text("Todo List")]),
-    render_error(m.error),
+    render_global_error(m.global_error),
     render_loading_indicator(m),
     render_filter_buttons(m),
     render_add_todo_form(m),
+    render_list_error(m.list_error),
     render_todo_list(m),
   ])
 }
 
-/// Render error message if present
-fn render_error(error: String) -> Element(Msg) {
+/// Render global error container (#error-container)
+fn render_global_error(error: ErrorState) -> Element(Msg) {
   case error {
-    "" -> html.div([], [])
-    _ ->
+    NoError -> html.div([attribute.attribute("data-testid", "error-container")], [])
+    Error(message, _) ->
       html.div(
-        [attribute.class("error-message"), attribute.attribute("data-testid", "error-message")],
-        [text(error)],
+        [
+          attribute.attribute("data-testid", "error-container"),
+          attribute.class("error-container"),
+        ],
+        [
+          html.div([attribute.class("error-message"), attribute.attribute("data-testid", "error-message")], [
+            text(message),
+          ]),
+        ],
+      )
+  }
+}
+
+/// Render form error container (#form-error)
+fn render_form_error(error: ErrorState) -> Element(Msg) {
+  case error {
+    NoError -> html.div([attribute.attribute("data-testid", "form-error")], [])
+    Error(message, _) ->
+      html.div(
+        [
+          attribute.attribute("data-testid", "form-error"),
+          attribute.class("error-message"),
+        ],
+        [
+          html.div([attribute.attribute("data-testid", "error-message")], [
+            text(message),
+          ]),
+        ],
+      )
+  }
+}
+
+/// Render list error container (#list-error)
+fn render_list_error(error: ErrorState) -> Element(Msg) {
+  case error {
+    NoError -> html.div([attribute.attribute("data-testid", "list-error")], [])
+    Error(message, _) ->
+      html.div(
+        [
+          attribute.attribute("data-testid", "list-error"),
+          attribute.class("error-message"),
+        ],
+        [
+          html.div([attribute.attribute("data-testid", "error-message")], [
+            text(message),
+          ]),
+          // Add click to clear transient errors
+          case error {
+            Error(_, True) -> html.span([attribute.style("cursor", "pointer"), event.on_click(ClearTransientError)], [text(" (click to dismiss)")])
+            _ -> html.span([], [])
+          },
+        ],
       )
   }
 }
@@ -120,44 +171,47 @@ fn render_filter_buttons(m: Model) -> Element(Msg) {
 fn render_add_todo_form(m: Model) -> Element(Msg) {
   let is_disabled = is_globally_loading(m)
 
-  html.form(
-    [
-      attribute.class("add-todo-form"),
-      attribute.attribute("data-testid", "add-todo-form"),
-      event.on_submit(fn(_) {
-        AddTodo(
-          Start,
-          msg.AddFormData(title: m.new_todo_title, description: m.new_todo_description),
-        )
-      }),
-    ],
-    [
-      html.input([
-        attribute.type_("text"),
-        attribute.placeholder("Todo title"),
-        attribute.value(m.new_todo_title),
-        attribute.attribute("data-testid", "todo-title-input"),
-        attribute.disabled(is_disabled),
-        event.on_input(UpdateTitle),
-      ]),
-      html.input([
-        attribute.type_("text"),
-        attribute.placeholder("Description (optional)"),
-        attribute.value(m.new_todo_description),
-        attribute.attribute("data-testid", "todo-description-input"),
-        attribute.disabled(is_disabled),
-        event.on_input(UpdateDescription),
-      ]),
-      html.button(
-        [
-          attribute.type_("submit"),
-          attribute.attribute("data-testid", "add-todo-submit-btn"),
-          attribute.disabled(is_disabled || string_is_empty(m.new_todo_title)),
-        ],
-        [text(m.submit_button_text)],
-      ),
-    ],
-  )
+  html.div([attribute.class("form-section")], [
+    html.form(
+      [
+        attribute.class("add-todo-form"),
+        attribute.attribute("data-testid", "add-todo-form"),
+        event.on_submit(fn(_) {
+          AddTodo(
+            Start,
+            msg.AddFormData(title: m.new_todo_title, description: m.new_todo_description),
+          )
+        }),
+      ],
+      [
+        html.input([
+          attribute.type_("text"),
+          attribute.placeholder("Todo title"),
+          attribute.value(m.new_todo_title),
+          attribute.attribute("data-testid", "todo-title-input"),
+          attribute.disabled(is_disabled),
+          event.on_input(UpdateTitle),
+        ]),
+        html.input([
+          attribute.type_("text"),
+          attribute.placeholder("Description (optional)"),
+          attribute.value(m.new_todo_description),
+          attribute.attribute("data-testid", "todo-description-input"),
+          attribute.disabled(is_disabled),
+          event.on_input(UpdateDescription),
+        ]),
+        html.button(
+          [
+            attribute.type_("submit"),
+            attribute.attribute("data-testid", "add-todo-submit-btn"),
+            attribute.disabled(is_disabled || string_is_empty(m.new_todo_title)),
+          ],
+          [text(m.submit_button_text)],
+        ),
+      ],
+    ),
+    render_form_error(m.form_error),
+  ])
 }
 
 /// Render the todo list
@@ -205,6 +259,7 @@ fn render_todo_item(m: Model) -> fn(Todo) -> Element(Msg) {
           False -> "todo-item"
         }),
         attribute.attribute("data-testid", "todo-item-" <> item.id),
+        attribute.attribute("data-todo-id", item.id),
       ],
       [
         html.input([
@@ -214,7 +269,7 @@ fn render_todo_item(m: Model) -> fn(Todo) -> Element(Msg) {
           attribute.disabled(checkbox_disabled),
           event.on_click(ToggleTodo(Start, ToggleData(id: item.id, completed: !item.completed))),
         ]),
-        html.span([attribute.class("todo-title")], [text(item.title)]),
+        html.span([attribute.attribute("data-testid", "todo-text"), attribute.class("todo-title")], [text(item.title)]),
         html.button(
           [
             attribute.class("delete-btn"),

@@ -6,6 +6,7 @@ pub type AppError {
   NotFound(String)
   InvalidInput(String)
   InternalError(String)
+  NetworkError(String)
 }
 
 /// Convert an error to a human-readable message
@@ -14,6 +15,7 @@ pub fn error_message(error: AppError) -> String {
     NotFound(msg) -> "Not found: " <> msg
     InvalidInput(msg) -> "Invalid input: " <> msg
     InternalError(msg) -> "Internal error: " <> msg
+    NetworkError(msg) -> msg
   }
 }
 

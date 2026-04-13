@@ -17,3 +17,17 @@ pub fn init_model_test() {
   m.submit_button_text
   |> should.equal("Add Todo")
 }
+
+pub fn init_model_todos_empty_test() {
+  let m = model.init()
+  m.todos
+  |> should.equal([])
+}
+
+pub fn init_model_form_fields_empty_test() {
+  let m = model.init()
+  m.new_todo_title
+  |> should.equal("")
+  m.new_todo_description
+  |> should.equal("")
+}

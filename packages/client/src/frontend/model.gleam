@@ -1,6 +1,12 @@
-/// Application state with loading state management
+/// Application state with loading states and error handling
 
 import shared.{type Filter, type Todo, All}
+
+/// Error state for different containers
+pub type ErrorState {
+  NoError
+  Error(message: String, transient: Bool)
+}
 
 pub type Model {
   Model(
@@ -22,8 +28,13 @@ pub type Model {
     loading_message: String,
     submit_button_text: String,
 
-    // Error state
-    error: String,
+    // Error states by container
+    list_error: ErrorState,
+    form_error: ErrorState,
+    global_error: ErrorState,
+
+    // Transient error tracking
+    transient_error_active: Bool,
   )
 }
 
@@ -41,7 +52,10 @@ pub fn init() -> Model {
     deleting_todo_ids: [],
     loading_message: "Loading todos...",
     submit_button_text: "Add Todo",
-    error: "",
+    list_error: NoError,
+    form_error: NoError,
+    global_error: NoError,
+    transient_error_active: False,
   )
 }
 
@@ -63,6 +77,54 @@ pub fn is_todo_deleting(model: Model, item_id: String) -> Bool {
 /// Check if a specific item has any operation in progress
 pub fn is_todo_busy(model: Model, item_id: String) -> Bool {
   is_todo_saving(model, item_id) || is_todo_deleting(model, item_id)
+}
+
+/// Check if there are any errors currently showing
+pub fn has_any_error(model: Model) -> Bool {
+  case model.list_error, model.form_error, model.global_error {
+    NoError, NoError, NoError -> False
+    _, _, _ -> True
+  }
+}
+
+/// Clear all errors (used after successful operations)
+pub fn clear_all_errors(model: Model) -> Model {
+  Model(
+    ..model,
+    list_error: NoError,
+    form_error: NoError,
+    global_error: NoError,
+    transient_error_active: False,
+  )
+}
+
+/// Set list error
+pub fn set_list_error(model: Model, message: String, transient: Bool) -> Model {
+  Model(
+    ..model,
+    list_error: Error(message, transient),
+    transient_error_active: transient,
+  )
+}
+
+/// Set form error
+pub fn set_form_error(model: Model, message: String) -> Model {
+  Model(..model, form_error: Error(message, False))
+}
+
+/// Set global error
+pub fn set_global_error(model: Model, message: String) -> Model {
+  Model(..model, global_error: Error(message, False))
+}
+
+/// Clear list error only
+pub fn clear_list_error(model: Model) -> Model {
+  Model(..model, list_error: NoError, transient_error_active: False)
+}
+
+/// Clear form error only
+pub fn clear_form_error(model: Model) -> Model {
+  Model(..model, form_error: NoError)
 }
 
 /// Helper to check if a string is in a list

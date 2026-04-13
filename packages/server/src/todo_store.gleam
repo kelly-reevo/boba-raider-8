@@ -7,7 +7,7 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/result
-import shared.{type AppError, type Todo, type TodoAttrs, NotFound, Todo}
+import shared.{type AppError, type Todo, type TodoAttrs, NotFound, Todo, Medium}
 
 // Message types for the todo store actor
 pub type StoreMsg {
@@ -121,7 +121,7 @@ fn handle_message(state: StoreState, msg: StoreMsg) {
             title: attrs.title,
             description: attrs.description,
             priority: attrs.priority,
-            completed: existing.completed,
+            completed: attrs.completed,
             created_at: existing.created_at,
             updated_at: current_timestamp(),
           )
@@ -259,6 +259,12 @@ pub fn get_all() -> List(Todo) {
   |> result.unwrap([])
 }
 
+/// Get todos filtered by completion status
+pub fn get_by_completed(completed: Bool) -> List(Todo) {
+  get_all()
+  |> list.filter(fn(t) { t.completed == completed })
+}
+
 /// Get a todo by ID, returns None if not found
 pub fn get_by_id(id: String) -> Option(Todo) {
   let store = ensure_store()
@@ -301,4 +307,67 @@ pub fn delete(id: String) -> Result(Nil, AppError) {
   actor.send(store, Delete(id, reply))
   process.receive(reply, 5000)
   |> result.unwrap(Error(shared.InternalError("Timeout")))
+}
+
+// =============================================================================
+// Test API Types (re-exported for test compatibility)
+// =============================================================================
+
+/// Re-export UpdateTodoInput from shared for test compatibility
+pub type UpdateTodoInput =
+  shared.UpdateTodoInput
+
+// =============================================================================
+// Test API Wrappers (for behavioral test compatibility)
+// =============================================================================
+
+/// Internal helper to create a todo with title/description
+fn do_create_todo(title: String, description: String) -> Result(Todo, AppError) {
+  let desc_opt = case description {
+    "" -> None
+    d -> Some(d)
+  }
+  let attrs = shared.TodoAttrs(
+    title: title,
+    description: desc_opt,
+    priority: shared.Medium,
+    completed: False,
+  )
+  create(attrs)
+}
+
+/// Create a test todo with optional store parameter (for test compatibility)
+/// The store parameter is ignored as we use the global store
+pub fn create_todo(_store, title: String, description: String) -> Result(Todo, AppError) {
+  do_create_todo(title, description)
+}
+
+/// Update a todo with UpdateTodoInput type (for behavioral test compatibility)
+pub fn update_todo(_store, id: String, input: shared.UpdateTodoInput) -> Result(Todo, Nil) {
+  // Build TodoAttrs from UpdateTodoInput
+  // We need to get the existing todo first to preserve fields not being updated
+  case get_by_id(id) {
+    option.Some(existing) -> {
+      let new_title = case input.title {
+        option.Some(t) -> t
+        option.None -> existing.title
+      }
+      let new_description = case input.description {
+        option.Some(d) -> option.Some(d)
+        option.None -> existing.description
+      }
+      let new_completed = case input.completed {
+        option.Some(c) -> c
+        option.None -> existing.completed
+      }
+      let attrs = shared.TodoAttrs(
+        title: new_title,
+        description: new_description,
+        priority: existing.priority,
+        completed: new_completed,
+      )
+      update(id, attrs)
+    }
+    option.None -> Error(Nil)
+  }
 }

@@ -8,11 +8,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '../src/data/rating-data-access': path.resolve(__dirname, 'src/data/rating-data-access.js'),
-      './test-db-setup': path.resolve(__dirname, '__cyclone_tests__/test-db-setup.js')
+      './test-db-setup': path.resolve(__dirname, '__cyclone_tests__/test-db-setup.js'),
+      '../src/components/create_drink_form_component': path.resolve(__dirname, 'src/components/create_drink_form_component.js')
     }
   },
   test: {
-    include: ['__cyclone_tests__/rating-data-access/*'],
+    include: ['__cyclone_tests__/rating-data-access/*', '__cyclone_tests__/create-drink-form/*'],
     exclude: ['__cyclone_tests__/test-db-setup.js'],
     testTimeout: 30000
   }

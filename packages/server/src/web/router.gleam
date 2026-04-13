@@ -9,18 +9,27 @@ import gleam/result
 import gleam/string
 import rating_service.{type RatingService}
 import store/store_data_access as data_access
+import store/store_service
 import store/store_validation
 import web/server.{type Request, type Response}
 import web/static
 
-/// Context holds service dependencies for the router
+/// Services container for dependency injection
+pub type StoreServices {
+  StoreServices(
+    store_service: store_service.StoreService,
+    rating_service: RatingService,
+  )
+}
+
+/// Context holds service dependencies for the router (legacy, for backward compatibility)
 pub type Context {
   Context(rating_service: RatingService)
 }
 
 /// Router handler function
 pub fn make_handler() -> fn(Request) -> Response {
-  fn(request: Request) { route(request) }
+  fn(request: Request) { route(request, None) }
 }
 
 /// Make a handler with services injected via context
@@ -28,54 +37,186 @@ pub fn make_handler_with_context(ctx: Context) -> fn(Request) -> Response {
   fn(request: Request) { route_with_context(request, ctx) }
 }
 
-/// Main routing logic (without context - legacy)
-fn route(request: Request) -> Response {
+/// Make handler with services for production use
+pub fn make_handler_with_services(services: StoreServices) -> fn(Request) -> Response {
+  fn(request: Request) { route(request, Some(services)) }
+}
+
+/// Main routing logic
+fn route(request: Request, services: Option(StoreServices)) -> Response {
   case request.method, request.path {
+    "POST", "/api/stores" -> handle_create_store(request, services)
     "GET", "/" -> static.serve_index()
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
-    "PUT", path -> route_put(path, request)
-    "GET", path -> route_get(path)
+    "PUT", path -> route_put(path, request, services)
+    "GET", path -> route_get(path, request, services)
     _, _ -> not_found()
   }
 }
 
-/// Main routing logic with context
+/// Main routing logic with context (legacy)
 fn route_with_context(request: Request, ctx: Context) -> Response {
   case request.method, request.path {
+    "POST", "/api/stores" -> handle_create_store_with_rating(request, ctx)
     "GET", "/" -> static.serve_index()
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
-    "PUT", path -> route_put(path, request)
+    "PUT", path -> route_put_with_context(path, request, ctx)
     "GET", path -> route_get_with_context(path, request, ctx)
     _, _ -> not_found()
   }
 }
 
 /// Route PUT requests for stores
-fn route_put(path: String, request: Request) -> Response {
+fn route_put(path: String, request: Request, _services: Option(StoreServices)) -> Response {
   case string.starts_with(path, "/api/stores/") {
     True -> update_store_handler(path, request)
     False -> not_found()
   }
 }
 
-/// Handle GET requests (without context)
-fn route_get(path: String) -> Response {
-  case string.starts_with(path, "/static/") {
-    True -> static.serve(path)
+/// Route PUT requests with context
+fn route_put_with_context(path: String, request: Request, _ctx: Context) -> Response {
+  case string.starts_with(path, "/api/stores/") {
+    True -> update_store_handler(path, request)
     False -> not_found()
   }
 }
 
-/// Handle GET requests with context
+/// Handler for POST /api/stores - creates a new boba store
+fn handle_create_store(request: Request, services: Option(StoreServices)) -> Response {
+  // Get store service from services or create fresh one for testing
+  let store_srv = case services {
+    Some(s) -> s.store_service
+    None -> {
+      // In test mode, start a fresh service
+      let assert Ok(svc) = store_service.start()
+      svc
+    }
+  }
+
+  // Parse request body
+  case parse_store_input(request.body) {
+    Error(err_msg) -> {
+      // Invalid JSON or missing required fields
+      server.json_response(422, json.object([
+        #("errors", json.array([json.object([
+          #("field", json.string("body")),
+          #("message", json.string(err_msg))
+        ])], of: fn(x) { x }))
+      ]) |> json.to_string)
+    }
+    Ok(input) -> {
+      // Call store service to create store
+      case store_service.create_store(store_srv, input) {
+        Error(service_err) -> {
+          server.json_response(500, json.object([
+            #("error", json.string(service_err))
+          ]) |> json.to_string)
+        }
+        Ok(result) -> {
+          case result {
+            store_service.CreateStoreSuccess(store) -> {
+              // Return 201 with created store
+              let response_body = json.object([
+                #("id", json.string(store.id)),
+                #("name", json.string(store.name)),
+                #("address", json.string(option.unwrap(store.address, ""))),
+                #("city", json.string(option.unwrap(store.city, ""))),
+                #("phone", json.string(option.unwrap(store.phone, ""))),
+                #("created_at", json.string(store.created_at))
+              ])
+              server.json_response(201, response_body |> json.to_string)
+            }
+            store_service.CreateStoreValidationError(errors) -> {
+              // Return 422 with validation errors
+              let error_objects = list.map(errors, fn(error) {
+                let #(field, message) = error
+                json.object([
+                  #("field", json.string(field)),
+                  #("message", json.string(message))
+                ])
+              })
+              server.json_response(422, json.object([
+                #("errors", json.array(error_objects, of: fn(x) { x }))
+              ]) |> json.to_string)
+            }
+            store_service.CreateStoreDuplicateError -> {
+              // Return 409 conflict
+              server.json_response(409, json.object([
+                #("error", json.string("store name already exists"))
+              ]) |> json.to_string)
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/// Handler for POST /api/stores with context (legacy)
+fn handle_create_store_with_rating(request: Request, _ctx: Context) -> Response {
+  // For legacy context mode, just call handle_create_store with no services
+  handle_create_store(request, None)
+}
+
+/// Parse store input from JSON body
+fn parse_store_input(body: String) -> Result(store_service.CreateStoreInput, String) {
+  // Parse JSON to dynamic value first
+  case json.parse(body, decode.dynamic) {
+    Error(_) -> Error("Invalid JSON payload")
+    Ok(dynamic_value) -> {
+      // Define decoder using the use syntax
+      let decoder = {
+        use name <- decode.field("name", decode.string)
+        use address <- decode.optional_field("address", None, decode.optional(decode.string))
+        use city <- decode.optional_field("city", None, decode.optional(decode.string))
+        use phone <- decode.optional_field("phone", None, decode.optional(decode.string))
+        decode.success(store_service.CreateStoreInput(
+          name: name,
+          address: address,
+          city: city,
+          phone: phone,
+        ))
+      }
+
+      // Run the decoder
+      case decode.run(dynamic_value, decoder) {
+        Ok(input) -> Ok(input)
+        Error(_) -> Error("Missing or invalid required fields")
+      }
+    }
+  }
+}
+
+/// Handle GET requests
+fn route_get(path: String, request: Request, services: Option(StoreServices)) -> Response {
+  case string.starts_with(path, "/static/") {
+    True -> static.serve(path)
+    False -> {
+      // Check for /api/drinks/:id/ratings pattern
+      case parse_drink_ratings_path(path) {
+        Some(drink_id) -> {
+          case services {
+            Some(s) -> get_drink_ratings_handler(drink_id, request, s.rating_service)
+            None -> not_found()
+          }
+        }
+        None -> not_found()
+      }
+    }
+  }
+}
+
+/// Handle GET requests with context (legacy)
 fn route_get_with_context(path: String, request: Request, ctx: Context) -> Response {
   case string.starts_with(path, "/static/") {
     True -> static.serve(path)
     False -> {
       // Check for /api/drinks/:id/ratings pattern
       case parse_drink_ratings_path(path) {
-        Some(drink_id) -> get_drink_ratings_handler(drink_id, request, ctx)
+        Some(drink_id) -> get_drink_ratings_handler(drink_id, request, ctx.rating_service)
         None -> not_found()
       }
     }
@@ -314,7 +455,7 @@ pub fn handle_request(request: Request, state: data_access.StoreState) -> Respon
         False -> not_found()
       }
     }
-    _, _ -> route(request)
+    _, _ -> route(request, None)
   }
 }
 
@@ -399,12 +540,12 @@ fn process_store_update_with_state(
 }
 
 /// Handler for GET /api/drinks/:id/ratings
-fn get_drink_ratings_handler(drink_id: String, request: Request, ctx: Context) -> Response {
+fn get_drink_ratings_handler(drink_id: String, request: Request, rating_svc: RatingService) -> Response {
   let params = parse_query_params(request.path)
   let limit = get_int_param(params, "limit", 20)
   let offset = get_int_param(params, "offset", 0)
 
-  case rating_service.list_ratings_by_drink_paginated(ctx.rating_service, drink_id, limit, offset) {
+  case rating_service.list_ratings_by_drink_paginated(rating_svc, drink_id, limit, offset) {
     Ok(result) -> {
       let ratings_json = json.array(result.ratings, fn(rating) {
         json.object([
@@ -428,4 +569,9 @@ fn get_drink_ratings_handler(drink_id: String, request: Request, ctx: Context) -
     }
     Error(_) -> not_found()
   }
+}
+
+// Public handler for testing - exposed for test compatibility
+pub fn handle_request_test(request: Request) -> Response {
+  route(request, None)
 }

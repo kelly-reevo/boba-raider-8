@@ -1,6 +1,6 @@
 /// State updates with loading states and error handling
 
-import frontend/model.{type ErrorState, type Model, Error, NoError}
+import frontend/model.{type ErrorState, type Model, Error as ErrorStateError, NoError}
 import frontend/msg.{
   type Msg, type Status, AddTodo, ClearTransientError, DeleteTodo, DismissError,
   Error as ErrorStatus, FetchTodos, SetFilter, Start, Success, ToggleTodo,
@@ -40,7 +40,7 @@ pub fn update(m: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     // Error management
     ClearTransientError -> {
       let new_list_error = case m.list_error {
-        Error(_, True) -> NoError
+        ErrorStateError(_, True) -> NoError
         other -> other
       }
       #(
@@ -104,7 +104,7 @@ fn handle_fetch_todos(
         ..m,
         is_loading: False,
         loading_message: "",
-        global_error: Error(error_msg, False),
+        global_error: ErrorStateError(error_msg, False),
       ),
       effect.none(),
     )
@@ -152,7 +152,7 @@ fn handle_add_todo(
         ..m,
         is_adding: False,
         submit_button_text: "Add Todo",
-        form_error: Error(error_msg, False),
+        form_error: ErrorStateError(error_msg, False),
       ),
       effect.none(),
     )
@@ -215,7 +215,7 @@ fn handle_toggle_todo(
       model.Model(
         ..m,
         saving_todo_ids: list_remove(m.saving_todo_ids, item_id),
-        list_error: Error(error_msg, True),
+        list_error: ErrorStateError(error_msg, True),
         transient_error_active: True,
       ),
       effect.none(),
@@ -262,7 +262,7 @@ fn handle_delete_todo(
       model.Model(
         ..m,
         deleting_todo_ids: list_remove(m.deleting_todo_ids, item_id),
-        list_error: Error(error_msg, False),
+        list_error: ErrorStateError(error_msg, False),
       ),
       effect.none(),
     )
@@ -333,5 +333,3 @@ fn list_filter(list: List(a), predicate: fn(a) -> Bool) -> List(a) {
       }
   }
 }
-
-import frontend/model

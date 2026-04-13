@@ -1,8 +1,8 @@
 /// HTTP client using FFI
 
 import frontend/msg.{type Msg}
-import frontend/model as model
 import lustre/effect.{type Effect}
+import shared.{type Todo}
 
 /// HTTP methods
 pub type Method {
@@ -40,8 +40,8 @@ fn method_to_string(method: Method) -> String {
 
 /// Expect type for response handling
 pub type Expect {
-  ExpectJsonTodoList(fn(List(model.Todo)) -> Msg, fn(String) -> Msg)
-  ExpectJsonTodo(fn(model.Todo) -> Msg, fn(String) -> Msg)
+  ExpectJsonTodoList(fn(List(Todo)) -> Msg, fn(String) -> Msg)
+  ExpectJsonTodo(fn(Todo) -> Msg, fn(String) -> Msg)
   ExpectAnything(fn() -> Msg, fn(String) -> Msg)
 }
 

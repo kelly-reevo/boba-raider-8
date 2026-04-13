@@ -63,7 +63,7 @@ pub fn delete_todo(id: String) -> Effect(Msg) {
     url,
     [],
     "",
-    ExpectAnything(handle_delete_success(id), handle_delete_error(id)),
+    ExpectAnything(fn() { handle_delete_success(id) }, handle_delete_error(id)),
   )
 }
 
@@ -101,7 +101,7 @@ fn handle_update_error(id, original_completed) {
 }
 
 fn handle_delete_success(id) {
-  fn(_) { msg.DeleteTodo(msg.Success, msg.DeleteResult(id)) }
+  msg.DeleteTodo(msg.Success, msg.DeleteResult(id))
 }
 
 fn handle_delete_error(id) {

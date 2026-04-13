@@ -50,10 +50,18 @@ fn validate_name(name: String) -> List(ValidationError) {
   let trimmed = string.trim(name)
   let length = string.length(trimmed)
 
-  case string.is_empty(trimmed), length < min_name_length, length > max_name_length {
+  case
+    string.is_empty(trimmed),
+    length < min_name_length,
+    length > max_name_length
+  {
     True, _, _ -> [ValidationError("name", "Name is required")]
-    False, True, _ -> [ValidationError("name", "Name must be at least 2 characters")]
-    False, False, True -> [ValidationError("name", "Name must not exceed 255 characters")]
+    False, True, _ -> [
+      ValidationError("name", "Name must be at least 2 characters"),
+    ]
+    False, False, True -> [
+      ValidationError("name", "Name must not exceed 255 characters"),
+    ]
     False, False, False -> []
   }
 }
@@ -67,7 +75,9 @@ fn validate_address(address: Option(String)) -> List(ValidationError) {
       let length = string.length(trimmed)
 
       case length > max_address_length {
-        True -> [ValidationError("address", "Address must not exceed 500 characters")]
+        True -> [
+          ValidationError("address", "Address must not exceed 500 characters"),
+        ]
         False -> []
       }
     }
@@ -86,7 +96,9 @@ fn validate_phone(phone: Option(String)) -> List(ValidationError) {
         False -> {
           case is_valid_phone(trimmed) {
             True -> []
-            False -> [ValidationError("phone", "Phone must be a valid phone number")]
+            False -> [
+              ValidationError("phone", "Phone must be a valid phone number"),
+            ]
           }
         }
       }
@@ -97,20 +109,20 @@ fn validate_phone(phone: Option(String)) -> List(ValidationError) {
 /// Check if phone number matches valid formats without using regex:
 /// - E.164: +1234567890
 /// - US format: (123) 456-7890
-/// - With dashes: 123-456-7890 or 555-9999
+/// - With dashes: 123-456-7890
 /// - With dots: 123.456.7890
 /// - Plain: 1234567890
 fn is_valid_phone(phone: String) -> Bool {
   let digits_only = extract_digits(phone)
   let digit_count = string.length(digits_only)
 
-  // Check for valid digit counts: 7 (local), 10 (US), or 11 (with country code)
-  let valid_digit_count = digit_count == 7 || digit_count == 10 || digit_count == 11
+  // Check for valid digit counts: 10 (US) or 11 (with country code)
+  let valid_digit_count = digit_count == 10 || digit_count == 11
 
   // Check if it starts with + for E.164 format
   let starts_with_plus = string.starts_with(phone, "+")
 
-  // If starts with +, it should be followed by 10-15 digits total (including country code)
+  // If starts with +, it should be followed by 11-15 digits total (including country code)
   let valid_e164 = case starts_with_plus {
     True -> {
       // Remove leading + and extract digits
@@ -128,20 +140,14 @@ fn is_valid_phone(phone: String) -> Bool {
     True -> valid_e164
     False -> {
       // Check standard US format patterns
-      is_us_format(phone) || is_dashed_format(phone) || is_dotted_format(phone) || is_plain_format(phone) || is_local_format(phone)
+      is_us_format(phone)
+      || is_dashed_format(phone)
+      || is_dotted_format(phone)
+      || is_plain_format(phone)
     }
   }
 
   valid_format && valid_digit_count
-}
-
-/// Check if phone is a local 7-digit format (no area code)
-fn is_local_format(phone: String) -> Bool {
-  let digits_only = extract_digits(phone)
-  let digit_count = string.length(digits_only)
-
-  // Local format is 7 digits with optional dash
-  digit_count == 7 && string.contains(phone, "-")
 }
 
 /// Extract only digit characters from string
@@ -171,29 +177,23 @@ fn is_us_format(phone: String) -> Bool {
       let rest_digits = extract_digits(rest)
       let area_valid = string.length(area_digits) == 3
       let rest_valid = string.length(rest_digits) == 7
-      let has_separators = string.contains(rest, "-") || string.contains(rest, " ")
+      let has_separators =
+        string.contains(rest, "-") || string.contains(rest, " ")
       area_valid && rest_valid && has_separators
     }
     _, _ -> False
   }
 }
 
-/// Check if phone matches XXX-XXX-XXXX or XXX-XXXX format
+/// Check if phone matches XXX-XXX-XXXX format
 fn is_dashed_format(phone: String) -> Bool {
   let parts = string.split(phone, "-")
   case parts {
-    // Standard 10-digit format: 123-456-7890
     [a, b, c] -> {
       let d1 = extract_digits(a)
       let d2 = extract_digits(b)
       let d3 = extract_digits(c)
       string.length(d1) == 3 && string.length(d2) == 3 && string.length(d3) == 4
-    }
-    // Local 7-digit format: 555-9999
-    [a, b] -> {
-      let d1 = extract_digits(a)
-      let d2 = extract_digits(b)
-      string.length(d1) == 3 && string.length(d2) == 4
     }
     _ -> False
   }

@@ -1,42 +1,47 @@
 import gleam/dict.{type Dict}
 
-// Internal type with positional constructor
-pub type HttpRequest {
-  HttpRequest(method: String, path: String, headers: Dict(String, String), body: String)
+/// Request type for HTTP requests
+pub type Request {
+  Request(
+    method: String,
+    path: String,
+    headers: Dict(String, String),
+    body: String,
+  )
 }
 
-// Type alias for external use
-pub type Request =
-  HttpRequest
+/// Response type for HTTP responses
+pub type Response {
+  Response(status: Int, headers: Dict(String, String), body: String)
+}
 
-// Constructor function with named arguments for test compatibility
+// Type aliases for backward compatibility
+pub type HttpRequest =
+  Request
+
+pub type HttpResponse =
+  Response
+
+/// Constructor function with named arguments for test compatibility
 pub fn request(
   method method: String,
   path path: String,
   headers headers: Dict(String, String),
   body body: String,
 ) -> Request {
-  HttpRequest(method, path, headers, body)
+  Request(method, path, headers, body)
 }
 
-// Internal type with positional constructor
-pub type HttpResponse {
-  HttpResponse(status: Int, headers: Dict(String, String), body: String)
-}
-
-// Type alias for external use
-pub type Response =
-  HttpResponse
-
-// Constructor function with named arguments for test compatibility
+/// Constructor function for responses
 pub fn response(
   status status: Int,
   headers headers: Dict(String, String),
   body body: String,
 ) -> Response {
-  HttpResponse(status, headers, body)
+  Response(status, headers, body)
 }
 
+/// Create a JSON response with the given status
 pub fn json_response(status: Int, body: String) -> Response {
   response(
     status: status,
@@ -45,6 +50,7 @@ pub fn json_response(status: Int, body: String) -> Response {
   )
 }
 
+/// Create an HTML response with the given status
 pub fn html_response(status: Int, body: String) -> Response {
   response(
     status: status,
@@ -53,6 +59,7 @@ pub fn html_response(status: Int, body: String) -> Response {
   )
 }
 
+/// Create a text response with the given status
 pub fn text_response(status: Int, body: String) -> Response {
   response(
     status: status,

@@ -43,12 +43,7 @@ pub type PaginationParams {
 
 /// Paginated result for list operations
 pub type PaginatedStores {
-  PaginatedStores(
-    stores: List(BobaStore),
-    total: Int,
-    limit: Int,
-    offset: Int,
-  )
+  PaginatedStores(stores: List(BobaStore), total: Int, limit: Int, offset: Int)
 }
 
 /// Error types for store operations
@@ -131,19 +126,23 @@ fn current_timestamp() -> String {
 }
 
 /// Create a new store
-pub fn create(state: StoreState, input: CreateStoreInput) -> #(StoreState, BobaStore) {
+pub fn create(
+  state: StoreState,
+  input: CreateStoreInput,
+) -> #(StoreState, BobaStore) {
   let id = generate_uuid(state.next_id)
   let timestamp = current_timestamp()
 
-  let store = BobaStore(
-    id: id,
-    name: input.name,
-    address: input.address,
-    city: input.city,
-    phone: input.phone,
-    created_at: timestamp,
-    updated_at: timestamp,
-  )
+  let store =
+    BobaStore(
+      id: id,
+      name: input.name,
+      address: input.address,
+      city: input.city,
+      phone: input.phone,
+      created_at: timestamp,
+      updated_at: timestamp,
+    )
 
   let new_stores = dict.insert(state.stores, id, store)
   let new_state = StoreState(stores: new_stores, next_id: state.next_id + 1)
@@ -164,11 +163,13 @@ pub fn list(state: StoreState, params: PaginationParams) -> PaginatedStores {
   let all_stores = dict.values(state.stores)
   let total = list.length(all_stores)
 
-  let sorted_stores = list.sort(all_stores, fn(a, b) {
-    string.compare(a.created_at, b.created_at)
-  })
+  let sorted_stores =
+    list.sort(all_stores, fn(a, b) {
+      string.compare(a.created_at, b.created_at)
+    })
 
-  let paginated = sorted_stores
+  let paginated =
+    sorted_stores
     |> list.drop(params.offset)
     |> list.take(params.limit)
 
@@ -189,15 +190,16 @@ pub fn update(
   case dict.get(state.stores, id) {
     Error(_) -> #(state, Error(StoreNotFound("Store not found: " <> id)))
     Ok(existing) -> {
-      let updated = BobaStore(
-        id: existing.id,
-        name: option.unwrap(input.name, existing.name),
-        address: merge_option(input.address, existing.address),
-        city: merge_option(input.city, existing.city),
-        phone: merge_option(input.phone, existing.phone),
-        created_at: existing.created_at,
-        updated_at: current_timestamp(),
-      )
+      let updated =
+        BobaStore(
+          id: existing.id,
+          name: option.unwrap(input.name, existing.name),
+          address: merge_option(input.address, existing.address),
+          city: merge_option(input.city, existing.city),
+          phone: merge_option(input.phone, existing.phone),
+          created_at: existing.created_at,
+          updated_at: current_timestamp(),
+        )
 
       let new_stores = dict.insert(state.stores, id, updated)
       let new_state = StoreState(..state, stores: new_stores)
@@ -216,7 +218,10 @@ fn merge_option(new: Option(String), existing: Option(String)) -> Option(String)
 }
 
 /// Delete a store by ID
-pub fn delete(state: StoreState, id: String) -> #(StoreState, Result(Nil, StoreError)) {
+pub fn delete(
+  state: StoreState,
+  id: String,
+) -> #(StoreState, Result(Nil, StoreError)) {
   case dict.get(state.stores, id) {
     Error(_) -> #(state, Error(StoreNotFound("Store not found: " <> id)))
     Ok(_) -> {
@@ -230,4 +235,11 @@ pub fn delete(state: StoreState, id: String) -> #(StoreState, Result(Nil, StoreE
 /// List all stores without pagination (for search)
 pub fn list_all(state: StoreState) -> List(BobaStore) {
   dict.values(state.stores)
+}
+
+/// Global state accessor for test compatibility
+/// In production, this would be backed by an OTP actor
+/// For tests, returns a fresh empty state
+pub fn global_state() -> StoreState {
+  new_state()
 }

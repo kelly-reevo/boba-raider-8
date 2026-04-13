@@ -103,7 +103,15 @@ fn format_uuid(timestamp: Int, hash: Int) -> String {
   let hex4 = int_to_hex_string(unique_integer() % 65_536)
   let hex5 = int_to_hex_string(system_time_milliseconds() % 4_294_967_296)
 
-  pad_left(hex1, 8) <> "-" <> pad_left(hex2, 4) <> "-" <> pad_left(hex3, 4) <> "-" <> pad_left(hex4, 4) <> "-" <> pad_left(hex5, 12)
+  pad_left(hex1, 8)
+  <> "-"
+  <> pad_left(hex2, 4)
+  <> "-"
+  <> pad_left(hex3, 4)
+  <> "-"
+  <> pad_left(hex4, 4)
+  <> "-"
+  <> pad_left(hex5, 12)
 }
 
 fn pad_left(s: String, len: Int) -> String {
@@ -206,19 +214,24 @@ fn recalculate_aggregate(
   let total = list.length(drink_ratings)
 
   case total {
-    0 -> RatingAggregate(
-      drink_id: drink_id,
-      average_overall: 0.0,
-      average_sweetness: 0.0,
-      average_boba_texture: 0.0,
-      average_tea_strength: 0.0,
-      total_reviews: 0,
-    )
+    0 ->
+      RatingAggregate(
+        drink_id: drink_id,
+        average_overall: 0.0,
+        average_sweetness: 0.0,
+        average_boba_texture: 0.0,
+        average_tea_strength: 0.0,
+        total_reviews: 0,
+      )
     _ -> {
-      let sum_overall = list.fold(drink_ratings, 0, fn(acc, r) { acc + r.overall_rating })
-      let sum_sweetness = list.fold(drink_ratings, 0, fn(acc, r) { acc + r.sweetness })
-      let sum_boba = list.fold(drink_ratings, 0, fn(acc, r) { acc + r.boba_texture })
-      let sum_tea = list.fold(drink_ratings, 0, fn(acc, r) { acc + r.tea_strength })
+      let sum_overall =
+        list.fold(drink_ratings, 0, fn(acc, r) { acc + r.overall_rating })
+      let sum_sweetness =
+        list.fold(drink_ratings, 0, fn(acc, r) { acc + r.sweetness })
+      let sum_boba =
+        list.fold(drink_ratings, 0, fn(acc, r) { acc + r.boba_texture })
+      let sum_tea =
+        list.fold(drink_ratings, 0, fn(acc, r) { acc + r.tea_strength })
 
       let total_float = int.to_float(total)
 
@@ -235,7 +248,10 @@ fn recalculate_aggregate(
 }
 
 // Actor implementation
-fn handle_message(state: ServiceState, msg: RatingServiceMsg) -> actor.Next(ServiceState, RatingServiceMsg) {
+fn handle_message(
+  state: ServiceState,
+  msg: RatingServiceMsg,
+) -> actor.Next(ServiceState, RatingServiceMsg) {
   case msg {
     CreateRating(input, reply_to) -> {
       case validate_create_input(input) {
@@ -253,30 +269,37 @@ fn handle_message(state: ServiceState, msg: RatingServiceMsg) -> actor.Next(Serv
             Ok(_) -> {
               let now = system_time_milliseconds()
               let id = generate_uuid()
-              let record = RatingRecord(
-                id: id,
-                drink_id: input.drink_id,
-                reviewer_name: input.reviewer_name,
-                overall_rating: input.overall_rating,
-                sweetness: input.sweetness,
-                boba_texture: input.boba_texture,
-                tea_strength: input.tea_strength,
-                review_text: input.review_text,
-                created_at: now,
-              )
+              let record =
+                RatingRecord(
+                  id: id,
+                  drink_id: input.drink_id,
+                  reviewer_name: input.reviewer_name,
+                  overall_rating: input.overall_rating,
+                  sweetness: input.sweetness,
+                  boba_texture: input.boba_texture,
+                  tea_strength: input.tea_strength,
+                  review_text: input.review_text,
+                  created_at: now,
+                )
 
               // Store the rating
               let new_ratings = dict.insert(state.ratings, id, record)
 
               // Recalculate aggregate for this drink
-              let new_aggregate = recalculate_aggregate(ServiceState(..state, ratings: new_ratings), input.drink_id)
-              let new_aggregates = dict.insert(state.aggregates, input.drink_id, new_aggregate)
+              let new_aggregate =
+                recalculate_aggregate(
+                  ServiceState(..state, ratings: new_ratings),
+                  input.drink_id,
+                )
+              let new_aggregates =
+                dict.insert(state.aggregates, input.drink_id, new_aggregate)
 
-              let new_state = ServiceState(
-                ..state,
-                ratings: new_ratings,
-                aggregates: new_aggregates,
-              )
+              let new_state =
+                ServiceState(
+                  ..state,
+                  ratings: new_ratings,
+                  aggregates: new_aggregates,
+                )
 
               actor.send(reply_to, Ok(record))
               actor.continue(new_state)
@@ -356,14 +379,15 @@ fn handle_message(state: ServiceState, msg: RatingServiceMsg) -> actor.Next(Serv
         }
         Error(_) -> {
           // Return empty aggregate if none exists
-          let empty = RatingAggregate(
-            drink_id: drink_id,
-            average_overall: 0.0,
-            average_sweetness: 0.0,
-            average_boba_texture: 0.0,
-            average_tea_strength: 0.0,
-            total_reviews: 0,
-          )
+          let empty =
+            RatingAggregate(
+              drink_id: drink_id,
+              average_overall: 0.0,
+              average_sweetness: 0.0,
+              average_boba_texture: 0.0,
+              average_tea_strength: 0.0,
+              total_reviews: 0,
+            )
           actor.send(reply_to, Ok(empty))
           actor.continue(state)
         }
@@ -377,14 +401,20 @@ fn handle_message(state: ServiceState, msg: RatingServiceMsg) -> actor.Next(Serv
           let new_ratings = dict.delete(state.ratings, id)
 
           // Recalculate aggregate after deletion
-          let new_aggregate = recalculate_aggregate(ServiceState(..state, ratings: new_ratings), drink_id)
-          let new_aggregates = dict.insert(state.aggregates, drink_id, new_aggregate)
+          let new_aggregate =
+            recalculate_aggregate(
+              ServiceState(..state, ratings: new_ratings),
+              drink_id,
+            )
+          let new_aggregates =
+            dict.insert(state.aggregates, drink_id, new_aggregate)
 
-          let new_state = ServiceState(
-            ..state,
-            ratings: new_ratings,
-            aggregates: new_aggregates,
-          )
+          let new_state =
+            ServiceState(
+              ..state,
+              ratings: new_ratings,
+              aggregates: new_aggregates,
+            )
 
           actor.send(reply_to, Ok(True))
           actor.continue(new_state)
@@ -401,12 +431,13 @@ fn handle_message(state: ServiceState, msg: RatingServiceMsg) -> actor.Next(Serv
 // Public API
 
 pub fn start(drink_store: DrinkStore) -> Result(RatingService, String) {
-  let initial_state = ServiceState(
-    ratings: dict.new(),
-    aggregates: dict.new(),
-    drink_store: drink_store,
-    next_id: 1,
-  )
+  let initial_state =
+    ServiceState(
+      ratings: dict.new(),
+      aggregates: dict.new(),
+      drink_store: drink_store,
+      next_id: 1,
+    )
 
   case
     actor.new(initial_state)
@@ -418,7 +449,10 @@ pub fn start(drink_store: DrinkStore) -> Result(RatingService, String) {
   }
 }
 
-pub fn create_rating(service: RatingService, input: CreateRatingInput) -> Result(RatingRecord, String) {
+pub fn create_rating(
+  service: RatingService,
+  input: CreateRatingInput,
+) -> Result(RatingRecord, String) {
   let reply_subject = process.new_subject()
   actor.send(service, CreateRating(input, reply_subject))
 
@@ -428,7 +462,10 @@ pub fn create_rating(service: RatingService, input: CreateRatingInput) -> Result
   }
 }
 
-pub fn get_rating_by_id(service: RatingService, id: String) -> Result(RatingRecord, String) {
+pub fn get_rating_by_id(
+  service: RatingService,
+  id: String,
+) -> Result(RatingRecord, String) {
   let reply_subject = process.new_subject()
   actor.send(service, GetRatingById(id, reply_subject))
 
@@ -438,7 +475,10 @@ pub fn get_rating_by_id(service: RatingService, id: String) -> Result(RatingReco
   }
 }
 
-pub fn list_ratings_by_drink(service: RatingService, drink_id: String) -> List(RatingRecord) {
+pub fn list_ratings_by_drink(
+  service: RatingService,
+  drink_id: String,
+) -> List(RatingRecord) {
   let reply_subject = process.new_subject()
   actor.send(service, ListRatingsByDrink(drink_id, reply_subject))
 
@@ -448,7 +488,10 @@ pub fn list_ratings_by_drink(service: RatingService, drink_id: String) -> List(R
   }
 }
 
-pub fn get_rating_aggregate(service: RatingService, drink_id: String) -> Result(RatingAggregate, String) {
+pub fn get_rating_aggregate(
+  service: RatingService,
+  drink_id: String,
+) -> Result(RatingAggregate, String) {
   let reply_subject = process.new_subject()
   actor.send(service, GetRatingAggregate(drink_id, reply_subject))
 

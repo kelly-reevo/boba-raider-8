@@ -19,9 +19,9 @@ pub type CreateDrinkInput {
 pub type UpdateDrinkInput {
   UpdateDrinkInput(
     name: Option(String),
-    description: Option(String),
-    base_tea_type: Option(String),
-    price: Option(Float),
+    description: Option(Option(String)),
+    base_tea_type: Option(Option(String)),
+    price: Option(Option(Float)),
   )
 }
 
@@ -76,7 +76,15 @@ fn format_uuid(timestamp: Int, hash: Int) -> String {
   let hex4 = int_to_hex_string(unique_integer() % 65_536)
   let hex5 = int_to_hex_string(system_time_milliseconds() % 4_294_967_296)
 
-  pad_left(hex1, 8) <> "-" <> pad_left(hex2, 4) <> "-" <> pad_left(hex3, 4) <> "-" <> pad_left(hex4, 4) <> "-" <> pad_left(hex5, 12)
+  pad_left(hex1, 8)
+  <> "-"
+  <> pad_left(hex2, 4)
+  <> "-"
+  <> pad_left(hex3, 4)
+  <> "-"
+  <> pad_left(hex4, 4)
+  <> "-"
+  <> pad_left(hex5, 12)
 }
 
 fn pad_left(s: String, len: Int) -> String {
@@ -154,7 +162,10 @@ fn validate_uuid(id: String) -> Bool {
 }
 
 // Actor implementation
-fn handle_message(state: StoreState, msg: DrinkStoreMsg) -> actor.Next(StoreState, DrinkStoreMsg) {
+fn handle_message(
+  state: StoreState,
+  msg: DrinkStoreMsg,
+) -> actor.Next(StoreState, DrinkStoreMsg) {
   case msg {
     CreateDrink(input, reply_to) -> {
       case validate_create_input(input) {
@@ -165,16 +176,17 @@ fn handle_message(state: StoreState, msg: DrinkStoreMsg) -> actor.Next(StoreStat
         Ok(_) -> {
           let now = system_time_milliseconds()
           let id = generate_uuid()
-          let record = DrinkRecord(
-            id: id,
-            store_id: input.store_id,
-            name: input.name,
-            description: input.description,
-            base_tea_type: input.base_tea_type,
-            price: input.price,
-            created_at: now,
-            updated_at: now,
-          )
+          let record =
+            DrinkRecord(
+              id: id,
+              store_id: input.store_id,
+              name: input.name,
+              description: input.description,
+              base_tea_type: input.base_tea_type,
+              price: input.price,
+              created_at: now,
+              updated_at: now,
+            )
           let new_state = dict.insert(state, id, record)
           actor.send(reply_to, Ok(record))
           actor.continue(new_state)
@@ -216,16 +228,33 @@ fn handle_message(state: StoreState, msg: DrinkStoreMsg) -> actor.Next(StoreStat
       case dict.get(state, id) {
         Ok(existing) -> {
           let now = system_time_milliseconds()
-          let updated = DrinkRecord(
-            id: existing.id,
-            store_id: existing.store_id,
-            name: case input.name { Some(n) -> n None -> existing.name },
-            description: case input.description { Some(d) -> Some(d) None -> existing.description },
-            base_tea_type: case input.base_tea_type { Some(b) -> Some(b) None -> existing.base_tea_type },
-            price: case input.price { Some(p) -> Some(p) None -> existing.price },
-            created_at: existing.created_at,
-            updated_at: now,
-          )
+          // Handle nested Option types for partial updates and null clearing:
+          // - None means "don't update this field" (keep existing)
+          // - Some(None) means "clear this field" (set to None)
+          // - Some(Some(v)) means "update to this value"
+          let updated =
+            DrinkRecord(
+              id: existing.id,
+              store_id: existing.store_id,
+              name: case input.name {
+                Some(n) -> n
+                None -> existing.name
+              },
+              description: case input.description {
+                Some(d) -> d
+                None -> existing.description
+              },
+              base_tea_type: case input.base_tea_type {
+                Some(b) -> b
+                None -> existing.base_tea_type
+              },
+              price: case input.price {
+                Some(p) -> p
+                None -> existing.price
+              },
+              created_at: existing.created_at,
+              updated_at: now,
+            )
           let new_state = dict.insert(state, id, updated)
           actor.send(reply_to, Ok(updated))
           actor.continue(new_state)
@@ -268,7 +297,10 @@ pub fn start() -> Result(DrinkStore, String) {
   }
 }
 
-pub fn create_drink(store: DrinkStore, input: CreateDrinkInput) -> Result(DrinkRecord, String) {
+pub fn create_drink(
+  store: DrinkStore,
+  input: CreateDrinkInput,
+) -> Result(DrinkRecord, String) {
   let reply_subject = process.new_subject()
   actor.send(store, CreateDrink(input, reply_subject))
 
@@ -278,7 +310,10 @@ pub fn create_drink(store: DrinkStore, input: CreateDrinkInput) -> Result(DrinkR
   }
 }
 
-pub fn get_drink_by_id(store: DrinkStore, id: String) -> Result(DrinkRecord, String) {
+pub fn get_drink_by_id(
+  store: DrinkStore,
+  id: String,
+) -> Result(DrinkRecord, String) {
   let reply_subject = process.new_subject()
   actor.send(store, GetDrinkById(id, reply_subject))
 
@@ -288,7 +323,10 @@ pub fn get_drink_by_id(store: DrinkStore, id: String) -> Result(DrinkRecord, Str
   }
 }
 
-pub fn list_drinks_by_store(store: DrinkStore, store_id: String) -> List(DrinkRecord) {
+pub fn list_drinks_by_store(
+  store: DrinkStore,
+  store_id: String,
+) -> List(DrinkRecord) {
   let reply_subject = process.new_subject()
   actor.send(store, ListDrinksByStore(store_id, reply_subject))
 
@@ -298,7 +336,11 @@ pub fn list_drinks_by_store(store: DrinkStore, store_id: String) -> List(DrinkRe
   }
 }
 
-pub fn update_drink(store: DrinkStore, id: String, input: UpdateDrinkInput) -> Result(DrinkRecord, String) {
+pub fn update_drink(
+  store: DrinkStore,
+  id: String,
+  input: UpdateDrinkInput,
+) -> Result(DrinkRecord, String) {
   let reply_subject = process.new_subject()
   actor.send(store, UpdateDrink(id, input, reply_subject))
 

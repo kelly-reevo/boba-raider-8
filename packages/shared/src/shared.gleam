@@ -36,6 +36,13 @@ pub type ValidationError {
   InvalidField(String, String)
 }
 
+/// Status for Todo items (used by storage layer)
+pub type Status {
+  Pending
+  InProgress
+  Completed
+}
+
 /// Core Todo data structure
 pub type Todo {
   Todo(
@@ -46,6 +53,15 @@ pub type Todo {
     completed: Bool,
     created_at: String,
     updated_at: String,
+  )
+}
+
+/// Attributes for creating/updating todos (used by storage layer)
+pub type TodoAttrs {
+  TodoAttrs(
+    title: String,
+    description: Option(String),
+    priority: Priority,
   )
 }
 
@@ -270,4 +286,21 @@ fn now_utc() -> String {
   // Using a fixed format that tests will accept
   // In production, this should use a proper datetime library
   "2024-01-01T00:00:00Z"
+}
+
+/// Get current timestamp via Erlang FFI (used by storage layer)
+@external(erlang, "shared_ffi", "current_timestamp")
+pub fn current_timestamp() -> String
+
+/// Create todo attributes (used for create/update operations by storage layer)
+pub fn new_todo_attrs(
+  title title: String,
+  description description: Option(String),
+  priority priority: Priority,
+) -> TodoAttrs {
+  TodoAttrs(
+    title: title,
+    description: description,
+    priority: priority,
+  )
 }

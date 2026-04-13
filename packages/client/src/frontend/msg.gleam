@@ -3,13 +3,20 @@
 import shared.{type Todo}
 
 pub type Msg {
-  // Todo list messages
+  // Toggle todo messages
   ToggleTodo(id: String, completed: Bool)
   ToggleTodoSuccess(item: Todo)
   ToggleTodoError(id: String, previous_state: Bool, error: String)
 
-  // Data loading
+  // Delete item messages
+  DeleteTodo(String)
+  DeleteTodoSuccess(String)
+  DeleteTodoError(String)
+
+  // Data loading messages
   LoadTodos
   LoadTodosSuccess(items: List(Todo))
   LoadTodosError(error: String)
+  TodosLoaded(List(Todo))
+  TodosLoadError(String)
 }

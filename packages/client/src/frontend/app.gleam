@@ -1,4 +1,5 @@
-import frontend/model.{type Model}
+import frontend/effects
+import frontend/model.{type Model} as model
 import frontend/msg.{type Msg}
 import frontend/toggle_handler_ffi
 import frontend/update
@@ -16,5 +17,5 @@ pub fn main() {
 }
 
 fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
-  #(model.default(), effect.none())
+  #(model.default(), effects.fetch_todos())
 }

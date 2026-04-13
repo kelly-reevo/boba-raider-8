@@ -52,9 +52,34 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       #(Model(..model, todos: reverted_todos, toggling_id: "", error: error), effect.none())
     }
 
-    // Data loading (placeholder)
-    msg.LoadTodos -> #(model, effect.none())
+    // Delete item initiated - set loading and make API call
+    msg.DeleteTodo(id) -> #(
+      Model(..model, loading: True, error: ""),
+      effects.delete_todo(id),
+    )
+
+    // Delete successful - remove from model.todos
+    msg.DeleteTodoSuccess(id) -> #(
+      Model(
+        todos: list.filter(model.todos, fn(item) { item.id != id }),
+        loading: False,
+        error: "",
+        toggling_id: model.toggling_id,
+      ),
+      effect.none(),
+    )
+
+    // Delete error - show error message, keep todos
+    msg.DeleteTodoError(error_msg) -> #(
+      Model(..model, loading: False, error: error_msg),
+      effect.none(),
+    )
+
+    // Data loading
+    msg.LoadTodos -> #(model, effects.fetch_todos())
     msg.LoadTodosSuccess(items) -> #(Model(..model, todos: items), effect.none())
     msg.LoadTodosError(error) -> #(Model(..model, error: error), effect.none())
+    msg.TodosLoaded(todos) -> #(Model(..model, todos: todos, loading: False), effect.none())
+    msg.TodosLoadError(error_msg) -> #(Model(..model, error: error_msg, loading: False), effect.none())
   }
 }

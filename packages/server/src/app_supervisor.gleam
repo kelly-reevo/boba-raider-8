@@ -1,32 +1,37 @@
 import config.{type Config}
 import gleam/erlang/process
 import gleam/io
-import todo_store
+import todo_actor
 import web/http_server_actor
 import web/router
 
 pub fn start(cfg: Config) -> Result(Nil, String) {
   io.println("Starting supervisor...")
 
-  // Start the todo store
-  let assert Ok(store) = todo_store.start()
+  // Start the todo actor first
+  case todo_actor.start() {
+    Ok(todo_actor_pid) -> {
+      io.println("Todo actor started")
 
-  // Create the HTTP handler with store
-  let handler = router.make_handler(store)
+      // Create the HTTP handler with todo_actor reference
+      let handler = router.make_handler(todo_actor_pid)
 
-  // Start HTTP server actor
-  case http_server_actor.start(cfg.port, handler) {
-    Ok(actor) -> {
-      // Set up trap for clean shutdown
-      process.trap_exits(True)
-      io.println("HTTP server actor started")
+      // Start HTTP server actor
+      case http_server_actor.start(cfg.port, handler) {
+        Ok(actor) -> {
+          // Set up trap for clean shutdown
+          process.trap_exits(True)
+          io.println("HTTP server actor started")
 
-      // Link to the actor so we crash if it crashes
-      let assert Ok(pid) = process.subject_owner(actor)
-      process.link(pid)
+          // Link to the actor so we crash if it crashes
+          let assert Ok(pid) = process.subject_owner(actor)
+          process.link(pid)
 
-      Ok(Nil)
+          Ok(Nil)
+        }
+        Error(err) -> Error("Failed to start HTTP server: " <> err)
+      }
     }
-    Error(err) -> Error("Failed to start HTTP server: " <> err)
+    Error(err) -> Error("Failed to start todo actor: " <> err)
   }
 }

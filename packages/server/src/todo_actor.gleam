@@ -5,9 +5,18 @@
 import gleam/dict.{type Dict}
 import gleam/erlang/process.{type Subject}
 import gleam/int
+import gleam/list
+import gleam/order
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
+import gleam/string
 import models/todo_item.{type Todo}
+
+/// Filter options for listing todos
+pub type Filter {
+  All
+  Completed(Bool)
+}
 
 /// Internal message types for the todo actor
 pub type TodoMsg {
@@ -28,6 +37,7 @@ pub type TodoMsg {
   )
   Delete(id: String, reply_to: Subject(Result(Nil, String)))
   GetAll(reply_to: Subject(Dict(String, Todo)))
+  List(filter: Filter, reply_to: Subject(List(Todo)))
   GetById(id: String, reply_to: Subject(Option(Todo)))
   Toggle(id: String, reply_to: Subject(Result(Todo, String)))
   Shutdown
@@ -145,6 +155,25 @@ fn handle_message(state: State, msg: TodoMsg) {
       actor.continue(state)
     }
 
+    List(filter, reply_to) -> {
+      let all_todos = dict.values(state.todos)
+      let filtered = case filter {
+        All -> all_todos
+        Completed(True) -> list.filter(all_todos, fn(t) { t.completed })
+        Completed(False) -> list.filter(all_todos, fn(t) { !t.completed })
+      }
+      // Sort by created_at descending (newest first) - using string comparison for ISO8601
+      let sorted = list.sort(filtered, fn(a, b) {
+        case string.compare(a.created_at, b.created_at) {
+          order.Lt -> order.Gt
+          order.Eq -> order.Eq
+          order.Gt -> order.Lt
+        }
+      })
+      process.send(reply_to, sorted)
+      actor.continue(state)
+    }
+
     GetById(id, reply_to) -> {
       process.send(reply_to, dict.get(state.todos, id) |> option.from_result)
       actor.continue(state)
@@ -207,9 +236,14 @@ pub fn delete(actor_pid: TodoActor, id: String) -> Result(Nil, String) {
   process.call(actor_pid, 5000, fn(reply_to) { Delete(id:, reply_to:) })
 }
 
-/// Public API: Get all todos
+/// Public API: Get all todos as Dict
 pub fn get_all(actor_pid: TodoActor) -> Dict(String, Todo) {
   process.call(actor_pid, 5000, fn(reply_to) { GetAll(reply_to:) })
+}
+
+/// Public API: List todos with optional filter, sorted by created_at descending
+pub fn list(actor_pid: TodoActor, filter: Filter) -> List(Todo) {
+  process.call(actor_pid, 5000, fn(reply_to) { List(filter:, reply_to:) })
 }
 
 /// Public API: Get todo by ID
@@ -249,3 +283,4 @@ fn current_timestamp_string() -> String {
 
 @external(erlang, "server_ffi", "format_timestamp_millis")
 fn format_timestamp_now(_unused: Int) -> String
+

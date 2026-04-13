@@ -2,13 +2,21 @@ import frontend/model.{type Model}
 import frontend/msg.{type Msg}
 import gleam/list
 import lustre/attribute
-import lustre/element.{type Element}
+import lustre/element.{type Element, text}
 import lustre/element/html
 import lustre/event
 import shared.{type Todo}
 
 /// Main application view
 pub fn view(model: Model) -> Element(Msg) {
+  // The list container where loading/todos/error will be rendered
+  let list_content = case model.status {
+    Loading -> render_loading()
+    Success -> render_todo_list(model.todos)
+    Error(err) -> render_error(err)
+    Idle -> element.none()
+  }
+
   html.div([attribute.class("app")], [
     // Error container at top of app - must be first child
     error_container_view(model.error),

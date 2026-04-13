@@ -1,6 +1,6 @@
 import gleeunit
 import gleeunit/should
-import frontend/model
+import frontend/model.{Idle}
 
 pub fn main() {
   gleeunit.main()

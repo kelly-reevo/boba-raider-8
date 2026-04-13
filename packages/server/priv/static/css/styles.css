@@ -63,6 +63,39 @@ button:hover {
   background: #616161;
 }
 
+/* Filter Controls */
+#filter-controls {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin: 1rem 0;
+}
+
+#filter-controls button {
+  padding: 0.4rem 1rem;
+  font-size: 0.875rem;
+  background: #e0e0e0;
+  color: #333;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#filter-controls button:hover {
+  background: #d0d0d0;
+}
+
+#filter-controls button.active {
+  background: #5e35b1;
+  color: white;
+  border-color: #5e35b1;
+}
+
+#filter-controls button.active:hover {
+  background: #4527a0;
+}
+
 /* Todo List Styles */
 #todo-list {
   list-style: none;

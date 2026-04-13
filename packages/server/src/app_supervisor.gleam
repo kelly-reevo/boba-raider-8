@@ -8,12 +8,20 @@ import web/router
 pub fn start(cfg: Config) -> Result(Nil, String) {
   io.println("Starting supervisor...")
 
+<<<<<<< HEAD
   // Start the todo actor first
+=======
+  // Start the todo actor
+>>>>>>> cyclone/feat-361714986/api-list-todos/api-list-todos-simplicity
   case todo_actor.start() {
     Ok(todo_actor_pid) -> {
       io.println("Todo actor started")
 
+<<<<<<< HEAD
       // Create the HTTP handler with todo_actor reference
+=======
+      // Create the HTTP handler with todo actor
+>>>>>>> cyclone/feat-361714986/api-list-todos/api-list-todos-simplicity
       let handler = router.make_handler(todo_actor_pid)
 
       // Start HTTP server actor

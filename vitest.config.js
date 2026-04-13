@@ -1,20 +1,38 @@
 import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+  plugins: [
+    react(),
+    {
+      name: 'treat-tests-as-jsx',
+      enforce: 'pre',
+      async transform(code, id) {
+        if (id.includes('__cyclone_tests__/boba-rating-form/') && !id.includes('node_modules')) {
+          // Return code as-is to let esbuild handle it with jsx loader
+          return null;
+        }
+      }
+    }
+  ],
   esbuild: {
-    jsx: 'automatic',
-    jsxImportSource: 'react'
+    loader: 'tsx',
+    include: [
+      /__cyclone_tests__\/boba-rating-form\/[^.]+$/,
+      /src\/components\/.*\.jsx$/
+    ]
   },
   resolve: {
     alias: {
       '../src/data/rating-data-access': path.resolve(__dirname, 'src/data/rating-data-access.js'),
       './test-db-setup': path.resolve(__dirname, '__cyclone_tests__/test-db-setup.js'),
       '../components/edit-store-form': path.resolve(__dirname, '__cyclone_tests__/components/edit-store-form.jsx'),
-      '../src/components/create_drink_form_component': path.resolve(__dirname, 'src/components/create_drink_form_component.js')
+      '../src/components/create_drink_form_component': path.resolve(__dirname, 'src/components/create_drink_form_component.js'),
+      './BobaRatingForm': path.resolve(__dirname, 'src/components/BobaRatingForm.jsx')
     }
   },
   test: {
@@ -25,7 +43,8 @@ export default defineConfig({
       '__cyclone_tests__/create-drink-form/*',
       '__cyclone_tests__/edit-drink-form/*.test.js',
       '__cyclone_tests__/edit-drink-form/*.test.ts',
-      '__cyclone_tests__/edit-drink-form/*.test.jsx'
+      '__cyclone_tests__/edit-drink-form/*.test.jsx',
+      '__cyclone_tests__/boba-rating-form/*'
     ],
     exclude: [
       '__cyclone_tests__/test-db-setup.js',

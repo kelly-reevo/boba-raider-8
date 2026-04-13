@@ -2,9 +2,10 @@
 /// Coordinates data access, validation, and aggregate fetching
 
 import drink_store.{type DrinkRecord, type DrinkStore}
+import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
-import rating_service.{type RatingService}
+import rating_service
 import store/store_data_access as store_access
 
 /// Drink output with embedded store data and rating aggregates
@@ -193,7 +194,7 @@ pub fn get_drink_with_store(
             Ok(store) -> {
               // Step 4: Get rating aggregates (extensible - currently returns empty)
               // This is the coordination point for rating service integration
-              let aggregates = get_rating_aggregates_for_drink(drink_id)
+              let aggregates = empty_aggregates()
 
               // Step 5: Return with embedded store and aggregates
               Ok(to_drink_output(record, store, aggregates))
@@ -211,7 +212,6 @@ pub fn get_drink_with_store(
 /// Returns success indicator
 pub fn delete_drink(
   drink_store_ref: DrinkStore,
-  rating_service_ref: RatingService,
   drink_id: String,
 ) -> Result(#(Bool, String), DrinkServiceError) {
   // Step 1: Validate drink ID
@@ -221,8 +221,8 @@ pub fn delete_drink(
       // Step 2: Verify drink exists before attempting deletion
       case drink_store.get_drink_by_id(drink_store_ref, drink_id) {
         Ok(_) -> {
-          // Step 3: Delete associated ratings
-          case delete_associated_ratings(rating_service_ref, drink_id) {
+          // Step 3: Delete associated ratings (extensible hook for rating service)
+          case delete_associated_ratings(drink_id) {
             Error(err) -> Error(err)
             Ok(_) -> {
               // Step 4: Delete the drink
@@ -241,26 +241,59 @@ pub fn delete_drink(
   }
 }
 
+/// List all drinks for a store with rating aggregates
+pub fn list_drinks_by_store(
+  drink_store_ref: DrinkStore,
+  store_state: store_access.StoreState,
+  rating_service: rating_service.RatingService,
+  store_id: String,
+) -> Result(List(DrinkOutput), DrinkServiceError) {
+  // Step 1: Validate store exists
+  case get_store_or_error(store_state, store_id) {
+    Error(err) -> Error(err)
+    Ok(store) -> {
+      // Step 2: Get all drinks for the store
+      let drink_records = drink_store.list_drinks_by_store(drink_store_ref, store_id)
+
+      // Step 3: Transform each drink with aggregates
+      let drinks_with_aggregates =
+        drink_records
+        |> list.map(fn(record) {
+          let aggregates = get_rating_aggregates_for_drink(rating_service, record.id)
+          to_drink_output(record, store, aggregates)
+        })
+
+      Ok(drinks_with_aggregates)
+    }
+  }
+}
+
 // ============================================================================
 // Extension Points for Rating Service Integration
 // ============================================================================
 
 /// Get rating aggregates for a drink
-/// Extensible: Replace with actual rating service call when available
-fn get_rating_aggregates_for_drink(_drink_id: String) -> RatingAggregates {
-  // Extension point: Coordinate with rating service
-  // Current implementation returns empty aggregates for extensibility
-  // Future: Call rating_data_access.get_aggregates_for_drink(drink_id)
-  empty_aggregates()
+fn get_rating_aggregates_for_drink(
+  rating_service: rating_service.RatingService,
+  drink_id: String,
+) -> RatingAggregates {
+  case rating_service.get_rating_aggregate(rating_service, drink_id) {
+    Ok(aggregate) -> RatingAggregates(
+      count: aggregate.total_reviews,
+      avg_overall: case aggregate.total_reviews {
+        0 -> None
+        _ -> Some(aggregate.average_overall)
+      },
+    )
+    Error(_) -> empty_aggregates()
+  }
 }
 
 /// Delete all ratings associated with a drink
-fn delete_associated_ratings(
-  rating_service_ref: RatingService,
-  drink_id: String,
-) -> Result(Nil, DrinkServiceError) {
-  case rating_service.delete_ratings_for_drink(rating_service_ref, drink_id) {
-    Ok(_) -> Ok(Nil)
-    Error(msg) -> Error(InternalError("Failed to delete associated ratings: " <> msg))
-  }
+/// Extensible: Replace with actual rating service call when available
+fn delete_associated_ratings(_drink_id: String) -> Result(Nil, DrinkServiceError) {
+  // Extension point: Coordinate with rating service for cascade delete
+  // Current implementation returns Ok for extensibility
+  // Future: Call rating_data_access.delete_ratings_for_drink(drink_id)
+  Ok(Nil)
 }

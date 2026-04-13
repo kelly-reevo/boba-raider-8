@@ -7,7 +7,14 @@
   <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app">
+    <div class="filter-controls">
+      <button data-testid="filter-btn-all" data-filter="all" class="active">All</button>
+      <button data-testid="filter-btn-active" data-filter="active">Active</button>
+      <button data-testid="filter-btn-completed" data-filter="completed">Completed</button>
+    </div>
+    <div data-testid="todo-list"></div>
+  </div>
   <script type="module" src="/static/js/app.js"></script>
 </body>
 </html>

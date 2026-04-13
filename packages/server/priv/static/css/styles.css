@@ -62,3 +62,46 @@ button:hover {
 .reset:hover {
   background: #616161;
 }
+
+.filter-controls {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  justify-content: center;
+}
+
+.filter-controls button {
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  background: #e0e0e0;
+  color: #333;
+}
+
+.filter-controls button:hover {
+  background: #bdbdbd;
+}
+
+.filter-controls button.active {
+  background: #5e35b1;
+  color: white;
+}
+
+[data-testid="todo-list"] {
+  min-height: 100px;
+  margin-top: 1rem;
+}
+
+.todo-item {
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  background: #f9f9f9;
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.todo-item.completed {
+  opacity: 0.6;
+  text-decoration: line-through;
+}

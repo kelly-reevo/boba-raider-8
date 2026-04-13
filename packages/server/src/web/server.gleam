@@ -1,7 +1,14 @@
 import gleam/dict.{type Dict}
+import gleam/option.{type Option}
 
 pub type Request {
-  Request(method: String, path: String, headers: Dict(String, String), body: String)
+  Request(
+    method: String,
+    path: String,
+    query: Option(String),
+    headers: Dict(String, String),
+    body: String,
+  )
 }
 
 pub type Response {

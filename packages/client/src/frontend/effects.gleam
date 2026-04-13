@@ -8,6 +8,9 @@ import gleam/javascript/promise
 import gleam/json
 import lustre/effect.{type Effect}
 
+@external(javascript, "./origin_ffi.mjs", "get_origin")
+fn get_origin() -> String
+
 fn count_decoder() -> decode.Decoder(Int) {
   use count <- decode.field("count", decode.int)
   decode.success(count)
@@ -15,7 +18,7 @@ fn count_decoder() -> decode.Decoder(Int) {
 
 fn api_get(path: String, to_msg: fn(Result(Int, msg.HttpError)) -> Msg) -> Effect(Msg) {
   effect.from(fn(dispatch) {
-    let assert Ok(req) = request.to(path)
+    let assert Ok(req) = request.to(get_origin() <> path)
     fetch.send(req)
     |> promise.try_await(fetch.read_text_body)
     |> promise.map(fn(result) {
@@ -31,7 +34,7 @@ fn api_get(path: String, to_msg: fn(Result(Int, msg.HttpError)) -> Msg) -> Effec
 
 fn api_post(path: String, to_msg: fn(Result(Int, msg.HttpError)) -> Msg) -> Effect(Msg) {
   effect.from(fn(dispatch) {
-    let assert Ok(req) = request.to(path)
+    let assert Ok(req) = request.to(get_origin() <> path)
     let req =
       req
       |> request.set_method(http.Post)

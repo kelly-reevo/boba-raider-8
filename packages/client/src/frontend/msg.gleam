@@ -1,42 +1,38 @@
-/// Application messages including error state handling AND filter support
+/// Application messages
 
-import frontend/model.{type ApiError, type Filter, type Todo}
-
-/// User actions and application events
 pub type Msg {
-  // Legacy counter messages (keep for compatibility)
+  // Counter messages (legacy)
   Increment
   Decrement
   Reset
 
-  // Todo list actions
-  LoadTodos
+  // Loading state messages
+  SetListLoading(Bool)
+  SetFormLoading(Bool)
+  SetTodoLoading(String, Bool)
+  ClearLoadingStates
+
+  // API response messages
+  LoadTodosRequest
   LoadTodosSuccess(List(Todo))
-  LoadTodosError(ApiError)
+  LoadTodosError(String)
 
-  // Filter actions
-  FilterChanged(Filter)
-
-  // Form actions
-  SubmitTodo
+  SubmitTodoRequest
   SubmitTodoSuccess(Todo)
-  SubmitTodoError(ApiError)
-  UpdateTitle(String)
-  UpdateDescription(String)
-  UpdatePriority(String)
+  SubmitTodoError(String)
 
-  // Todo actions
-  DeleteTodo(String)
+  ToggleTodoRequest(String, Bool)
+  ToggleTodoSuccess(Todo)
+  ToggleTodoError(String)
+
+  DeleteTodoRequest(String)
   DeleteTodoSuccess(String)
-  DeleteTodoError(ApiError)
-  EditTodo(String)
-  EditTodoSuccess(Todo)
-  EditTodoError(ApiError)
+  DeleteTodoError(String)
 
-  // Error handling actions
-  ClearErrors
-  RetryLoadTodos
-
-  // Result wrapper for todos loaded with filter
-  TodosLoaded(Result(List(Todo), String))
+  // Form input messages
+  TitleInputChanged(String)
+  DescriptionInputChanged(String)
 }
+
+// Import Todo type from model
+import frontend/model.{type Todo}

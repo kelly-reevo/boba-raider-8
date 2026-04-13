@@ -1,300 +1,233 @@
-/// View rendering with comprehensive error state display AND filter support
-
-import frontend/model.{
-  type ApiError, type FieldError, type Filter, type Model, type Todo,
-  NetworkError, NotFoundError, ServerError, ValidationError, All, Active, Completed
-}
-import frontend/msg.{type Msg, FilterChanged, Increment, Decrement, Reset, SubmitTodo, UpdateTitle, UpdateDescription, UpdatePriority, DeleteTodo, EditTodo, RetryLoadTodos}
-import gleam/int
+import frontend/model.{type Model, type Todo, Model, Loading, Idle}
+import frontend/msg.{type Msg}
 import gleam/list
-import gleam/option.{type Option, None, Some}
-import gleam/string
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
 
-/// Main application view
 pub fn view(model: Model) -> Element(Msg) {
-  html.div([attribute.class("app")], [
+  html.div([attribute.class("app"), attribute.attribute("data-testid", "app-container")], [
     html.h1([], [element.text("boba-raider-8")]),
+    render_error_banner(model.error),
+    render_todo_form(model),
+    render_todo_list_section(model),
+  ])
+}
 
-    // Counter section (existing)
-    html.div([attribute.class("counter")], [
-      html.button([event.on_click(Decrement)], [element.text("-")]),
-      html.span([attribute.class("count")], [
-        element.text("Count: " <> int.to_string(model.count)),
+// Render error banner when there's an error
+fn render_error_banner(error: String) -> Element(Msg) {
+  case error {
+    "" -> html.div([], [])
+    _ ->
+      html.div(
+        [attribute.class("error-banner"), attribute.attribute("data-testid", "error-banner")],
+        [element.text(error)],
+      )
+  }
+}
+
+// Render the todo form with loading states
+fn render_todo_form(model: Model) -> Element(Msg) {
+  let is_submitting = case model.form_loading {
+    Loading -> True
+    _ -> False
+  }
+
+  let submit_btn_content = case is_submitting {
+    True -> html.span([attribute.class("spinner"), attribute.attribute("data-testid", "btn-spinner")], [element.text("Loading...")])
+    False -> element.text("Add Todo")
+  }
+
+  let submit_btn_attrs = [
+    attribute.type_("submit"),
+    attribute.class("submit-btn"),
+    attribute.attribute("data-testid", "submit-btn"),
+  ]
+  // Disable button during submission
+  let submit_btn_attrs = case is_submitting {
+    True -> [attribute.disabled(True), ..submit_btn_attrs]
+    False -> submit_btn_attrs
+  }
+
+  html.form(
+    [
+      attribute.class("todo-form"),
+      attribute.attribute("data-testid", "todo-form"),
+      event.on_submit(fn(_) { msg.SubmitTodoRequest }),
+    ],
+    [
+      html.input([
+        attribute.type_("text"),
+        attribute.name("title"),
+        attribute.placeholder("Todo title"),
+        attribute.class("title-input"),
+        attribute.attribute("data-testid", "title-input"),
+        attribute.value(model.title_input),
+        event.on_input(msg.TitleInputChanged),
+        // Disable input during submission
+        case is_submitting {
+          True -> attribute.disabled(True)
+          False -> attribute.none()
+        },
       ]),
-      html.button([event.on_click(Increment)], [element.text("+")]),
-    ]),
-    html.button([event.on_click(Reset), attribute.class("reset")], [
-      element.text("Reset"),
-    ]),
-
-    // Boundary contract: global error container
-    render_error_container("global", model.global_error),
-    render_global_notification(model.global_error),
-
-    // Todo filter section
-    render_filter_section(model),
-  ])
-}
-
-/// Render error container per boundary contract: showError(container, error)
-fn render_error_container(container: String, error: Option(ApiError)) -> Element(Msg) {
-  html.div(
-    [
-      attribute.class("error-container-" <> container),
-      attribute.attribute("data-testid", "error-container-" <> container),
-      case error {
-        None -> attribute.styles([#("display", "none")])
-        Some(_) -> attribute.styles([#("display", "block")])
-      },
+      html.textarea(
+        [
+          attribute.name("description"),
+          attribute.placeholder("Description (optional)"),
+          attribute.class("description-input"),
+          attribute.attribute("data-testid", "description-input"),
+          attribute.value(model.description_input),
+          event.on_input(msg.DescriptionInputChanged),
+          // Disable textarea during submission
+          case is_submitting {
+            True -> attribute.disabled(True)
+            False -> attribute.none()
+          },
+        ],
+        "",
+      ),
+      html.button(submit_btn_attrs, [submit_btn_content]),
     ],
-    case error {
-      None -> []
-      Some(e) -> {
-        let msg_text = case e {
-          NotFoundError(msg) -> msg
-          ServerError(msg) -> msg
-          NetworkError(msg) -> msg
-          ValidationError(_) -> ""
-        }
-        case string.is_empty(msg_text) {
-          True -> []
-          False -> [
-            html.div(
-              [
-                attribute.class("error-message-" <> container),
-                attribute.attribute("data-testid", "error-message-" <> container),
-                attribute.attribute("role", case container {
-                  "global" -> "alert"
-                  _ -> ""
-                }),
-              ],
-              [element.text(msg_text)],
-            ),
-          ]
-        }
-      }
-    },
   )
 }
 
-/// Render global notification area for non-field errors
-fn render_global_notification(error: Option(ApiError)) -> Element(Msg) {
-  let content = case error {
-    None -> []
-    Some(e) -> {
-      let msg_text = case e {
-        NotFoundError(msg) -> msg
-        ServerError(msg) -> msg
-        NetworkError(msg) -> msg
-        ValidationError(_) -> ""
-      }
-      case string.is_empty(msg_text) {
-        True -> []
-        False -> [element.text(msg_text)]
-      }
-    }
+// Render the todo list section with loading indicator
+fn render_todo_list_section(model: Model) -> Element(Msg) {
+  let is_loading = case model.list_loading {
+    Loading -> True
+    _ -> False
   }
 
-  html.div(
-    [
-      attribute.class("global-notification"),
-      attribute.attribute("data-testid", "global-notification"),
-      attribute.attribute("role", "alert"),
-      case error {
-        None -> attribute.styles([#("display", "none")])
-        Some(_) -> attribute.styles([#("display", "block")])
-      },
-      case error {
-        Some(NotFoundError(_)) | Some(ServerError(_)) | Some(NetworkError(_)) ->
-          attribute.class("error")
-        _ -> attribute.class("")
-      },
-    ],
-    content,
-  )
-}
-
-/// Render filter section with filter buttons and todo list
-fn render_filter_section(model: Model) -> Element(Msg) {
-  html.div([attribute.class("todo-section")], [
-    html.h2([], [element.text("Todos")]),
-
-    // Filter buttons
-    render_filter_buttons(model.current_filter),
-
-    // Todo list with error handling
-    render_todo_list(model),
-  ])
-}
-
-fn render_filter_buttons(current_filter: Filter) -> Element(Msg) {
-  html.div([attribute.class("filter-buttons")], [
-    render_filter_button(All, current_filter),
-    render_filter_button(Active, current_filter),
-    render_filter_button(Completed, current_filter),
-  ])
-}
-
-fn render_filter_button(filter: Filter, current: Filter) -> Element(Msg) {
-  let label = case filter {
-    All -> "All"
-    Active -> "Active"
-    Completed -> "Completed"
+  let loading_indicator = case is_loading {
+    True ->
+      html.div(
+        [
+          attribute.class("loading-indicator"),
+          attribute.attribute("data-testid", "loading-indicator"),
+        ],
+        [
+          html.span([attribute.class("spinner")], []),
+          element.text("Loading..."),
+        ],
+      )
+    False ->
+      // Hidden loading indicator (for test compatibility)
+      html.div(
+        [
+          attribute.class("loading-indicator"),
+          attribute.attribute("data-testid", "loading-indicator"),
+          attribute.style("display", "none"),
+        ],
+        [],
+      )
   }
 
-  let filter_data_attr = case filter {
-    All -> "all"
-    Active -> "active"
-    Completed -> "completed"
+  let list_content = case is_loading, model.todos {
+    // Show loading state
+    True, _ -> [loading_indicator]
+
+    // Show empty state when not loading and no todos
+    False, [] -> [loading_indicator, render_empty_state()]
+
+    // Show todo list when not loading and has todos
+    False, todos -> [loading_indicator, render_todo_list(model, todos)]
   }
 
-  let is_active = filter == current
-  let testid = "filter-btn-" <> filter_data_attr
-
-  html.button(
-    [
-      attribute.class(case is_active {
-        True -> "filter-btn active"
-        False -> "filter-btn"
-      }),
-      attribute.attribute("data-testid", testid),
-      attribute.attribute("data-filter", filter_data_attr),
-      event.on_click(FilterChanged(filter)),
-    ],
-    [element.text(label)],
-  )
-}
-
-/// Render todo list with error state handling AND filter support
-fn render_todo_list(model: Model) -> Element(Msg) {
   html.div(
     [
       attribute.class("todo-list-container"),
       attribute.attribute("data-testid", "todo-list-container"),
     ],
-    [
-      // Boundary contract: list error container
-      render_error_container("list", model.list_error),
-      html.div(
-        [
-          attribute.class("list-error-container"),
-          attribute.attribute("data-testid", "list-error-container"),
-          case model.list_error {
-            None -> attribute.styles([#("display", "none")])
-            Some(_) -> attribute.styles([#("display", "block")])
-          },
-        ],
-        case model.list_error {
-          None -> []
-          Some(error) -> render_list_error_content(error)
-        },
-      ),
-      html.div(
-        [
-          attribute.class("loading-spinner"),
-          attribute.attribute("data-testid", "loading-spinner"),
-          case model.loading {
-            True -> attribute.styles([#("display", "block")])
-            False -> attribute.styles([#("display", "none")])
-          },
-        ],
-        [element.text("Loading...")],
-      ),
-      render_todo_items(model.todos),
-    ],
+    list_content,
   )
 }
 
-/// Render list error content with retry button
-fn render_list_error_content(error: ApiError) -> List(Element(Msg)) {
-  let message = case error {
-    ServerError(msg) -> msg
-    NetworkError(msg) -> msg
-    _ -> "Failed to load todos"
+// Render empty state when no todos
+fn render_empty_state() -> Element(Msg) {
+  html.div(
+    [attribute.class("empty-state"), attribute.attribute("data-testid", "empty-state")],
+    [element.text("No todos yet. Add one above!")],
+  )
+}
+
+// Render the todo list
+fn render_todo_list(model: Model, todos: List(Todo)) -> Element(Msg) {
+  html.ul(
+    [attribute.class("todo-list"), attribute.attribute("data-testid", "todo-list")],
+    list.map(todos, fn(item) { render_todo_item(model, item) }),
+  )
+}
+
+// Check if a specific todo is being operated on
+fn is_todo_loading(model: Model, item_id: String) -> Bool {
+  case dict.get(model.todo_loading, item_id) {
+    Ok(Loading) -> True
+    _ -> False
+  }
+}
+
+// Render a single todo item
+fn render_todo_item(model: Model, item: Todo) -> Element(Msg) {
+  let is_item_loading = is_todo_loading(model, item.id)
+  let is_any_operation_loading = case model.form_loading, model.list_loading {
+    Loading, _ -> True
+    _, Loading -> True
+    _, _ -> False
   }
 
-  [
-    html.div(
-      [
-        attribute.class("error-message-text"),
-        attribute.attribute("data-testid", "error-message-text"),
-      ],
-      [element.text(message)],
-    ),
-    html.button(
-      [
-        attribute.class("retry-load-btn"),
-        attribute.attribute("data-testid", "retry-load-btn"),
-        event.on_click(RetryLoadTodos),
-      ],
-      [element.text("Try Again")],
-    ),
+  // Disable checkbox during any loading operation on this item
+  let checkbox_attrs = [
+    attribute.type_("checkbox"),
+    attribute.class("todo-checkbox"),
+    attribute.attribute("data-testid", "todo-checkbox-" <> item.id),
+    attribute.checked(item.completed),
+    event.on_check(fn(checked) { msg.ToggleTodoRequest(item.id, checked) }),
   ]
-}
-
-fn render_todo_items(todos: List(Todo)) -> Element(Msg) {
-  // Show empty state
-  case todos {
-    [] ->
-      html.div(
-        [
-          attribute.class("todo-empty"),
-          attribute.attribute("data-testid", "todo-empty"),
-        ],
-        [element.text("No todos found")],
-      )
-    items ->
-      html.ul(
-        [
-          attribute.class("todo-list"),
-          attribute.attribute("data-testid", "todo-list"),
-        ],
-        list.map(items, render_todo_item),
-      )
+  let checkbox_attrs = case is_item_loading || is_any_operation_loading {
+    True -> [attribute.disabled(True), ..checkbox_attrs]
+    False -> checkbox_attrs
   }
-}
 
-fn render_todo_item(todo_item: Todo) -> Element(Msg) {
+  // Disable delete button during any loading operation on this item
+  let delete_btn_attrs = [
+    attribute.class("delete-btn"),
+    attribute.attribute("data-testid", "delete-btn-" <> item.id),
+    event.on_click(msg.DeleteTodoRequest(item.id)),
+  ]
+  let delete_btn_attrs = case is_item_loading || is_any_operation_loading {
+    True -> [attribute.disabled(True), ..delete_btn_attrs]
+    False -> delete_btn_attrs
+  }
+
+  // Show loading overlay when this specific item is loading
+  let loading_overlay = case is_item_loading {
+    True ->
+      html.span(
+        [attribute.class("item-loading-indicator")],
+        [element.text("...")],
+      )
+    False -> element.text("")
+  }
+
   html.li(
     [
-      attribute.class(case todo_item.completed {
+      attribute.class(case item.completed {
         True -> "todo-item completed"
         False -> "todo-item"
       }),
-      attribute.attribute("data-testid", "todo-item-" <> todo_item.id),
-      attribute.attribute("data-completed", case todo_item.completed {
-        True -> "true"
-        False -> "false"
-      }),
+      attribute.attribute("data-testid", "todo-item-" <> item.id),
     ],
     [
+      html.input(checkbox_attrs),
       html.span(
-        [
-          attribute.class("todo-title"),
-          attribute.attribute("data-testid", "todo-title-" <> todo_item.id),
-        ],
-        [element.text(todo_item.title)],
+        [attribute.class("todo-title")],
+        [element.text(item.title)],
       ),
-      html.button(
-        [
-          attribute.class("edit-todo-btn"),
-          attribute.attribute("data-testid", "edit-todo-btn-" <> todo_item.id),
-          event.on_click(EditTodo(todo_item.id)),
-        ],
-        [element.text("Edit")],
-      ),
-      html.button(
-        [
-          attribute.class("delete-todo-btn"),
-          attribute.attribute("data-testid", "delete-todo-btn-" <> todo_item.id),
-          event.on_click(DeleteTodo(todo_item.id)),
-        ],
-        [element.text("Delete")],
-      ),
+      html.button(delete_btn_attrs, [element.text("Delete")]),
+      loading_overlay,
     ],
   )
 }
+
+import gleam/dict

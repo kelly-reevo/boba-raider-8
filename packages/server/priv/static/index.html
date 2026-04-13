@@ -7,7 +7,51 @@
   <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app">
+    <h1>boba-raider-8</h1>
+
+    <!-- Error Banner -->
+    <div id="error-banner" class="error-banner" data-testid="error-banner" style="display: none;"></div>
+
+    <!-- Todo Form -->
+    <form id="todo-form" data-testid="todo-form" class="todo-form">
+      <input
+        type="text"
+        name="title"
+        placeholder="Todo title"
+        class="title-input"
+        data-testid="title-input"
+        required
+      />
+      <textarea
+        name="description"
+        placeholder="Description (optional)"
+        class="description-input"
+        data-testid="description-input"
+      ></textarea>
+      <button type="submit" class="submit-btn" data-testid="submit-btn">
+        Add Todo
+      </button>
+    </form>
+
+    <!-- Todo List Container -->
+    <div id="todo-list-container" class="todo-list-container" data-testid="todo-list-container">
+      <!-- Loading Indicator (hidden by default) -->
+      <div id="loading-indicator" class="loading-indicator" data-testid="loading-indicator" style="display: none;">
+        <span class="spinner"></span>
+        <span class="loading-text">Loading...</span>
+      </div>
+
+      <!-- Empty State (shown when no todos) -->
+      <div id="empty-state" class="empty-state" data-testid="empty-state" style="display: none;">
+        No todos yet. Add one above!
+      </div>
+
+      <!-- Todo List -->
+      <ul id="todo-list" class="todo-list" data-testid="todo-list"></ul>
+    </div>
+  </div>
+
   <script type="module" src="/static/js/app.js"></script>
 </body>
 </html>

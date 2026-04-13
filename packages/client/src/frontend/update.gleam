@@ -1,118 +1,185 @@
-/// State updates with comprehensive error handling AND filter support
-
 import frontend/effects
-import frontend/model.{type ApiError, type Model, type Todo, Model, ValidationError}
+import frontend/model.{type LoadingState, type Model, type Todo, Model, Error as LoadingError, Idle, Loading, Success}
 import frontend/msg.{type Msg}
-import gleam/list
-import gleam/option.{None, Some}
+import gleam/dict
 import lustre/effect.{type Effect}
 
-/// Main update function handling all messages
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
-    // Legacy counter messages (keep for compatibility)
-    msg.Increment -> #(Model(..model, count: model.count + 1), effect.none())
-    msg.Decrement -> #(Model(..model, count: model.count - 1), effect.none())
-    msg.Reset -> #(Model(..model, count: 0), effect.none())
+    // Legacy counter messages - no-op since count field was removed
+    msg.Increment -> #(model, effect.none())
+    msg.Decrement -> #(model, effect.none())
+    msg.Reset -> #(model, effect.none())
 
-    // Load todos (legacy path)
-    msg.LoadTodos -> #(
-      Model(..model, loading: True, list_error: None),
-      effects.load_todos()
-    )
-    msg.LoadTodosSuccess(todos) -> #(
-      Model(..model, todos: todos, loading: False, list_error: None, global_error: None),
-      effect.none()
-    )
-    msg.LoadTodosError(error) -> #(
-      Model(..model, loading: False, list_error: Some(error), global_error: None),
-      effect.none()
-    )
+    // Loading state messages
+    msg.SetListLoading(is_loading) -> {
+      let new_state = case is_loading {
+        True -> Loading
+        False -> Idle
+      }
+      #(set_list_loading(model, new_state), effect.none())
+    }
 
-    // Filter messages with error handling
-    msg.FilterChanged(filter) -> #(
-      Model(..model, current_filter: filter, loading: True, list_error: None, global_error: None),
-      effects.list_todos(filter),
-    )
-    msg.TodosLoaded(result) -> {
-      case result {
-        Ok(todos) -> #(Model(..model, todos: todos, loading: False, list_error: None, global_error: None), effect.none())
-        Error(err) -> #(Model(..model, loading: False, list_error: Some(model.NetworkError(err)), global_error: None), effect.none())
+    msg.SetFormLoading(is_loading) -> {
+      let new_state = case is_loading {
+        True -> Loading
+        False -> Idle
+      }
+      #(set_form_loading(model, new_state), effect.none())
+    }
+
+    msg.SetTodoLoading(todo_id, is_loading) -> {
+      let new_state = case is_loading {
+        True -> Loading
+        False -> Idle
+      }
+      #(set_todo_loading(model, todo_id, new_state), effect.none())
+    }
+
+    msg.ClearLoadingStates -> {
+      #(clear_all_loading(model), effect.none())
+    }
+
+    // Load todos flow
+    msg.LoadTodosRequest -> {
+      let new_model =
+        model
+        |> set_list_loading(Loading)
+        |> clear_error()
+      #(new_model, effects.fetch_todos())
+    }
+
+    msg.LoadTodosSuccess(todos) -> {
+      #(set_todos(model, todos), effect.none())
+    }
+
+    msg.LoadTodosError(error) -> {
+      #(set_error(model, error), effect.none())
+    }
+
+    // Submit todo flow
+    msg.SubmitTodoRequest -> {
+      case model.title_input {
+        "" -> #(model, effect.none())
+        _ -> {
+          let new_model =
+            model
+            |> set_form_loading(Loading)
+            |> clear_error()
+          #(new_model, effects.submit_todo(model.title_input, model.description_input))
+        }
       }
     }
 
-    // Form field updates
-    msg.UpdateTitle(title) -> #(Model(..model, form_title: title), effect.none())
-    msg.UpdateDescription(desc) -> #(Model(..model, form_description: desc), effect.none())
-    msg.UpdatePriority(priority) -> #(Model(..model, form_priority: priority), effect.none())
+    msg.SubmitTodoSuccess(new_item) -> {
+      #(add_todo(model, new_item), effect.none())
+    }
 
-    // Submit todo
-    msg.SubmitTodo -> #(
-      Model(..model, loading: True, form_errors: [], global_error: None),
-      effects.submit_todo(model.form_title, model.form_description, model.form_priority)
-    )
-    msg.SubmitTodoSuccess(todo_item) -> #(
-      Model(
-        ..model,
-        todos: list.append(model.todos, [todo_item]),
-        loading: False,
-        form_title: "",
-        form_description: "",
-        form_priority: "medium",
-        form_errors: [],
-        global_error: None,
-      ),
-      effect.none()
-    )
-    msg.SubmitTodoError(error) -> #(
-      Model(
-        ..model,
-        loading: False,
-        form_errors: case error {
-          ValidationError(errors) -> errors
-          _ -> []
-        },
-        global_error: case error {
-          ValidationError(_) -> None
-          _ -> Some(error)
-        },
-      ),
-      effect.none()
-    )
+    msg.SubmitTodoError(error) -> {
+      #(Model(..model, form_loading: LoadingError(error), error: error), effect.none())
+    }
 
-    // Delete todo
-    msg.DeleteTodo(id) -> #(model, effects.delete_todo(id))
-    msg.DeleteTodoSuccess(id) -> #(
-      Model(
-        ..model,
-        todos: list.filter(model.todos, fn(t) { t.id != id }),
-        global_error: None,
-      ),
-      effect.none()
-    )
-    msg.DeleteTodoError(error) -> #(
-      Model(..model, global_error: Some(error)),
-      effect.none()
-    )
+    // Toggle todo flow
+    msg.ToggleTodoRequest(todo_id, completed) -> {
+      let new_model = set_todo_loading(model, todo_id, Loading)
+      #(new_model, effects.toggle_todo(todo_id, completed))
+    }
 
-    // Edit todo (placeholder)
-    msg.EditTodo(_id) -> #(model, effect.none())
-    msg.EditTodoSuccess(_todo_item) -> #(model, effect.none())
-    msg.EditTodoError(error) -> #(
-      Model(..model, global_error: Some(error)),
-      effect.none()
-    )
+    msg.ToggleTodoSuccess(updated_item) -> {
+      #(update_todo(model, updated_item), effect.none())
+    }
 
-    // Error handling
-    msg.ClearErrors -> #(
-      Model(
-        ..model,
-        form_errors: [],
-        list_error: None,
-        global_error: None,
-      ),
-      effect.none()
-    )
-    msg.RetryLoadTodos -> #(model, effects.load_todos())
+    msg.ToggleTodoError(error) -> {
+      #(Model(..model, error: error), effect.none())
+    }
+
+    // Delete todo flow
+    msg.DeleteTodoRequest(todo_id) -> {
+      let new_model = set_todo_loading(model, todo_id, Loading)
+      #(new_model, effects.delete_todo(todo_id))
+    }
+
+    msg.DeleteTodoSuccess(todo_id) -> {
+      #(remove_todo(model, todo_id), effect.none())
+    }
+
+    msg.DeleteTodoError(error) -> {
+      #(Model(..model, error: error), effect.none())
+    }
+
+    // Form input messages
+    msg.TitleInputChanged(value) -> {
+      #(set_title_input(model, value), effect.none())
+    }
+
+    msg.DescriptionInputChanged(value) -> {
+      #(set_description_input(model, value), effect.none())
+    }
   }
 }
+
+// Re-export model helper functions for local use
+fn set_list_loading(m: Model, loading: LoadingState) -> Model {
+  Model(..m, list_loading: loading)
+}
+
+fn set_form_loading(m: Model, loading: LoadingState) -> Model {
+  Model(..m, form_loading: loading)
+}
+
+fn set_todo_loading(m: Model, todo_id: String, loading: LoadingState) -> Model {
+  Model(..m, todo_loading: dict.insert(m.todo_loading, todo_id, loading))
+}
+
+fn clear_error(m: Model) -> Model {
+  Model(..m, error: "")
+}
+
+fn set_error(m: Model, error: String) -> Model {
+  Model(..m, error: error, list_loading: LoadingError(error))
+}
+
+fn set_todos(m: Model, todos: List(Todo)) -> Model {
+  Model(..m, todos: todos, list_loading: Success)
+}
+
+fn add_todo(m: Model, item: Todo) -> Model {
+  Model(..m, todos: [item, ..m.todos], form_loading: Success, title_input: "", description_input: "")
+}
+
+fn update_todo(m: Model, updated: Todo) -> Model {
+  let new_todos = m.todos |> list.map(fn(t) {
+    case t.id == updated.id {
+      True -> updated
+      False -> t
+    }
+  })
+  let new_loading = dict.delete(m.todo_loading, updated.id)
+  Model(..m, todos: new_todos, todo_loading: new_loading)
+}
+
+fn remove_todo(m: Model, todo_id: String) -> Model {
+  let new_todos = m.todos |> list.filter(fn(t) { t.id != todo_id })
+  let new_loading = dict.delete(m.todo_loading, todo_id)
+  Model(..m, todos: new_todos, todo_loading: new_loading)
+}
+
+fn set_title_input(m: Model, value: String) -> Model {
+  Model(..m, title_input: value)
+}
+
+fn set_description_input(m: Model, value: String) -> Model {
+  Model(..m, description_input: value)
+}
+
+fn clear_all_loading(m: Model) -> Model {
+  Model(
+    ..m,
+    list_loading: Idle,
+    form_loading: Idle,
+    todo_loading: dict.new(),
+    error: "",
+  )
+}
+
+import gleam/list

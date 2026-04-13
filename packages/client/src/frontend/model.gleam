@@ -1,70 +1,135 @@
-/// Application state with comprehensive error handling AND filter support
-import gleam/option.{type Option, None}
+/// Application state with loading states
 
-/// Error state for field-level validation errors (422 responses)
-pub type FieldError {
-  FieldError(field: String, message: String)
+pub type LoadingState {
+  Idle
+  Loading
+  Success
+  Error(String)
 }
 
-/// Container type for error display location
-pub type ErrorContainer {
-  FormError
-  ListError
-  GlobalError
-}
-
-/// API error types matching backend responses
-pub type ApiError {
-  ValidationError(errors: List(FieldError))
-  NotFoundError(message: String)
-  ServerError(message: String)
-  NetworkError(message: String)
-}
-
-/// Filter type for todo status filtering
-pub type Filter {
-  All
-  Active
-  Completed
-}
-
-/// Todo data type
 pub type Todo {
-  Todo(id: String, title: String, description: String, priority: String, completed: Bool)
+  Todo(id: String, title: String, description: String, completed: Bool)
 }
 
-/// Application model with todo state, error handling, AND filtering
 pub type Model {
   Model(
-    // Todo list state
+    // List loading state
+    list_loading: LoadingState,
+    // Form submission loading state
+    form_loading: LoadingState,
+    // Individual todo operation loading states (by id)
+    todo_loading: Dict(String, LoadingState),
+    // Data
     todos: List(Todo),
-    loading: Bool,
-    current_filter: Filter,
-    // Form state
-    form_title: String,
-    form_description: String,
-    form_priority: String,
-    // Error state
-    form_errors: List(FieldError),
-    list_error: Option(ApiError),
-    global_error: Option(ApiError),
-    // Legacy counter (keep for compatibility)
-    count: Int,
+    // Error message
+    error: String,
+    // Form fields
+    title_input: String,
+    description_input: String,
   )
 }
 
-/// Default/initial model state
+import gleam/dict.{type Dict}
+
 pub fn default() -> Model {
   Model(
+    list_loading: Idle,
+    form_loading: Idle,
+    todo_loading: dict.new(),
     todos: [],
-    loading: False,
-    current_filter: All,
-    form_title: "",
-    form_description: "",
-    form_priority: "medium",
-    form_errors: [],
-    list_error: None,
-    global_error: None,
-    count: 0,
+    error: "",
+    title_input: "",
+    description_input: "",
   )
 }
+
+/// Check if any loading operation is in progress
+pub fn is_loading(model: Model) -> Bool {
+  case model.list_loading {
+    Loading -> True
+    _ -> False
+  }
+}
+
+/// Check if form is submitting
+pub fn is_form_submitting(model: Model) -> Bool {
+  case model.form_loading {
+    Loading -> True
+    _ -> False
+  }
+}
+
+/// Check if a specific todo is being operated on
+pub fn is_todo_loading(model: Model, todo_id: String) -> Bool {
+  case dict.get(model.todo_loading, todo_id) {
+    Ok(Loading) -> True
+    _ -> False
+  }
+}
+
+/// Set loading state for the list
+pub fn set_list_loading(model: Model, loading: LoadingState) -> Model {
+  Model(..model, list_loading: loading)
+}
+
+/// Set loading state for the form
+pub fn set_form_loading(model: Model, loading: LoadingState) -> Model {
+  Model(..model, form_loading: loading)
+}
+
+/// Set loading state for a specific todo
+pub fn set_todo_loading(model: Model, todo_id: String, loading: LoadingState) -> Model {
+  Model(..model, todo_loading: dict.insert(model.todo_loading, todo_id, loading))
+}
+
+/// Clear error message
+pub fn clear_error(model: Model) -> Model {
+  Model(..model, error: "")
+}
+
+/// Set error message
+pub fn set_error(model: Model, error: String) -> Model {
+  Model(..model, error: error, list_loading: Error(error))
+}
+
+/// Update todos list
+pub fn set_todos(model: Model, todos: List(Todo)) -> Model {
+  Model(..model, todos: todos, list_loading: Success)
+}
+
+/// Add a new todo to the list
+pub fn add_todo(model: Model, item: Todo) -> Model {
+  Model(..model, todos: [item, ..model.todos], form_loading: Success, title_input: "", description_input: "")
+}
+
+/// Update a todo in the list
+pub fn update_todo(model: Model, updated: Todo) -> Model {
+  let new_todos = model.todos |> list.map(fn(t) {
+    case t.id == updated.id {
+      True -> updated
+      False -> t
+    }
+  })
+  let new_loading = dict.delete(model.todo_loading, updated.id)
+  Model(..model, todos: new_todos, todo_loading: new_loading)
+}
+
+/// Remove a todo from the list
+pub fn remove_todo(model: Model, todo_id: String) -> Model {
+  let new_todos = model.todos |> list.filter(fn(t) { t.id != todo_id })
+  let new_loading = dict.delete(model.todo_loading, todo_id)
+  Model(..model, todos: new_todos, todo_loading: new_loading)
+}
+
+/// Update title input
+pub fn set_title_input(model: Model, value: String) -> Model {
+  Model(..model, title_input: value)
+}
+
+/// Update description input
+pub fn set_description_input(model: Model, value: String) -> Model {
+  Model(..model, description_input: value)
+}
+
+// Import list at the end to avoid circular reference issues in type definitions
+import gleam/list

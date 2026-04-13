@@ -1,5 +1,5 @@
 import frontend/effects
-import frontend/model.{type Model, All}
+import frontend/model
 import frontend/msg.{type Msg}
 import frontend/update
 import frontend/view
@@ -12,7 +12,7 @@ pub fn main() {
   Nil
 }
 
-fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
-  // Load todos on initial render with "all" filter AND error handling
-  #(model.default(), effects.list_todos(All))
+fn init(_flags: Nil) -> #(model.Model, Effect(Msg)) {
+  // Trigger initial todos load
+  #(model.default(), effects.fetch_todos())
 }

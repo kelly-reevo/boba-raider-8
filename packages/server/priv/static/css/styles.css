@@ -1,3 +1,5 @@
+/* boba-raider-8 Styles */
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -9,24 +11,210 @@ body {
   background: #f5f5f5;
   color: #333;
   min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  padding: 20px;
 }
 
-.app {
-  text-align: center;
-  padding: 2rem;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+#app {
+  max-width: 800px;
+  margin: 0 auto;
 }
 
 h1 {
+  text-align: center;
   margin-bottom: 2rem;
   color: #5e35b1;
 }
 
+/* Error Banner */
+.error-banner {
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 12px 16px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  border: 1px solid #ef9a9a;
+}
+
+/* Todo Form */
+.todo-form {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+}
+
+.todo-form input,
+.todo-form textarea {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.todo-form textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.todo-form input:focus,
+.todo-form textarea:focus {
+  outline: none;
+  border-color: #5e35b1;
+}
+
+.todo-form input:disabled,
+.todo-form textarea:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.submit-btn {
+  background: #5e35b1;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s;
+}
+
+.submit-btn:hover:not(:disabled) {
+  background: #4527a0;
+}
+
+.submit-btn:disabled {
+  background: #b39ddb;
+  cursor: not-allowed;
+}
+
+/* Spinner */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #ffffff;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.loading-indicator .spinner {
+  width: 24px;
+  height: 24px;
+  border-color: #5e35b1;
+  border-top-color: transparent;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Todo List Container */
+.todo-list-container {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  min-height: 100px;
+}
+
+/* Loading Indicator */
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
+  color: #666;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+  font-style: italic;
+}
+
+/* Todo List */
+.todo-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* Todo Item */
+.todo-item {
+  display: flex;
+  align-items: center;
+  padding: 16px 12px;
+  border-bottom: 1px solid #eee;
+  gap: 12px;
+}
+
+.todo-item:last-child {
+  border-bottom: none;
+}
+
+.todo-item.completed .todo-title {
+  text-decoration: line-through;
+  color: #999;
+}
+
+.todo-checkbox {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.todo-checkbox:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.todo-title {
+  flex: 1;
+  font-size: 16px;
+}
+
+.delete-btn {
+  background: #f44336;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.delete-btn:hover:not(:disabled) {
+  background: #d32f2f;
+}
+
+.delete-btn:disabled {
+  background: #ef9a9a;
+  cursor: not-allowed;
+}
+
+.item-loading-indicator {
+  color: #999;
+  font-size: 14px;
+  font-style: italic;
+}
+
+/* Legacy counter styles (for backward compatibility) */
 .counter {
   display: flex;
   align-items: center;
@@ -38,21 +226,6 @@ h1 {
 .count {
   font-size: 1.5rem;
   min-width: 120px;
-}
-
-button {
-  padding: 0.5rem 1.5rem;
-  font-size: 1.25rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  background: #5e35b1;
-  color: white;
-  transition: background 0.2s;
-}
-
-button:hover {
-  background: #4527a0;
 }
 
 .reset {

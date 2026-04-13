@@ -1,189 +1,92 @@
-/// HTTP client effects for API communication with error handling AND filter support
-
-import frontend/model.{
-  type ApiError, type FieldError, type Filter, type Todo, All, Active, Completed,
-  FieldError, NetworkError, NotFoundError, ServerError, ValidationError
-}
+import frontend/model.{type Todo, Todo}
 import frontend/msg.{type Msg}
-import gleam/dynamic/decode.{type Decoder}
+import gleam/dynamic
 import gleam/http
 import gleam/http/request
 import gleam/json
 import gleam/list
 import gleam/result
-import gleam/string
 import lustre/effect.{type Effect}
 
 /// API base URL
 const api_base = "/api"
 
-/// Decode a single todo from JSON
-fn todo_decoder() -> Decoder(Todo) {
-  use id <- decode.field("id", decode.string)
-  use title <- decode.field("title", decode.string)
-  use description <- decode.field("description", decode.string)
-  use priority <- decode.field("priority", decode.string)
-  use completed <- decode.field("completed", decode.bool)
-  decode.success(model.Todo(id:, title:, description:, priority:, completed:))
-}
+/// Fetch all todos from the API
+pub fn fetch_todos() -> Effect(Msg) {
+  let url = api_base <> "/todos"
 
-/// Decode a list of todos from JSON (wrapped in "todos" field)
-fn todos_response_decoder() -> Decoder(List(Todo)) {
-  use todos <- decode.field("todos", decode.list(todo_decoder()))
-  decode.success(todos)
-}
-
-/// Decode field errors from 422 validation error response
-fn field_error_decoder() -> Decoder(FieldError) {
-  use field <- decode.field("field", decode.string)
-  use message <- decode.field("message", decode.string)
-  decode.success(FieldError(field:, message:))
-}
-
-/// Decode validation errors from 422 response
-fn validation_error_decoder() -> Decoder(List(FieldError)) {
-  use errors <- decode.field("errors", decode.list(field_error_decoder()))
-  decode.success(errors)
-}
-
-/// Extract API error from HTTP response
-fn parse_api_error(status: Int, body: String) -> ApiError {
-  case status {
-    422 -> {
-      case json.parse(body, validation_error_decoder()) {
-        Ok(errors) -> ValidationError(errors)
-        Error(_) -> ValidationError([FieldError("general", "Validation failed")])
-      }
-    }
-    404 -> {
-      case json.parse(body, decode.field("error", decode.string, decode.success)) {
-        Ok(msg) -> NotFoundError(msg)
-        Error(_) -> NotFoundError("Todo not found")
-      }
-    }
-    _ -> {
-      case json.parse(body, decode.field("error", decode.string, decode.success)) {
-        Ok(msg) -> ServerError(msg)
-        Error(_) -> ServerError("Request failed")
-      }
-    }
-  }
-}
-
-/// Effect to load todos from API with optional filter
-pub fn load_todos() -> Effect(Msg) {
   effect.from(fn(dispatch) {
-    let url = api_base <> "/todos"
     let req = request.new()
       |> request.set_method(http.Get)
       |> request.set_header("Accept", "application/json")
       |> request.set_path(url)
 
-    case do_fetch_request(req) {
-      Ok(#(status, body)) -> {
-        case status {
-          200 -> {
-            case json.parse(body, todos_response_decoder()) {
-              Ok(todos) -> dispatch(msg.LoadTodosSuccess(todos))
-              Error(_) -> dispatch(msg.LoadTodosError(ServerError("Failed to parse response")))
-            }
-          }
-          _ -> dispatch(msg.LoadTodosError(parse_api_error(status, body)))
-        }
-      }
-      Error(_) -> dispatch(msg.LoadTodosError(NetworkError("Connection failed. Please try again.")))
-    }
+    // Use JavaScript fetch via FFI
+    do_fetch_todos(req, dispatch)
   })
 }
 
-/// Fetch todos with filter parameter
-pub fn list_todos(filter: Filter) -> Effect(Msg) {
-  let filter_str = case filter {
-    All -> "all"
-    Active -> "active"
-    Completed -> "completed"
-  }
-
-  let url = "/api/todos?status=" <> filter_str
-
+/// Submit a new todo to the API
+pub fn submit_todo(title: String, description: String) -> Effect(Msg) {
   effect.from(fn(dispatch) {
-    do_fetch(url, fn(result) {
-      dispatch(msg.TodosLoaded(result))
-    })
-  })
-}
-
-/// Effect to submit a new todo
-pub fn submit_todo(title: String, description: String, priority: String) -> Effect(Msg) {
-  effect.from(fn(dispatch) {
-    let url = api_base <> "/todos"
-    let body_obj = json.object([
+    let body = json.object([
       #("title", json.string(title)),
       #("description", json.string(description)),
-      #("priority", json.string(priority)),
+      #("completed", json.bool(False))
     ])
-    let body = json.to_string(body_obj)
+    |> json.to_string
 
     let req = request.new()
       |> request.set_method(http.Post)
       |> request.set_header("Content-Type", "application/json")
       |> request.set_header("Accept", "application/json")
+      |> request.set_path(api_base <> "/todos")
       |> request.set_body(body)
-      |> request.set_path(url)
 
-    case do_fetch_with_body(req) {
-      Ok(#(status, response_body)) -> {
-        case status {
-          201 -> {
-            case json.parse(response_body, todo_decoder()) {
-              Ok(todo_item) -> dispatch(msg.SubmitTodoSuccess(todo_item))
-              Error(_) -> dispatch(msg.SubmitTodoError(ServerError("Failed to parse response")))
-            }
-          }
-          422 -> dispatch(msg.SubmitTodoError(parse_api_error(status, response_body)))
-          404 -> dispatch(msg.SubmitTodoError(parse_api_error(status, response_body)))
-          _ -> dispatch(msg.SubmitTodoError(parse_api_error(status, response_body)))
-        }
-      }
-      Error(_) -> dispatch(msg.SubmitTodoError(NetworkError("Connection failed. Please try again.")))
-    }
+    do_submit_todo(req, dispatch)
   })
 }
 
-/// Effect to delete a todo
-pub fn delete_todo(id: String) -> Effect(Msg) {
+/// Toggle a todo's completed status
+pub fn toggle_todo(todo_id: String, completed: Bool) -> Effect(Msg) {
   effect.from(fn(dispatch) {
-    let url = api_base <> "/todos/" <> id
+    let body = json.object([
+      #("completed", json.bool(completed))
+    ])
+    |> json.to_string
+
+    let req = request.new()
+      |> request.set_method(http.Patch)
+      |> request.set_header("Content-Type", "application/json")
+      |> request.set_header("Accept", "application/json")
+      |> request.set_path(api_base <> "/todos/" <> todo_id)
+      |> request.set_body(body)
+
+    do_toggle_todo(req, todo_id, dispatch)
+  })
+}
+
+/// Delete a todo
+pub fn delete_todo(todo_id: String) -> Effect(Msg) {
+  effect.from(fn(dispatch) {
     let req = request.new()
       |> request.set_method(http.Delete)
       |> request.set_header("Accept", "application/json")
-      |> request.set_path(url)
+      |> request.set_path(api_base <> "/todos/" <> todo_id)
 
-    case do_fetch_request(req) {
-      Ok(#(status, body)) -> {
-        case status {
-          200 | 204 -> dispatch(msg.DeleteTodoSuccess(id))
-          404 -> dispatch(msg.DeleteTodoError(parse_api_error(status, body)))
-          _ -> dispatch(msg.DeleteTodoError(parse_api_error(status, body)))
-        }
-      }
-      Error(_) -> dispatch(msg.DeleteTodoError(NetworkError("Connection failed. Please try again.")))
-    }
+    do_delete_todo(req, todo_id, dispatch)
   })
 }
 
-/// Simplified fetch that returns status and body
-fn do_fetch_request(req: request.Request(String)) -> Result(#(Int, String), Nil) {
-  // In a real implementation, this would use the browser's fetch API
-  // For now, we return an error to trigger the network error state
-  Error(Nil)
-}
+// FFI functions for JavaScript fetch
+@external(javascript, "../ffi/fetch.js", "fetchTodos")
+fn do_fetch_todos(req: request.Request(String), dispatch: fn(Msg) -> Nil) -> Nil
 
-/// Fetch with request body support
-fn do_fetch_with_body(req: request.Request(String)) -> Result(#(Int, String), Nil) {
-  // In a real implementation, this would use the browser's fetch API
-  Error(Nil)
-}
+@external(javascript, "../ffi/fetch.js", "submitTodo")
+fn do_submit_todo(req: request.Request(String), dispatch: fn(Msg) -> Nil) -> Nil
 
-@external(javascript, "../client_ffi.mjs", "fetchTodos")
-fn do_fetch(url: String, callback: fn(Result(List(Todo), String)) -> Nil) -> Nil
+@external(javascript, "../ffi/fetch.js", "toggleTodo")
+fn do_toggle_todo(req: request.Request(String), todo_id: String, dispatch: fn(Msg) -> Nil) -> Nil
+
+@external(javascript, "../ffi/fetch.js", "deleteTodo")
+fn do_delete_todo(req: request.Request(String), todo_id: String, dispatch: fn(Msg) -> Nil) -> Nil

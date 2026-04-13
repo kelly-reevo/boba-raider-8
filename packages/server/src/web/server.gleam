@@ -43,6 +43,11 @@ pub fn response(
   Response(status:, headers:, body:)
 }
 
+/// Empty headers helper
+pub fn empty_headers() -> Dict(String, String) {
+  dict.new()
+}
+
 /// Create a JSON response with the given status
 pub fn json_response(status: Int, body: String) -> Response {
   response(

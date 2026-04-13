@@ -56,7 +56,7 @@ pub type RatingServiceMsg {
   ListRatingsByDrink(String, Subject(List(RatingRecord)))
   GetRatingAggregate(String, Subject(Result(RatingAggregate, String)))
   DeleteRating(String, Subject(Result(Bool, String)))
-  DeleteRatingsByDrink(String, Subject(List(String)))
+  DeleteRatingsForDrink(String, Subject(Result(Nil, String)))
 }
 
 pub type RatingService =
@@ -156,17 +156,17 @@ fn validate_create_input(input: CreateRatingInput) -> Result(Nil, String) {
       case input.overall_rating >= 1 && input.overall_rating <= 5 {
         False -> Error("overall_rating must be between 1 and 5")
         True -> {
-          // Validate sweetness is between 1 and 10
-          case input.sweetness >= 1 && input.sweetness <= 10 {
-            False -> Error("sweetness must be between 1 and 10")
+          // Validate sweetness is between 1 and 5
+          case input.sweetness >= 1 && input.sweetness <= 5 {
+            False -> Error("sweetness must be between 1 and 5")
             True -> {
-              // Validate boba_texture is between 1 and 10
-              case input.boba_texture >= 1 && input.boba_texture <= 10 {
-                False -> Error("boba_texture must be between 1 and 10")
+              // Validate boba_texture is between 1 and 5
+              case input.boba_texture >= 1 && input.boba_texture <= 5 {
+                False -> Error("boba_texture must be between 1 and 5")
                 True -> {
-                  // Validate tea_strength is between 1 and 10
-                  case input.tea_strength >= 1 && input.tea_strength <= 10 {
-                    False -> Error("tea_strength must be between 1 and 10")
+                  // Validate tea_strength is between 1 and 5
+                  case input.tea_strength >= 1 && input.tea_strength <= 5 {
+                    False -> Error("tea_strength must be between 1 and 5")
                     True -> Ok(Nil)
                   }
                 }
@@ -354,25 +354,22 @@ fn handle_message(state: ServiceState, msg: RatingServiceMsg) -> actor.Next(Serv
       }
     }
 
-    DeleteRatingsByDrink(drink_id, reply_to) -> {
+    DeleteRatingsForDrink(drink_id, reply_to) -> {
       // Find all ratings for this drink
       let ratings_to_delete =
         state.ratings
         |> dict.values()
         |> list.filter(fn(r) { r.drink_id == drink_id })
 
-      // Get IDs of ratings to delete
-      let deleted_ids = list.map(ratings_to_delete, fn(rating) { rating.id })
-
-      // Delete all ratings for this drink
+      // Delete all matching ratings
       let new_ratings =
-        list.fold(ratings_to_delete, state.ratings, fn(current_ratings, rating) {
-          dict.delete(current_ratings, rating.id)
+        ratings_to_delete
+        |> list.fold(state.ratings, fn(acc, rating) {
+          dict.delete(acc, rating.id)
         })
 
-      // Recalculate aggregate for this drink (now empty)
-      let new_aggregate = recalculate_aggregate(ServiceState(..state, ratings: new_ratings), drink_id)
-      let new_aggregates = dict.insert(state.aggregates, drink_id, new_aggregate)
+      // Remove the aggregate for this drink since it has no ratings
+      let new_aggregates = dict.delete(state.aggregates, drink_id)
 
       let new_state = ServiceState(
         ..state,
@@ -380,7 +377,7 @@ fn handle_message(state: ServiceState, msg: RatingServiceMsg) -> actor.Next(Serv
         aggregates: new_aggregates,
       )
 
-      actor.send(reply_to, deleted_ids)
+      actor.send(reply_to, Ok(Nil))
       actor.continue(new_state)
     }
   }
@@ -456,14 +453,12 @@ pub fn delete_rating(service: RatingService, id: String) -> Result(Bool, String)
   }
 }
 
-/// Delete all ratings for a drink (for cascade delete)
-/// Returns list of deleted rating IDs
-pub fn delete_ratings_by_drink(service: RatingService, drink_id: String) -> List(String) {
+pub fn delete_ratings_for_drink(service: RatingService, drink_id: String) -> Result(Nil, String) {
   let reply_subject = process.new_subject()
-  actor.send(service, DeleteRatingsByDrink(drink_id, reply_subject))
+  actor.send(service, DeleteRatingsForDrink(drink_id, reply_subject))
 
   case process.receive(reply_subject, within: 5000) {
-    Ok(deleted_ids) -> deleted_ids
-    Error(_) -> []
+    Ok(result) -> result
+    Error(_) -> Error("Timeout waiting for rating service")
   }
 }

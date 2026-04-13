@@ -14,6 +14,12 @@ import shared.{type Priority, type Todo}
 /// Main update function handling all messages
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
+    // Filter messages - client-side only, no API call
+    msg.SetFilter(filter) -> #(
+      model.Model(..model, filter: filter),
+      effect.none(),
+    )
+
     // Form interactions
     msg.FormTitleChanged(title) -> #(
       model.Model(..model, form: FormState(..model.form, title: title)),
@@ -92,12 +98,6 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         effects.toggle_todo(id, completed),
       )
     }
-
-    // Filter actions
-    msg.FilterChanged(filter) -> #(
-      model.Model(..model, filter: filter),
-      effect.none(),
-    )
 
     // API responses - clear error on success
     msg.FetchTodosSuccess(todos) -> #(

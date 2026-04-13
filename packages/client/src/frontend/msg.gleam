@@ -26,8 +26,8 @@ pub type Msg {
   DeleteTodo(id: String)
   ToggleTodo(id: String, completed: Bool)
 
-  // Filter actions
-  FilterChanged(filter: Filter)
+  // Filter actions - client-side only, no API call
+  SetFilter(Filter)
 
   // API responses
   FetchTodosSuccess(todos: List(Todo))

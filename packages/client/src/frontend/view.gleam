@@ -14,6 +14,7 @@ import lustre/event
 import shared.{type Priority, type Todo, Low, Medium, High}
 
 /// Main view function rendering the complete application
+/// Combines error handling, filter controls, and todo list with all states
 pub fn view(model: Model) -> Element(Msg) {
   html.div([attribute.class("app")], [
     // Error message container (per boundary contract: <div id='error-message'>)
@@ -26,9 +27,9 @@ pub fn view(model: Model) -> Element(Msg) {
     render_form(model),
 
     // Filter tabs with data-filter attributes per boundary contract
-    render_filters(model.filter),
+    render_filter_controls(model.filter),
 
-    // Todo list with empty state support
+    // Todo list with loading, empty, and populated states
     render_todo_list_section(model),
   ])
 }
@@ -180,29 +181,30 @@ fn render_field_error(error_msg: String) -> Element(Msg) {
   }
 }
 
-/// Render filter tabs per boundary contract:
+/// Render filter controls per boundary contract:
 /// - data-filter attributes: "all", "active", "completed"
 /// - "active" CSS class on active filter button
-fn render_filters(current_filter: Filter) -> Element(Msg) {
-  html.div([attribute.id("filter-controls")], [
-    render_filter_button("all", "All", current_filter),
-    render_filter_button("active", "Active", current_filter),
-    render_filter_button("completed", "Completed", current_filter),
-  ])
+fn render_filter_controls(current_filter: Filter) -> Element(Msg) {
+  html.div(
+    [attribute.id("filter-controls")],
+    [
+      render_filter_button("all", "All", current_filter == All, All),
+      render_filter_button("active", "Active", current_filter == Active, Active),
+      render_filter_button("completed", "Completed", current_filter == Completed, Completed),
+    ]
+  )
 }
 
-fn render_filter_button(filter_value: String, label: String, current_filter: Filter) -> Element(Msg) {
-  let filter = case filter_value {
-    "active" -> Active
-    "completed" -> Completed
-    _ -> All
-  }
-
-  let is_active = filter == current_filter
-
+/// Render a single filter button
+fn render_filter_button(
+  filter_value: String,
+  label: String,
+  is_active: Bool,
+  filter: Filter,
+) -> Element(Msg) {
   let base_attrs = [
     attribute.attribute("data-filter", filter_value),
-    event.on_click(msg.FilterChanged(filter)),
+    event.on_click(msg.SetFilter(filter)),
   ]
 
   let attrs = case is_active {
@@ -221,7 +223,8 @@ fn render_todo_list_section(model: Model) -> Element(Msg) {
   ])
 }
 
-/// Render loading state indicator
+/// Render loading state indicator per boundary contract:
+/// - <div id='loading-state'>Loading todos...</div>
 fn render_loading_state(loading: LoadingState) -> Element(Msg) {
   case loading {
     Loading -> html.div([attribute.id("loading-state")], [element.text("Loading todos...")])

@@ -20,11 +20,12 @@ pub fn default_model_test() {
   // Default filter is All
   m.filter
   |> should.equal(model.All)
-}
 
-pub fn default_model_has_no_error_test() {
-  let m = model.default()
-  // Model should have no error by default
+  // Default loading state is Idle
+  m.loading
+  |> should.equal(model.Idle)
+
+  // Default error is None
   m.error
   |> should.equal(option.None)
 }

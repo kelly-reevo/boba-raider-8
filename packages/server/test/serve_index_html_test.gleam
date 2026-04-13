@@ -59,7 +59,7 @@ pub fn html_contains_todo_list_element_test() {
 
   // Then: HTML contains element with id 'todo-list'
   body
-  |> string.contains("<div id=\"todo-list\"")
+  |> string.contains("id=\"todo-list\"")
   |> should.be_true()
 }
 

@@ -1,7 +1,12 @@
 /// Application messages
 
+/// Messages for the update loop
 pub type Msg {
-  Increment
-  Decrement
-  Reset
+  // Delete todo flow
+  DeleteTodo(id: String)
+  Deleted(id: String)
+  DeleteError(message: String)
+
+  // Error handling
+  DismissError
 }

@@ -1,11 +1,23 @@
+import frontend/effects
 import frontend/model.{type Model, Model}
 import frontend/msg.{type Msg}
 import lustre/effect.{type Effect}
 
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
-    msg.Increment -> #(Model(..model, count: model.count + 1), effect.none())
-    msg.Decrement -> #(Model(..model, count: model.count - 1), effect.none())
-    msg.Reset -> #(Model(..model, count: 0), effect.none())
+    msg.FetchTodos -> #(
+      Model(..model, loading: True, error: ""),
+      effects.fetch_todos(),
+    )
+    msg.FetchTodosSuccess(todos) -> #(
+      Model(todos: todos, loading: False, error: ""),
+      effect.none(),
+    )
+    msg.FetchTodosError(error) -> #(
+      Model(..model, loading: False, error: error),
+      effect.none(),
+    )
+    msg.ToggleTodo(_id, _completed) -> #(model, effect.none())
+    msg.DeleteTodo(_id) -> #(model, effect.none())
   }
 }

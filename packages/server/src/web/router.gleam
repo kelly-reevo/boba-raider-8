@@ -1,5 +1,6 @@
 import gleam/dict.{type Dict}
 import gleam/dynamic/decode
+import gleam/int
 import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -324,8 +325,8 @@ fn encode_todo(t: todo_item.Todo) -> json.Json {
     }),
     #("priority", json.string(todo_item.priority_to_string(t.priority))),
     #("completed", json.bool(t.completed)),
-    #("created_at", json.string(t.created_at)),
-    #("updated_at", json.string(t.updated_at)),
+    #("created_at", json.string(int.to_string(t.created_at))),
+    #("updated_at", json.string(int.to_string(t.updated_at))),
   ])
 }
 

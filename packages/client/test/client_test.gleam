@@ -195,7 +195,7 @@ pub fn server_error_not_retryable_test() {
 
 /// Test get_field_error returns correct field error
 pub fn get_field_error_test() {
-  let field_errors = dict.from_list([("title", "Title is required")])
+  let field_errors = dict.from_list([#("title", "Title is required")])
   let error = model.ErrorState(
     message: "Validation error",
     error_type: model.ValidationError,

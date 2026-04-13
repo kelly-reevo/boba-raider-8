@@ -49,7 +49,7 @@ pub type FormState {
 pub type Model {
   Model(
     /// List of todos
-    todos: List<Todo>,
+    todos: List(Todo),
     /// Current loading state
     loading: LoadingState,
     /// Current filter for todo list

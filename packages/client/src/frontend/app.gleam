@@ -1,3 +1,4 @@
+import frontend/effects
 import frontend/model.{type Model}
 import frontend/msg.{type Msg}
 import frontend/update
@@ -12,5 +13,5 @@ pub fn main() {
 }
 
 fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
-  #(model.default(), effect.none())
+  #(model.default(), effects.load_todos())
 }

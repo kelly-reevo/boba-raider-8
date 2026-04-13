@@ -2,6 +2,7 @@
 import gleam/list
 import gleeunit
 import gleeunit/should
+import shared.{Low, ValidationError}
 import todo_data_model
 
 pub fn main() {
@@ -12,7 +13,7 @@ pub fn empty_title_validation_error_test() {
   // Given an empty title
   let title = ""
   let description = "Some description"
-  let priority = todo_data_model.Low
+  let priority = Low
 
   // When validating (via create_todo)
   let result = todo_data_model.create_todo(title, description, priority)

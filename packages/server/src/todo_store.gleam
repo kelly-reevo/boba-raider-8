@@ -16,6 +16,14 @@ pub type StoreMsg {
   GetById(id: String, reply_to: Subject(Option(Todo)))
   Update(id: String, attrs: TodoAttrs, reply_to: Subject(Result(Todo, Nil)))
   Delete(id: String, reply_to: Subject(Result(Nil, AppError)))
+  Patch(
+    id: String,
+    title: Option(String),
+    description: Option(Option(String)),
+    priority: Option(shared.Priority),
+    completed: Option(Bool),
+    reply_to: Subject(Result(Todo, Nil)),
+  )
 }
 
 // Store state holds the list of todos and a counter for ID generation
@@ -149,6 +157,39 @@ fn handle_message(state: StoreState, msg: StoreMsg) {
         }
       }
     }
+
+    Patch(id, title_opt, description_opt, priority_opt, completed_opt, reply_to) -> {
+      let found = list.find(state.todos, fn(t) { t.id == id })
+      case found {
+        Ok(existing) -> {
+          let updated = Todo(
+            id: existing.id,
+            title: option.unwrap(title_opt, existing.title),
+            description: case description_opt {
+              Some(desc) -> desc
+              None -> existing.description
+            },
+            priority: option.unwrap(priority_opt, existing.priority),
+            completed: option.unwrap(completed_opt, existing.completed),
+            created_at: existing.created_at,
+            updated_at: current_timestamp(),
+          )
+          let new_todos = list.map(state.todos, fn(t) {
+            case t.id == id {
+              True -> updated
+              False -> t
+            }
+          })
+          let new_state = StoreState(..state, todos: new_todos)
+          actor.send(reply_to, Ok(updated))
+          actor.continue(new_state)
+        }
+        Error(_) -> {
+          actor.send(reply_to, Error(Nil))
+          actor.continue(state)
+        }
+      }
+    }
   }
 }
 
@@ -232,6 +273,23 @@ pub fn update(id: String, attrs: TodoAttrs) -> Result(Todo, Nil) {
   let store = ensure_store()
   let reply = process.new_subject()
   actor.send(store, Update(id, attrs, reply))
+  process.receive(reply, 5000)
+  |> result.unwrap(Error(Nil))
+}
+
+/// Patch a todo by ID with partial updates
+/// Supports updating: title, description, priority, completed
+/// Returns Error(Nil) if not found
+pub fn patch(
+  id: String,
+  title: Option(String),
+  description: Option(Option(String)),
+  priority: Option(shared.Priority),
+  completed: Option(Bool),
+) -> Result(Todo, Nil) {
+  let store = ensure_store()
+  let reply = process.new_subject()
+  actor.send(store, Patch(id, title, description, priority, completed, reply))
   process.receive(reply, 5000)
   |> result.unwrap(Error(Nil))
 }

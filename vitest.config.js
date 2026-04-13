@@ -22,16 +22,22 @@ export default defineConfig({
       '__cyclone_tests__/rating-data-access/*',
       '__cyclone_tests__/edit-store-form/*.test.[jt]s',
       '__cyclone_tests__/edit-store-form/*.test.[jt]sx',
-      '__cyclone_tests__/create-drink-form/*'
+      '__cyclone_tests__/create-drink-form/*',
+      '__cyclone_tests__/edit-drink-form/*.test.js',
+      '__cyclone_tests__/edit-drink-form/*.test.ts',
+      '__cyclone_tests__/edit-drink-form/*.test.jsx'
     ],
     exclude: [
       '__cyclone_tests__/test-db-setup.js',
       '__cyclone_tests__/test-setup.js',
-      '__cyclone_tests__/edit-store-form/*e2e*'
+      '__cyclone_tests__/edit-store-form/*e2e*',
+      '__cyclone_tests__/edit-drink-form/edit-drink-form.jsx',
+      '__cyclone_tests__/edit-drink-form/test_003_end-to-end_test__complete_edit_flow_from.test.js',
+      '__cyclone_tests__/setup.js'
     ],
     setupFiles: ['./__cyclone_tests__/test-setup.js'],
     testTimeout: 30000,
-    environment: 'happy-dom',
+    environment: 'jsdom',
     globals: true
   }
 });

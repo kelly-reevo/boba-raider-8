@@ -392,3 +392,11 @@ pub fn delete_drinks_by_store(store: DrinkStore, store_id: String) -> List(Strin
     Error(_) -> []
   }
 }
+
+/// Check if any drinks exist for a store (used to verify store existence)
+/// Returns True if at least one drink exists for this store_id
+pub fn check_store_exists(store: DrinkStore, store_id: String) -> Result(Bool, String) {
+  // List drinks for this store and check if any exist
+  let drinks = list_drinks_by_store(store, store_id)
+  Ok(!list.is_empty(drinks))
+}

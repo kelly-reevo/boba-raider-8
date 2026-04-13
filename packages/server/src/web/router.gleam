@@ -1,9 +1,12 @@
 import gleam/json
+import gleam/int
+import gleam/option.{None, Some}
 import gleam/string
 import drink_store.{type DrinkStore}
 import rating_service.{type RatingService}
 import store/store_data_access as store_access
 import web/handlers/drink_handler
+import web/handlers/store_list_handler
 import web/server.{type Request, type Response}
 import web/static
 
@@ -16,40 +19,45 @@ fn route(request: Request) -> Response {
     "GET", "/" -> static.serve_index()
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
-    "GET", path -> route_get(path)
+    "GET", path -> route_get(request, path)
     _, _ -> not_found()
   }
 }
 
-fn route_get(path: String) -> Response {
+fn route_get(request: Request, path: String) -> Response {
   // Check for static files first
   case string.starts_with(path, "/static/") {
     True -> static.serve(path)
     False -> {
       // Check for API routes
-      case string.starts_with(path, "/api/stores/") && string.ends_with(path, "/drinks") {
-        True -> {
-          // Initialize services for the handler
-          // In a production app, these would be passed via supervision tree
-          case initialize_services() {
-            Ok(#(drink_store_ref, store_state, rating_service_ref)) -> {
-              drink_handler.list_drinks_by_store(
-                drink_store_ref,
-                store_state,
-                rating_service_ref,
-                path,
-              )
+      case path {
+        "/api/stores" -> store_list_handler.handle_list_stores(request)
+        _ -> {
+          case string.starts_with(path, "/api/stores/") && string.ends_with(path, "/drinks") {
+            True -> {
+              // Initialize services for the handler
+              // In a production app, these would be passed via supervision tree
+              case initialize_services() {
+                Ok(#(drink_store_ref, store_state, rating_service_ref)) -> {
+                  drink_handler.list_drinks_by_store(
+                    drink_store_ref,
+                    store_state,
+                    rating_service_ref,
+                    path,
+                  )
+                }
+                Error(_) -> {
+                  server.json_response(
+                    500,
+                    json.object([#("error", json.string("Service initialization failed"))])
+                    |> json.to_string,
+                  )
+                }
+              }
             }
-            Error(_) -> {
-              server.json_response(
-                500,
-                json.object([#("error", json.string("Service initialization failed"))])
-                |> json.to_string,
-              )
-            }
+            False -> not_found()
           }
         }
-        False -> not_found()
       }
     }
   }

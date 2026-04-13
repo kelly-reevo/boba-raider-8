@@ -6,6 +6,7 @@ pub type Request {
   Request(
     method: String,
     path: String,
+    query_string: String,
     headers: Dict(String, String),
     body: String,
   )

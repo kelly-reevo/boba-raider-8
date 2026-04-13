@@ -1,6 +1,7 @@
 import boba_store.{type BobaStore}
 import gleam/dict.{type Dict}
 import gleam/dynamic/decode
+import gleam/int
 import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -210,7 +211,7 @@ fn create_drink_handler(wrapper: StoreWrapper, request: Request) -> Response {
           // Step 3: Check if store exists
           let store_exists = boba_store.check_store_exists(
             wrapper.boba_store,
-            input.store_id,
+            int.to_string(input.store_id),
           )
 
           case store_exists {

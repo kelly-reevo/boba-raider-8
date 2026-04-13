@@ -10,7 +10,8 @@ pub type Todo {
     description: String,
     priority: String,
     completed: Bool,
-    created_at: String,
+    created_at: Int,
+    updated_at: Int,
   )
 }
 
@@ -22,7 +23,8 @@ pub fn todo_to_json(t: Todo) -> Json {
     #("description", json.string(t.description)),
     #("priority", json.string(t.priority)),
     #("completed", json.bool(t.completed)),
-    #("created_at", json.string(t.created_at)),
+    #("created_at", json.int(t.created_at)),
+    #("updated_at", json.int(t.updated_at)),
   ])
 }
 

@@ -1,46 +1,43 @@
-/// Todo Store module - HTTP API interface for todo operations
-/// Wraps the todo_actor for use in HTTP request handlers
+/// Public API module for todo storage
+/// Wraps the todo_actor and provides a clean interface
 
+import gleam/dict.{type Dict}
 import gleam/option.{type Option}
+import todo_actor
 import models/todo_item.{type Todo}
-import todo_actor.{type TodoActor}
 
-/// Store handle wrapping the todo actor
-pub type Store {
-  Store(actor: TodoActor)
+/// Public handle for the todo store
+pub type TodoStore {
+  TodoStore(actor: todo_actor.TodoActor)
 }
 
-/// Start the todo store (initializes the underlying actor)
-pub fn start() -> Result(Store, String) {
+/// Start the todo store
+pub fn start() -> Result(TodoStore, String) {
   case todo_actor.start() {
-    Ok(actor) -> Ok(Store(actor))
-    Error(err) -> Error(err)
+    Ok(actor) -> Ok(TodoStore(actor))
+    Error(e) -> Error(e)
   }
 }
 
-/// Create a new todo with the given fields
-pub fn create_todo(
-  store: Store,
+/// Create a new todo
+/// Description is converted to None if empty string
+pub fn create(
+  store: TodoStore,
   title: String,
   description: String,
+  priority: String,
 ) -> Result(Todo, String) {
-  todo_actor.create(store.actor, title, description, "medium")
+  todo_actor.create(store.actor, title, description, priority)
 }
 
 /// Read a todo by id
-/// Returns Ok(Todo) if found, Error("not_found") if not found
-pub fn get_todo(store: Store, id: String) -> Result(Todo, String) {
+pub fn read(store: TodoStore, id: String) -> Result(Todo, String) {
   todo_actor.read(store.actor, id)
 }
 
-/// List all todos (optionally filtered)
-pub fn list_todos(store: Store, filter: todo_actor.Filter) -> List(Todo) {
-  todo_actor.list(store.actor, filter)
-}
-
-/// Update an existing todo
-pub fn update_todo(
-  store: Store,
+/// Update a todo
+pub fn update(
+  store: TodoStore,
   id: String,
   title: Option(String),
   description: Option(String),
@@ -50,12 +47,17 @@ pub fn update_todo(
   todo_actor.update(store.actor, id, title, description, priority, completed)
 }
 
-/// Delete a todo by id
-pub fn delete_todo(store: Store, id: String) -> Result(Nil, String) {
+/// Delete a todo
+pub fn delete(store: TodoStore, id: String) -> Result(Nil, String) {
   todo_actor.delete(store.actor, id)
 }
 
-/// Shutdown the store and underlying actor
-pub fn shutdown(store: Store) -> Nil {
-  todo_actor.shutdown(store.actor)
+/// Get all todos as a Dict
+pub fn get_all(store: TodoStore) -> Dict(String, Todo) {
+  todo_actor.get_all(store.actor)
+}
+
+/// List todos with optional filter
+pub fn list(store: TodoStore, filter: todo_actor.Filter) -> List(Todo) {
+  todo_actor.list(store.actor, filter)
 }

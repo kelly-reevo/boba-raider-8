@@ -57,22 +57,24 @@ pub type State {
 @external(erlang, "todo_actor_ffi", "generate_uuid")
 fn generate_uuid() -> String
 
-/// Get current ISO8601 datetime string
-@external(erlang, "todo_actor_ffi", "current_datetime")
-fn current_datetime() -> String
+/// Get current timestamp in milliseconds
+@external(erlang, "erlang", "system_time")
+fn current_timestamp_millis() -> Int
 
 /// Create a new todo from input data with generated ID and timestamp
 fn create_todo(data: CreateTodoData) -> Todo {
+  let now = current_timestamp_millis()
   todo_item.new(
     generate_uuid(),
     data.title,
     Some(data.description),
     todo_item.parse_priority(data.priority),
+    now,
   )
 }
 
 /// Merge partial updates into an existing todo
-fn merge_todo(existing: Todo, updates: UpdateRequest) -> Todo {
+fn merge_todo(existing: Todo, updates: UpdateRequest, now: Int) -> Todo {
   let updated_title = case updates.title {
     Some(t) -> t
     None -> existing.title
@@ -95,6 +97,7 @@ fn merge_todo(existing: Todo, updates: UpdateRequest) -> Todo {
     description: updated_description,
     priority: updated_priority,
     completed: updated_completed,
+    updated_at: now,
   )
 }
 
@@ -137,7 +140,8 @@ fn handle_message(state: State, msg: Message) -> actor.Next(State, Message) {
     Update(id, updates, reply_to) -> {
       case dict.get(state.todos, id) {
         Ok(existing) -> {
-          let updated = merge_todo(existing, updates)
+          let now = current_timestamp_millis()
+          let updated = merge_todo(existing, updates, now)
           let new_todos = dict.insert(state.todos, id, updated)
           process.send(reply_to, Updated(updated))
           actor.continue(State(todos: new_todos))

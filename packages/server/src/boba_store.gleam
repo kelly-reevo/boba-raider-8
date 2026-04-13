@@ -28,10 +28,10 @@ pub type Rating {
   Rating(
     id: String,
     drink_id: String,
-    overall_rating: Float,
-    sweetness: Float,
-    boba_texture: Float,
-    tea_strength: Float,
+    overall_rating: Int,
+    sweetness: Int,
+    boba_texture: Int,
+    tea_strength: Int,
   )
 }
 
@@ -93,12 +93,12 @@ pub fn create_drink(
 pub fn submit_rating(
   store: BobaStore,
   drink_id: String,
-  overall_rating: Float,
-  sweetness: Float,
-  boba_texture: Float,
-  tea_strength: Float,
+  overall_rating: Int,
+  sweetness: Int,
+  boba_texture: Int,
+  tea_strength: Int,
 ) -> Result(Rating, String) {
-  // Pass float ratings directly to rating service
+  // Pass int ratings directly to rating service
   let input = rating_service.CreateRatingInput(
     drink_id: drink_id,
     reviewer_name: None,
@@ -177,5 +177,15 @@ pub type AggregateRatings {
     tea_strength: Option(Float),
     count: Int,
   )
+}
+
+/// Check if a store exists by ID
+/// Returns True if the store exists, False otherwise
+pub fn check_store_exists(store: BobaStore, store_id: String) -> Bool {
+  // Use drink_store to verify store existence
+  case drink_store.check_store_exists(store.drink_store, store_id) {
+    Ok(exists) -> exists
+    Error(_) -> False
+  }
 }
 

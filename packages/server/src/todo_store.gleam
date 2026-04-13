@@ -321,8 +321,13 @@ pub type UpdateTodoInput =
 // Test API Wrappers (for behavioral test compatibility)
 // =============================================================================
 
-/// Internal helper to create a todo with title/description
-fn do_create_todo(title: String, description: String) -> Result(Todo, AppError) {
+/// Helper function for tests: create todo with store, title, description
+/// Uses Medium priority by default
+pub fn create_todo(
+  _store: TodoStore,
+  title: String,
+  description: String,
+) -> Result(Todo, AppError) {
   let desc_opt = case description {
     "" -> None
     d -> Some(d)
@@ -334,12 +339,6 @@ fn do_create_todo(title: String, description: String) -> Result(Todo, AppError) 
     completed: False,
   )
   create(attrs)
-}
-
-/// Create a test todo with optional store parameter (for test compatibility)
-/// The store parameter is ignored as we use the global store
-pub fn create_todo(_store, title: String, description: String) -> Result(Todo, AppError) {
-  do_create_todo(title, description)
 }
 
 /// Update a todo with UpdateTodoInput type (for behavioral test compatibility)

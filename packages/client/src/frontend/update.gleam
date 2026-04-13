@@ -1,7 +1,7 @@
-/// State updates with comprehensive error handling
+/// State updates with comprehensive error handling AND filter support
 
 import frontend/effects
-import frontend/model.{type ApiError, type Model, type Todo, Model, FieldError, ValidationError}
+import frontend/model.{type ApiError, type Model, type Todo, Model, ValidationError}
 import frontend/msg.{type Msg}
 import gleam/list
 import gleam/option.{None, Some}
@@ -10,7 +10,12 @@ import lustre/effect.{type Effect}
 /// Main update function handling all messages
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
-    // Load todos
+    // Legacy counter messages (keep for compatibility)
+    msg.Increment -> #(Model(..model, count: model.count + 1), effect.none())
+    msg.Decrement -> #(Model(..model, count: model.count - 1), effect.none())
+    msg.Reset -> #(Model(..model, count: 0), effect.none())
+
+    // Load todos (legacy path)
     msg.LoadTodos -> #(
       Model(..model, loading: True, list_error: None),
       effects.load_todos()
@@ -23,6 +28,18 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       Model(..model, loading: False, list_error: Some(error), global_error: None),
       effect.none()
     )
+
+    // Filter messages with error handling
+    msg.FilterChanged(filter) -> #(
+      Model(..model, current_filter: filter, loading: True, list_error: None, global_error: None),
+      effects.list_todos(filter),
+    )
+    msg.TodosLoaded(result) -> {
+      case result {
+        Ok(todos) -> #(Model(..model, todos: todos, loading: False, list_error: None, global_error: None), effect.none())
+        Error(err) -> #(Model(..model, loading: False, list_error: Some(model.NetworkError(err)), global_error: None), effect.none())
+      }
+    }
 
     // Form field updates
     msg.UpdateTitle(title) -> #(Model(..model, form_title: title), effect.none())

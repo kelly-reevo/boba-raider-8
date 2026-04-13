@@ -1,6 +1,9 @@
-/// HTTP client effects for API communication with error handling
+/// HTTP client effects for API communication with error handling AND filter support
 
-import frontend/model.{type ApiError, type FieldError, type Todo, FieldError, NetworkError, NotFoundError, ServerError, ValidationError}
+import frontend/model.{
+  type ApiError, type FieldError, type Filter, type Todo, All, Active, Completed,
+  FieldError, NetworkError, NotFoundError, ServerError, ValidationError
+}
 import frontend/msg.{type Msg}
 import gleam/dynamic/decode.{type Decoder}
 import gleam/http
@@ -67,7 +70,7 @@ fn parse_api_error(status: Int, body: String) -> ApiError {
   }
 }
 
-/// Effect to load todos from API
+/// Effect to load todos from API with optional filter
 pub fn load_todos() -> Effect(Msg) {
   effect.from(fn(dispatch) {
     let url = api_base <> "/todos"
@@ -76,7 +79,7 @@ pub fn load_todos() -> Effect(Msg) {
       |> request.set_header("Accept", "application/json")
       |> request.set_path(url)
 
-    case do_fetch(req) {
+    case do_fetch_request(req) {
       Ok(#(status, body)) -> {
         case status {
           200 -> {
@@ -90,6 +93,23 @@ pub fn load_todos() -> Effect(Msg) {
       }
       Error(_) -> dispatch(msg.LoadTodosError(NetworkError("Connection failed. Please try again.")))
     }
+  })
+}
+
+/// Fetch todos with filter parameter
+pub fn list_todos(filter: Filter) -> Effect(Msg) {
+  let filter_str = case filter {
+    All -> "all"
+    Active -> "active"
+    Completed -> "completed"
+  }
+
+  let url = "/api/todos?status=" <> filter_str
+
+  effect.from(fn(dispatch) {
+    do_fetch(url, fn(result) {
+      dispatch(msg.TodosLoaded(result))
+    })
   })
 }
 
@@ -139,7 +159,7 @@ pub fn delete_todo(id: String) -> Effect(Msg) {
       |> request.set_header("Accept", "application/json")
       |> request.set_path(url)
 
-    case do_fetch(req) {
+    case do_fetch_request(req) {
       Ok(#(status, body)) -> {
         case status {
           200 | 204 -> dispatch(msg.DeleteTodoSuccess(id))
@@ -153,7 +173,7 @@ pub fn delete_todo(id: String) -> Effect(Msg) {
 }
 
 /// Simplified fetch that returns status and body
-fn do_fetch(req: request.Request(String)) -> Result(#(Int, String), Nil) {
+fn do_fetch_request(req: request.Request(String)) -> Result(#(Int, String), Nil) {
   // In a real implementation, this would use the browser's fetch API
   // For now, we return an error to trigger the network error state
   Error(Nil)
@@ -164,3 +184,6 @@ fn do_fetch_with_body(req: request.Request(String)) -> Result(#(Int, String), Ni
   // In a real implementation, this would use the browser's fetch API
   Error(Nil)
 }
+
+@external(javascript, "../client_ffi.mjs", "fetchTodos")
+fn do_fetch(url: String, callback: fn(Result(List(Todo), String)) -> Nil) -> Nil

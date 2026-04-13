@@ -155,17 +155,17 @@ fn validate_create_input(input: CreateRatingInput) -> Result(Nil, String) {
       case input.overall_rating >= 1 && input.overall_rating <= 5 {
         False -> Error("overall_rating must be between 1 and 5")
         True -> {
-          // Validate sweetness is between 1 and 5
-          case input.sweetness >= 1 && input.sweetness <= 5 {
-            False -> Error("sweetness must be between 1 and 5")
+          // Validate sweetness is between 1 and 10
+          case input.sweetness >= 1 && input.sweetness <= 10 {
+            False -> Error("sweetness must be between 1 and 10")
             True -> {
-              // Validate boba_texture is between 1 and 5
-              case input.boba_texture >= 1 && input.boba_texture <= 5 {
-                False -> Error("boba_texture must be between 1 and 5")
+              // Validate boba_texture is between 1 and 10
+              case input.boba_texture >= 1 && input.boba_texture <= 10 {
+                False -> Error("boba_texture must be between 1 and 10")
                 True -> {
-                  // Validate tea_strength is between 1 and 5
-                  case input.tea_strength >= 1 && input.tea_strength <= 5 {
-                    False -> Error("tea_strength must be between 1 and 5")
+                  // Validate tea_strength is between 1 and 10
+                  case input.tea_strength >= 1 && input.tea_strength <= 10 {
+                    False -> Error("tea_strength must be between 1 and 10")
                     True -> Ok(Nil)
                   }
                 }

@@ -1,7 +1,7 @@
 import gleam/dict
 import gleam/string
 import simplifile
-import web/server.{type Response}
+import web/server.{type Response, response}
 
 pub fn serve_index() -> Response {
   serve_file("priv/static/index.html", "text/html; charset=utf-8")
@@ -16,7 +16,7 @@ pub fn serve(path: String) -> Response {
 fn serve_file(path: String, content_type: String) -> Response {
   case simplifile.read(path) {
     Ok(content) ->
-      server.Response(
+      response(
         status: 200,
         headers: dict.from_list([#("Content-Type", content_type)]),
         body: content,

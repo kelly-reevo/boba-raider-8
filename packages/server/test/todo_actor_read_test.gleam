@@ -1,6 +1,8 @@
 import gleam/string
 import gleeunit
 import gleeunit/should
+import gleam/option.{Some}
+import models/todo_item.{Low, Medium, High}
 import todo_actor
 
 // Boundary contract: Input: id: string
@@ -30,8 +32,8 @@ pub fn read_existing_todo_returns_todo_test() {
   let assert Ok(found_todo) = read_result
   should.equal(found_todo.id, existing_id)
   should.equal(found_todo.title, title)
-  should.equal(found_todo.description, description)
-  should.equal(found_todo.priority, priority)
+  should.equal(found_todo.description, Some(description))
+  should.equal(found_todo.priority, High)
   should.equal(found_todo.completed, False)
   should.be_true(string.length(found_todo.created_at) > 0)
 
@@ -88,10 +90,10 @@ pub fn read_returns_todo_with_required_schema_fields_test() {
   should.be_true(string.length(found_todo.id) > 0)
   // Verify title is correct
   should.equal(found_todo.title, "Schema Test")
-  // Verify description is empty string
-  should.equal(found_todo.description, "")
-  // Verify priority is valid
-  should.be_true(found_todo.priority == "low" || found_todo.priority == "medium" || found_todo.priority == "high")
+  // Verify description is empty string (stored as Some(""))
+  should.equal(found_todo.description, Some(""))
+  // Verify priority is valid (Medium enum value)
+  should.equal(found_todo.priority, Medium)
   // Verify completed is a boolean (False for new todos)
   should.be_false(found_todo.completed)
   // Verify created_at is non-empty string

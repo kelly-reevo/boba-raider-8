@@ -56,6 +56,7 @@ pub type RatingServiceMsg {
   ListRatingsByDrink(String, Subject(List(RatingRecord)))
   GetRatingAggregate(String, Subject(Result(RatingAggregate, String)))
   DeleteRating(String, Subject(Result(Bool, String)))
+  DeleteRatingsByDrink(String, Subject(List(String)))
 }
 
 pub type RatingService =
@@ -352,6 +353,36 @@ fn handle_message(state: ServiceState, msg: RatingServiceMsg) -> actor.Next(Serv
         }
       }
     }
+
+    DeleteRatingsByDrink(drink_id, reply_to) -> {
+      // Find all ratings for this drink
+      let ratings_to_delete =
+        state.ratings
+        |> dict.values()
+        |> list.filter(fn(r) { r.drink_id == drink_id })
+
+      // Get IDs of ratings to delete
+      let deleted_ids = list.map(ratings_to_delete, fn(rating) { rating.id })
+
+      // Delete all ratings for this drink
+      let new_ratings =
+        list.fold(ratings_to_delete, state.ratings, fn(current_ratings, rating) {
+          dict.delete(current_ratings, rating.id)
+        })
+
+      // Recalculate aggregate for this drink (now empty)
+      let new_aggregate = recalculate_aggregate(ServiceState(..state, ratings: new_ratings), drink_id)
+      let new_aggregates = dict.insert(state.aggregates, drink_id, new_aggregate)
+
+      let new_state = ServiceState(
+        ..state,
+        ratings: new_ratings,
+        aggregates: new_aggregates,
+      )
+
+      actor.send(reply_to, deleted_ids)
+      actor.continue(new_state)
+    }
   }
 }
 
@@ -422,5 +453,17 @@ pub fn delete_rating(service: RatingService, id: String) -> Result(Bool, String)
   case process.receive(reply_subject, within: 5000) {
     Ok(result) -> result
     Error(_) -> Error("Timeout waiting for rating service")
+  }
+}
+
+/// Delete all ratings for a drink (for cascade delete)
+/// Returns list of deleted rating IDs
+pub fn delete_ratings_by_drink(service: RatingService, drink_id: String) -> List(String) {
+  let reply_subject = process.new_subject()
+  actor.send(service, DeleteRatingsByDrink(drink_id, reply_subject))
+
+  case process.receive(reply_subject, within: 5000) {
+    Ok(deleted_ids) -> deleted_ids
+    Error(_) -> []
   }
 }

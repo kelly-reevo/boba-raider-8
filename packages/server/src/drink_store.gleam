@@ -46,6 +46,7 @@ pub type DrinkStoreMsg {
   ListDrinksByStore(String, Subject(List(DrinkRecord)))
   UpdateDrink(String, UpdateDrinkInput, Subject(Result(DrinkRecord, String)))
   DeleteDrink(String, Subject(Result(Bool, String)))
+  DeleteDrinksByStore(String, Subject(List(String)))
 }
 
 pub type DrinkStore =
@@ -279,6 +280,26 @@ fn handle_message(
         }
       }
     }
+
+    DeleteDrinksByStore(store_id, reply_to) -> {
+      // Find all drinks for this store
+      let drinks_to_delete =
+        state
+        |> dict.values()
+        |> list.filter(fn(drink) { drink.store_id == store_id })
+
+      // Get IDs of drinks to delete
+      let deleted_ids = list.map(drinks_to_delete, fn(drink) { drink.id })
+
+      // Delete all drinks for this store
+      let new_state =
+        list.fold(drinks_to_delete, state, fn(current_state, drink) {
+          dict.delete(current_state, drink.id)
+        })
+
+      actor.send(reply_to, deleted_ids)
+      actor.continue(new_state)
+    }
   }
 }
 
@@ -357,5 +378,17 @@ pub fn delete_drink(store: DrinkStore, id: String) -> Result(Bool, String) {
   case process.receive(reply_subject, within: 5000) {
     Ok(result) -> result
     Error(_) -> Error("Timeout waiting for drink store")
+  }
+}
+
+/// Delete all drinks for a store (for cascade delete)
+/// Returns list of deleted drink IDs for rating cascade
+pub fn delete_drinks_by_store(store: DrinkStore, store_id: String) -> List(String) {
+  let reply_subject = process.new_subject()
+  actor.send(store, DeleteDrinksByStore(store_id, reply_subject))
+
+  case process.receive(reply_subject, within: 5000) {
+    Ok(deleted_ids) -> deleted_ids
+    Error(_) -> []
   }
 }

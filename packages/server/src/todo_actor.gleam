@@ -71,14 +71,20 @@ fn handle_message(state: State, msg: TodoMsg) {
   case msg {
     Create(title, description, priority, reply_to) -> {
       let id = generate_id()
-      let now = now_timestamp_millis()
+      let created_at = current_timestamp_string()
       let priority_val = todo_item.parse_priority(priority)
-      let new_todo = todo_item.new(
-        id,
-        title,
-        Some(description),
-        priority_val,
-        now,
+      // Store None for empty description, Some(description) for non-empty
+      let description_val = case description {
+        "" -> None
+        d -> Some(d)
+      }
+      let new_todo = todo_item.Todo(
+        id: id,
+        title: title,
+        description: description_val,
+        priority: priority_val,
+        completed: False,
+        created_at: created_at,
       )
       let new_state = State(dict.insert(state.todos, id, new_todo))
       process.send(reply_to, Ok(new_todo))
@@ -117,14 +123,12 @@ fn handle_message(state: State, msg: TodoMsg) {
             Some(c) -> c
             None -> existing.completed
           }
-          let now = now_timestamp_millis()
           let updated = todo_item.Todo(
             ..existing,
             title: updated_title,
             description: updated_description,
             priority: updated_priority,
             completed: updated_completed,
-            updated_at: now,
           )
           let new_state = State(dict.insert(state.todos, id, updated))
           process.send(reply_to, Ok(updated))
@@ -163,9 +167,9 @@ fn handle_message(state: State, msg: TodoMsg) {
         Completed(True) -> list.filter(all_todos, fn(t) { t.completed })
         Completed(False) -> list.filter(all_todos, fn(t) { !t.completed })
       }
-      // Sort by created_at descending (newest first) - using int comparison for timestamps
+      // Sort by created_at descending (newest first) - using string comparison for ISO8601
       let sorted = list.sort(filtered, fn(a, b) {
-        case int.compare(a.created_at, b.created_at) {
+        case string.compare(a.created_at, b.created_at) {
           order.Lt -> order.Gt
           order.Eq -> order.Eq
           order.Gt -> order.Lt

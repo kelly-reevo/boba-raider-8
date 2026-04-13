@@ -1,0 +1,14 @@
+{
+  "name": "boba-raider-8",
+  "version": "1.0.0",
+  "description": "boba-raider-8 - Gleam monorepo with Lustre frontend",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^1.0.0",
+    "jsdom": "^23.0.0",
+    "@vitest/ui": "^1.0.0"
+  }
+}

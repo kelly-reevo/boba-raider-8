@@ -56,6 +56,7 @@ pub type RatingServiceMsg {
   ListRatingsByDrink(String, Subject(List(RatingRecord)))
   GetRatingAggregate(String, Subject(Result(RatingAggregate, String)))
   DeleteRating(String, Subject(Result(Bool, String)))
+  DeleteRatingsForDrink(String, Subject(Result(Nil, String)))
 }
 
 pub type RatingService =
@@ -352,6 +353,33 @@ fn handle_message(state: ServiceState, msg: RatingServiceMsg) -> actor.Next(Serv
         }
       }
     }
+
+    DeleteRatingsForDrink(drink_id, reply_to) -> {
+      // Find all ratings for this drink
+      let ratings_to_delete =
+        state.ratings
+        |> dict.values()
+        |> list.filter(fn(r) { r.drink_id == drink_id })
+
+      // Delete all matching ratings
+      let new_ratings =
+        ratings_to_delete
+        |> list.fold(state.ratings, fn(acc, rating) {
+          dict.delete(acc, rating.id)
+        })
+
+      // Remove the aggregate for this drink since it has no ratings
+      let new_aggregates = dict.delete(state.aggregates, drink_id)
+
+      let new_state = ServiceState(
+        ..state,
+        ratings: new_ratings,
+        aggregates: new_aggregates,
+      )
+
+      actor.send(reply_to, Ok(Nil))
+      actor.continue(new_state)
+    }
   }
 }
 
@@ -418,6 +446,16 @@ pub fn get_rating_aggregate(service: RatingService, drink_id: String) -> Result(
 pub fn delete_rating(service: RatingService, id: String) -> Result(Bool, String) {
   let reply_subject = process.new_subject()
   actor.send(service, DeleteRating(id, reply_subject))
+
+  case process.receive(reply_subject, within: 5000) {
+    Ok(result) -> result
+    Error(_) -> Error("Timeout waiting for rating service")
+  }
+}
+
+pub fn delete_ratings_for_drink(service: RatingService, drink_id: String) -> Result(Nil, String) {
+  let reply_subject = process.new_subject()
+  actor.send(service, DeleteRatingsForDrink(drink_id, reply_subject))
 
   case process.receive(reply_subject, within: 5000) {
     Ok(result) -> result

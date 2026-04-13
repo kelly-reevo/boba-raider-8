@@ -4,6 +4,7 @@
 import drink_store.{type DrinkRecord, type DrinkStore}
 import gleam/option.{type Option, None, Some}
 import gleam/string
+import rating_service.{type RatingService}
 import store/store_data_access as store_access
 
 /// Drink output with embedded store data and rating aggregates
@@ -210,6 +211,7 @@ pub fn get_drink_with_store(
 /// Returns success indicator
 pub fn delete_drink(
   drink_store_ref: DrinkStore,
+  rating_service_ref: RatingService,
   drink_id: String,
 ) -> Result(#(Bool, String), DrinkServiceError) {
   // Step 1: Validate drink ID
@@ -219,8 +221,8 @@ pub fn delete_drink(
       // Step 2: Verify drink exists before attempting deletion
       case drink_store.get_drink_by_id(drink_store_ref, drink_id) {
         Ok(_) -> {
-          // Step 3: Delete associated ratings (extensible hook for rating service)
-          case delete_associated_ratings(drink_id) {
+          // Step 3: Delete associated ratings
+          case delete_associated_ratings(rating_service_ref, drink_id) {
             Error(err) -> Error(err)
             Ok(_) -> {
               // Step 4: Delete the drink
@@ -253,10 +255,12 @@ fn get_rating_aggregates_for_drink(_drink_id: String) -> RatingAggregates {
 }
 
 /// Delete all ratings associated with a drink
-/// Extensible: Replace with actual rating service call when available
-fn delete_associated_ratings(_drink_id: String) -> Result(Nil, DrinkServiceError) {
-  // Extension point: Coordinate with rating service for cascade delete
-  // Current implementation returns Ok for extensibility
-  // Future: Call rating_data_access.delete_ratings_for_drink(drink_id)
-  Ok(Nil)
+fn delete_associated_ratings(
+  rating_service_ref: RatingService,
+  drink_id: String,
+) -> Result(Nil, DrinkServiceError) {
+  case rating_service.delete_ratings_for_drink(rating_service_ref, drink_id) {
+    Ok(_) -> Ok(Nil)
+    Error(msg) -> Error(InternalError("Failed to delete associated ratings: " <> msg))
+  }
 }

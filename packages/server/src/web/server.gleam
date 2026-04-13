@@ -8,6 +8,10 @@ pub type Response {
   Response(status: Int, headers: Dict(String, String), body: String)
 }
 
+pub fn empty_headers() -> Dict(String, String) {
+  dict.new()
+}
+
 pub fn json_response(status: Int, body: String) -> Response {
   Response(
     status: status,

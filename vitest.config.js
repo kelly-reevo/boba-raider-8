@@ -12,7 +12,7 @@ export default defineConfig({
     }
   },
   test: {
-    include: ['__cyclone_tests__/rating-data-access/*'],
+    include: ['__cyclone_tests__/rating-data-access/*', '__cyclone_tests__/aggregate-ratings-display/*'],
     exclude: ['__cyclone_tests__/test-db-setup.js'],
     testTimeout: 30000
   }

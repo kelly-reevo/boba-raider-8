@@ -1,11 +1,14 @@
+/// Todo store - OTP actor with full CRUD and filtering support
+
 import gleam/dict.{type Dict}
 import gleam/erlang/process.{type Subject}
 import gleam/int
 import gleam/list
+import gleam/option.{type Option, None, Some}
 import gleam/order
 import gleam/otp/actor
 import gleam/string
-import shared.{type Todo, type UpdateTodoInput, type AppError, NotFound}
+import shared.{type Todo, Todo, type UpdateTodoInput, NotFound}
 
 // Internal state for the store actor
 type StoreState {
@@ -16,34 +19,59 @@ type StoreState {
 }
 
 // Actor messages
-type StoreMessage {
-  CreateTodo(
-    reply_to: Subject(Result(Todo, AppError)),
-    title: String,
-    description: String,
+type StoreMsg {
+  Create(
+    payload: List(#(String, String)),
+    reply: Subject(CreateResult),
   )
-  GetTodo(
-    reply_to: Subject(Result(Todo, AppError)),
+  Get(
     id: String,
+    reply: Subject(GetResult),
   )
-  UpdateTodo(
-    reply_to: Subject(Result(Todo, AppError)),
+  Update(
     id: String,
-    input: UpdateTodoInput,
+    changes: List(#(String, String)),
+    reply: Subject(UpdateResult),
   )
-  DeleteTodo(
-    reply_to: Subject(Result(Nil, AppError)),
+  Delete(
     id: String,
+    reply: Subject(DeleteResult),
   )
   ListAll(
-    reply_to: Subject(Result(List(Todo), AppError)),
+    reply: Subject(ListResult),
     filter: String,
   )
 }
 
+// Result types for internal message handling
+type CreateResult {
+  CreateSuccess(Todo)
+  CreateValidationError(List(String))
+}
+
+type GetResult {
+  GetSuccess(Todo)
+  GetNotFound
+}
+
+type UpdateResult {
+  UpdateSuccess(Todo)
+  UpdateNotFound
+  UpdateValidationError(List(String))
+}
+
+type DeleteResult {
+  DeleteOk
+  DeleteNotFound
+}
+
+type ListResult {
+  ListSuccess(List(Todo))
+}
+
 /// Store handle type (actor subject)
 pub opaque type Store {
-  Store(Subject(StoreMessage))
+  Store(Subject(StoreMsg))
 }
 
 /// Start the todo store actor
@@ -60,16 +88,121 @@ pub fn start() -> Result(Store, String) {
   }
 }
 
+// Pad a string to minimum length by prepending a character
+fn pad_left(s: String, length: Int, pad_char: String) -> String {
+  case string.length(s) >= length {
+    True -> s
+    False -> pad_left(pad_char <> s, length, pad_char)
+  }
+}
+
+// Generate a UUID-like unique ID (36 characters: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+fn generate_id(counter: Int) -> String {
+  let now = current_timestamp_millis()
+
+  // Format: 8-4-4-4-12 = 36 chars total (including 4 dashes)
+  // part1: 8 chars from counter
+  let part1 = pad_left(int.to_string(counter), 8, "0")
+
+  // part2: 4 chars from timestamp
+  let part2 = string.slice(pad_left(int.to_string(now), 12, "0"), 0, 4)
+
+  // part3: 4 chars from timestamp / 10
+  let part3 = string.slice(pad_left(int.to_string(now / 10), 12, "0"), 0, 4)
+
+  // part4: 4 chars from timestamp / 100
+  let part4 = string.slice(pad_left(int.to_string(now / 100), 12, "0"), 0, 4)
+
+  // part5: 12 chars from timestamp / 1000 + counter
+  let part5_source = int.to_string(now / 1000) <> int.to_string(counter)
+  let part5 = string.slice(pad_left(part5_source, 12, "0"), 0, 12)
+
+  part1 <> "-" <> part2 <> "-" <> part3 <> "-" <> part4 <> "-" <> part5
+}
+
 // Actor message handler
 fn handle_message(
   state: StoreState,
-  msg: StoreMessage,
-) -> actor.Next(StoreState, StoreMessage) {
+  msg: StoreMsg,
+) -> actor.Next(StoreState, StoreMsg) {
   case msg {
-    CreateTodo(reply_to, title, description) -> {
+    Create(payload, reply) -> {
+      let id = generate_id(state.next_id)
+      let result = do_create(payload, id)
+      process.send(reply, result)
+      case result {
+        CreateSuccess(item) -> {
+          let new_todos = dict.insert(state.todos, item.id, item)
+          let new_state = StoreState(
+            todos: new_todos,
+            next_id: state.next_id + 1,
+          )
+          actor.continue(new_state)
+        }
+        CreateValidationError(_) -> {
+          actor.continue(StoreState(..state, next_id: state.next_id + 1))
+        }
+      }
+    }
+
+    Get(id, reply) -> {
+      process.send(reply, do_get(state, id))
+      actor.continue(state)
+    }
+
+    Update(id, changes, reply) -> {
+      let result = do_update(state, id, changes)
+      process.send(reply, result)
+      case result {
+        UpdateSuccess(item) -> {
+          let new_todos = dict.insert(state.todos, item.id, item)
+          actor.continue(StoreState(..state, todos: new_todos))
+        }
+        UpdateNotFound -> actor.continue(state)
+        UpdateValidationError(_) -> actor.continue(state)
+      }
+    }
+
+    Delete(id, reply) -> {
+      let result = do_delete(state, id)
+      process.send(reply, result)
+      case result {
+        DeleteOk -> {
+          let new_todos = dict.delete(state.todos, id)
+          actor.continue(StoreState(..state, todos: new_todos))
+        }
+        DeleteNotFound -> actor.continue(state)
+      }
+    }
+
+    ListAll(reply, filter) -> {
+      let all_todos = dict.values(state.todos)
+      let filtered = apply_filter(all_todos, filter)
+      let sorted = sort_by_created_at_desc(filtered)
+      process.send(reply, ListSuccess(sorted))
+      actor.continue(state)
+    }
+  }
+}
+
+fn do_create(payload: List(#(String, String)), id: String) -> CreateResult {
+  case validate_create(payload) {
+    [] -> {
+      let title = get_field(payload, "title") |> option.unwrap("")
+      let description = case get_field(payload, "description") {
+        Some("") -> None
+        Some(d) -> Some(d)
+        None -> None
+      }
+      let priority = case get_field(payload, "priority") {
+        Some("high") -> "high"
+        Some("medium") -> "medium"
+        Some("low") -> "low"
+        _ -> "medium"
+      }
       let now = current_timestamp_millis()
-      let id = "todo-" <> int.to_string(state.next_id)
-      let new_item = shared.Todo(
+
+      let new_item = Todo(
         id: id,
         title: title,
         description: description,
@@ -77,147 +210,116 @@ fn handle_message(
         created_at: now,
         updated_at: now,
       )
-      let new_todos = dict.insert(state.todos, id, new_item)
-      let new_state = StoreState(
-        todos: new_todos,
-        next_id: state.next_id + 1,
-      )
-      process.send(reply_to, Ok(new_item))
-      actor.continue(new_state)
+      CreateSuccess(new_item)
     }
-
-    GetTodo(reply_to, id) -> {
-      case dict.get(state.todos, id) {
-        Ok(todo) -> {
-          process.send(reply_to, Ok(todo))
-          actor.continue(state)
-        }
-        Error(_) -> {
-          process.send(reply_to, Error(NotFound("Todo not found: " <> id)))
-          actor.continue(state)
-        }
-      }
-    }
-
-    UpdateTodo(reply_to, id, input) -> {
-      case dict.get(state.todos, id) {
-        Ok(existing) -> {
-          let updated_title = case input.title {
-            shared.Some(t) -> t
-            shared.None -> existing.title
-          }
-          let updated_desc = case input.description {
-            shared.Some(d) -> d
-            shared.None -> existing.description
-          }
-          let updated_completed = case input.completed {
-            shared.Some(c) -> c
-            shared.None -> existing.completed
-          }
-          let updated = shared.Todo(
-            id: existing.id,
-            title: updated_title,
-            description: updated_desc,
-            completed: updated_completed,
-            created_at: existing.created_at,
-            updated_at: current_timestamp_millis(),
-          )
-          let new_todos = dict.insert(state.todos, id, updated)
-          let new_state = StoreState(..state, todos: new_todos)
-          process.send(reply_to, Ok(updated))
-          actor.continue(new_state)
-        }
-        Error(_) -> {
-          process.send(reply_to, Error(NotFound("Todo not found: " <> id)))
-          actor.continue(state)
-        }
-      }
-    }
-
-    DeleteTodo(reply_to, id) -> {
-      case dict.get(state.todos, id) {
-        Ok(_) -> {
-          let new_todos = dict.delete(state.todos, id)
-          let new_state = StoreState(..state, todos: new_todos)
-          process.send(reply_to, Ok(Nil))
-          actor.continue(new_state)
-        }
-        Error(_) -> {
-          process.send(reply_to, Error(NotFound("Todo not found: " <> id)))
-          actor.continue(state)
-        }
-      }
-    }
-
-    ListAll(reply_to, filter) -> {
-      let all_todos = dict.values(state.todos)
-      let filtered = apply_filter(all_todos, filter)
-      let sorted = sort_by_created_at_desc(filtered)
-      process.send(reply_to, Ok(sorted))
-      actor.continue(state)
-    }
+    errors -> CreateValidationError(errors)
   }
 }
 
-/// Create a new todo
-pub fn create_todo(
-  store: Store,
-  title: String,
-  description: String,
-) -> Result(Todo, AppError) {
-  let Store(subject) = store
-  let reply_subject = process.new_subject()
-  actor.send(subject, CreateTodo(reply_subject, title, description))
-  let assert Ok(result) = process.receive(reply_subject, 5000)
-  result
+fn do_get(state: StoreState, id: String) -> GetResult {
+  case dict.get(state.todos, id) {
+    Ok(item) -> GetSuccess(item)
+    Error(_) -> GetNotFound
+  }
 }
 
-/// Get a todo by ID
-pub fn get_todo(
-  store: Store,
+fn do_update(
+  state: StoreState,
   id: String,
-) -> Result(Todo, AppError) {
-  let Store(subject) = store
-  let reply_subject = process.new_subject()
-  actor.send(subject, GetTodo(reply_subject, id))
-  let assert Ok(result) = process.receive(reply_subject, 5000)
-  result
+  changes: List(#(String, String)),
+) -> UpdateResult {
+  case dict.get(state.todos, id) {
+    Ok(existing) -> {
+      case validate_update(changes) {
+        [] -> {
+          let title = case get_field(changes, "title") {
+            Some(t) -> t
+            None -> existing.title
+          }
+          let description = case get_field(changes, "description") {
+            Some("") -> None
+            Some(d) -> Some(d)
+            None -> existing.description
+          }
+          let priority = case get_field(changes, "priority") {
+            Some("low") -> "low"
+            Some("medium") -> "medium"
+            Some("high") -> "high"
+            Some(_) -> existing.description
+            None -> existing.description
+          }
+          let completed = case get_field(changes, "completed") {
+            Some("true") -> True
+            Some("false") -> False
+            Some(_) -> existing.completed
+            None -> existing.completed
+          }
+
+          let now = current_timestamp_millis()
+          let updated = Todo(
+            id: existing.id,
+            title: title,
+            description: description,
+            completed: completed,
+            created_at: existing.created_at,
+            updated_at: now,
+          )
+          UpdateSuccess(updated)
+        }
+        errors -> UpdateValidationError(errors)
+      }
+    }
+    Error(_) -> UpdateNotFound
+  }
 }
 
-/// Update an existing todo
-pub fn update_todo(
-  store: Store,
-  id: String,
-  input: UpdateTodoInput,
-) -> Result(Todo, AppError) {
-  let Store(subject) = store
-  let reply_subject = process.new_subject()
-  actor.send(subject, UpdateTodo(reply_subject, id, input))
-  let assert Ok(result) = process.receive(reply_subject, 5000)
-  result
+fn do_delete(state: StoreState, id: String) -> DeleteResult {
+  case dict.get(state.todos, id) {
+    Ok(_) -> DeleteOk
+    Error(_) -> DeleteNotFound
+  }
 }
 
-/// Delete a todo
-pub fn delete_todo(
-  store: Store,
-  id: String,
-) -> Result(Nil, AppError) {
-  let Store(subject) = store
-  let reply_subject = process.new_subject()
-  actor.send(subject, DeleteTodo(reply_subject, id))
-  let assert Ok(result) = process.receive(reply_subject, 5000)
-  result
+fn get_field(payload: List(#(String, String)), key: String) -> Option(String) {
+  case list.find(payload, fn(field) { field.0 == key }) {
+    Ok(#(_, value)) -> Some(value)
+    Error(_) -> None
+  }
 }
 
-/// List all todos with optional filtering
-/// Filter values: "all", "active", "completed"
-/// Invalid filter defaults to "all"
-pub fn list_all(store: Store, filter: String) -> Result(List(Todo), AppError) {
-  let Store(subject) = store
-  let reply_subject = process.new_subject()
-  actor.send(subject, ListAll(reply_subject, filter))
-  let assert Ok(result) = process.receive(reply_subject, 5000)
-  result
+fn validate_create(payload: List(#(String, String))) -> List(String) {
+  let errors = []
+
+  let errors = case get_field(payload, "title") {
+    None -> ["title is required", ..errors]
+    Some("") -> ["title is required", ..errors]
+    _ -> errors
+  }
+
+  list.reverse(errors)
+}
+
+fn validate_update(changes: List(#(String, String))) -> List(String) {
+  let errors = []
+
+  let errors = case get_field(changes, "priority") {
+    Some(p) if p != "low" && p != "medium" && p != "high" && p != "" -> [
+      "priority must be low, medium, or high",
+      ..errors
+    ]
+    _ -> errors
+  }
+
+  list.reverse(errors)
+}
+
+// Get current timestamp in milliseconds
+@external(erlang, "erlang", "system_time")
+fn system_time(unit: Int) -> Int
+
+fn current_timestamp_millis() -> Int {
+  // 1000 = millisecond unit for Erlang system_time
+  system_time(1000)
 }
 
 // Apply filter to todos list
@@ -249,18 +351,8 @@ fn sort_by_created_at_desc(todos: List(Todo)) -> List(Todo) {
   })
 }
 
-// Get current timestamp in milliseconds
-@external(erlang, "erlang", "system_time")
-fn system_time(unit: Int) -> Int
-
-fn current_timestamp_millis() -> Int {
-  // 1000 = millisecond unit for Erlang system_time
-  system_time(1000)
-}
-
 // ============================================================================
 // API-compatible wrappers for test expectations
-// These functions provide the API that tests expect
 // ============================================================================
 
 /// Result types for public API matching test expectations
@@ -301,46 +393,31 @@ pub type DeleteErrorType {
   NotFoundDelete
 }
 
-// Helper to convert payload list to individual fields
-fn payload_to_fields(payload: List(#(String, String))) -> #(String, String, String) {
-  let title = get_field_value(payload, "title")
-  let description = get_field_value(payload, "description")
-  let priority = get_field_value(payload, "priority")
-  #(title, description, priority)
-}
-
-fn get_field_value(payload: List(#(String, String)), key: String) -> String {
-  case list.find(payload, fn(field) { field.0 == key }) {
-    Ok(#(_, value)) -> value
-    Error(_) -> ""
-  }
-}
-
 /// API-compatible create function
 pub fn create_api(
   store: Store,
   payload: List(#(String, String)),
 ) -> CreateApiResult {
-  let #(title, description, _priority) = payload_to_fields(payload)
+  let Store(subject) = store
+  let reply_subject = process.new_subject()
+  actor.send(subject, Create(payload, reply_subject))
 
-  // Validate title
-  case string.is_empty(title) {
-    True -> CreateErrorResult(ValidationErrorCreate(["title is required"]))
-    False -> {
-      case create_todo(store, title, description) {
-        Ok(todo) -> CreateOkResult(todo)
-        Error(NotFound(_)) -> CreateErrorResult(ValidationErrorCreate(["not found"]))
-        Error(shared.ValidationError(msg)) -> CreateErrorResult(ValidationErrorCreate([msg]))
-      }
-    }
+  case process.receive(reply_subject, 5000) {
+    Ok(CreateSuccess(item)) -> CreateOkResult(item)
+    Ok(CreateValidationError(errors)) -> CreateErrorResult(ValidationErrorCreate(errors))
+    _ -> CreateErrorResult(ValidationErrorCreate(["timeout"]))
   }
 }
 
 /// API-compatible get function
 pub fn get_api(store: Store, id: String) -> GetApiResult {
-  case get_todo(store, id) {
-    Ok(todo) -> GetOkResult(todo)
-    Error(_) -> GetErrorResult(NotFoundGet)
+  let Store(subject) = store
+  let reply_subject = process.new_subject()
+  actor.send(subject, Get(id, reply_subject))
+
+  case process.receive(reply_subject, 5000) {
+    Ok(GetSuccess(item)) -> GetOkResult(item)
+    Ok(GetNotFound) | _ -> GetErrorResult(NotFoundGet)
   }
 }
 
@@ -350,52 +427,39 @@ pub fn update_api(
   id: String,
   changes: List(#(String, String)),
 ) -> UpdateApiResult {
-  // Get existing todo first
-  case get_todo(store, id) {
-    Error(_) -> UpdateErrorResult(NotFoundUpdate)
-    Ok(existing) -> {
-      // Build UpdateTodoInput from changes
-      let title = case get_field_value(changes, "title") {
-        "" -> shared.None
-        t -> shared.Some(t)
-      }
-      let description = case get_field_value(changes, "description") {
-        "" -> shared.None
-        d -> shared.Some(d)
-      }
-      let completed = case get_field_value(changes, "completed") {
-        "true" -> shared.Some(True)
-        "false" -> shared.Some(False)
-        _ -> shared.None
-      }
+  let Store(subject) = store
+  let reply_subject = process.new_subject()
+  actor.send(subject, Update(id, changes, reply_subject))
 
-      let input = shared.UpdateTodoInput(
-        title: title,
-        description: description,
-        completed: completed,
-      )
-
-      case update_todo(store, id, input) {
-        Ok(todo) -> UpdateOkResult(todo)
-        Error(_) -> UpdateErrorResult(NotFoundUpdate)
-      }
-    }
+  case process.receive(reply_subject, 5000) {
+    Ok(UpdateSuccess(item)) -> UpdateOkResult(item)
+    Ok(UpdateNotFound) -> UpdateErrorResult(NotFoundUpdate)
+    Ok(UpdateValidationError(errors)) -> UpdateErrorResult(ValidationErrorUpdate(errors))
+    _ -> UpdateErrorResult(NotFoundUpdate)
   }
 }
 
 /// API-compatible delete function
 pub fn delete_api(store: Store, id: String) -> DeleteApiResult {
-  case delete_todo(store, id) {
-    Ok(_) -> DeleteOkResult
-    Error(_) -> DeleteErrorResult(NotFoundDelete)
+  let Store(subject) = store
+  let reply_subject = process.new_subject()
+  actor.send(subject, Delete(id, reply_subject))
+
+  case process.receive(reply_subject, 5000) {
+    Ok(DeleteOk) -> DeleteOkResult
+    Ok(DeleteNotFound) | _ -> DeleteErrorResult(NotFoundDelete)
   }
 }
 
 /// API-compatible list all function
 pub fn list_all_api(store: Store) -> List(Todo) {
-  case list_all(store, "all") {
-    Ok(todos) -> todos
-    Error(_) -> []
+  let Store(subject) = store
+  let reply_subject = process.new_subject()
+  actor.send(subject, ListAll(reply_subject, "all"))
+
+  case process.receive(reply_subject, 5000) {
+    Ok(ListSuccess(todos)) -> todos
+    _ -> []
   }
 }
 
@@ -405,8 +469,31 @@ pub fn list_by_status_api(store: Store, completed: Bool) -> List(Todo) {
     True -> "completed"
     False -> "active"
   }
-  case list_all(store, filter) {
-    Ok(todos) -> todos
-    Error(_) -> []
+
+  let Store(subject) = store
+  let reply_subject = process.new_subject()
+  actor.send(subject, ListAll(reply_subject, filter))
+
+  case process.receive(reply_subject, 5000) {
+    Ok(ListSuccess(todos)) -> todos
+    _ -> []
+  }
+}
+
+/// Simple wrapper to create a todo with title and description
+pub fn create_todo(
+  store: Store,
+  title: String,
+  description: String,
+) -> Result(Todo, AppError) {
+  let payload = [#("title", title), #("description", description)]
+  case create_api(store, payload) {
+    CreateOkResult(todo) -> Ok(todo)
+    CreateErrorResult(ValidationErrorCreate(errors)) -> {
+      case errors {
+        [first, ..] -> Error(shared.ValidationError(first))
+        _ -> Error(shared.ValidationError("validation failed"))
+      }
+    }
   }
 }

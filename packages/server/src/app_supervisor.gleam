@@ -2,7 +2,8 @@ import config.{type Config}
 import gleam/erlang/process.{type Subject}
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
-import todo_store.{type Store, type Todo}
+import shared.{type Todo}
+import todo_store.{type Store}
 import web/http_server_actor
 import web/router
 

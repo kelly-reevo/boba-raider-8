@@ -1,36 +1,24 @@
-/// Application messages for todo management
+import shared.{type Todo}
 
-import frontend/model.{type Todo, type Filter}
-
-/// Messages that can be sent to update the application
+/// Application messages
 pub type Msg {
-  // Todo loading
+  // Data loading
+  FetchTodos
+  FetchTodosSuccess(List(Todo))
+  FetchTodosError(String)
   LoadTodos
   TodosLoaded(List(Todo))
   TodosLoadFailed(String)
 
-  // Filter changes
-  SetFilter(Filter)
+  // Toggle todo
+  ToggleTodo(String, Bool)
+  ToggleTodoSuccess(Todo)
+  ToggleTodoError(String, Bool, String)
+  TodoUpdated(Todo)
+  TodoUpdateFailed(String)
 
-  // Form input changes
-  SetTitle(String)
-  SetDescription(String)
-  SetPriority(String)
-
-  // Todo creation
-  SubmitForm
-  TodoCreated(Todo)
-  TodoCreateFailed(String)
-
-  // Todo deletion
+  // Delete todo
   DeleteTodo(String)
   TodoDeleted(String)
   TodoDeleteFailed(String)
-
-  // Todo toggle/update with optimistic update support
-  ToggleTodo(id: String, completed: Bool)
-  ToggleTodoSuccess(item: Todo)
-  ToggleTodoError(id: String, previous_state: Bool, error: String)
-  TodoUpdated(Todo)
-  TodoUpdateFailed(String)
 }

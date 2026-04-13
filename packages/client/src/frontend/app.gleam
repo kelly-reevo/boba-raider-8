@@ -1,7 +1,5 @@
-/// Main application entry point
-
 import frontend/effects
-import frontend/model
+import frontend/model.{type Model}
 import frontend/msg.{type Msg}
 import frontend/toggle_handler_ffi
 import frontend/update
@@ -18,7 +16,6 @@ pub fn main() {
   Nil
 }
 
-/// Initialize the application with loading state and fetch todos effect
-fn init(_flags: Nil) -> #(model.Model, Effect(Msg)) {
+fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
   #(model.default(), effects.fetch_todos())
 }

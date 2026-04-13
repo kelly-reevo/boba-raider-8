@@ -10,6 +10,10 @@ import shared.{type Todo}
 /// Main application view
 pub fn view(model: Model) -> Element(Msg) {
   html.div([attribute.class("app")], [
+    // Error container at top of app - must be first child
+    error_container_view(model.error),
+
+    // Main application content
     html.h1([], [element.text("boba-raider-8")]),
     html.button([event.on_click(msg.FetchTodos)], [element.text("Load Todos")]),
     render_content(model),

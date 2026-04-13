@@ -75,3 +75,40 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     msg.TodoDeleteFailed(error) -> #(Model(..model, error: error), effect.none())
   }
 }
+
+/// Convert API error to error state for the model
+fn convert_api_error_to_state(api_error: ApiError) -> ErrorState {
+  case api_error {
+    GeneralApiError(message) -> GeneralErrorState(message)
+    ValidationApiError(errors) -> {
+      let validation_errors = convert_validation_pairs(errors)
+      ValidationErrorState(validation_errors)
+    }
+    NetworkError -> GeneralErrorState("Network error. Please check your connection and try again.")
+  }
+}
+
+/// Convert list of #(field, message) pairs to ValidationError records
+fn convert_validation_pairs(pairs: List(#(String, String))) -> List(ValidationError) {
+  case pairs {
+    [] -> []
+    [#(field, message), ..rest] -> [
+      ValidationErrorConstructor(field: field, message: message),
+      ..convert_validation_pairs(rest)
+    ]
+  }
+}
+
+/// Helper function to display an error from an HTTP response status and message
+pub fn error_from_response(status: Int, message: String) -> ApiError {
+  case status {
+    422 -> GeneralApiError(message)
+    _ if status >= 500 -> GeneralApiError(message)
+    _ -> GeneralApiError("An error occurred. Please try again.")
+  }
+}
+
+/// Create a validation error from field errors
+pub fn validation_error(field_errors: List(#(String, String))) -> ApiError {
+  ValidationApiError(field_errors)
+}

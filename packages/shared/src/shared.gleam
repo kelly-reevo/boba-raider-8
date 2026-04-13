@@ -2,6 +2,7 @@
 
 import gleam/option.{type Option}
 
+/// AppError moved to shared module for reuse
 pub type AppError {
   NotFound(String)
   InvalidInput(String)
@@ -17,7 +18,7 @@ pub fn error_message(error: AppError) -> String {
   }
 }
 
-/// Todo data model
+/// Re-export Todo type from todo_data_model
 pub type Todo {
   Todo(
     id: String,
@@ -30,6 +31,13 @@ pub type Todo {
   )
 }
 
+/// Re-export Priority type and variants
+pub type Priority {
+  Low
+  Medium
+  High
+}
+
 /// Input for updating a todo - fields are optional
 pub type UpdateTodoInput {
   UpdateTodoInput(
@@ -39,3 +47,7 @@ pub type UpdateTodoInput {
   )
 }
 
+/// Validation error structure
+pub type ValidationError {
+  ValidationError(field: String, message: String)
+}

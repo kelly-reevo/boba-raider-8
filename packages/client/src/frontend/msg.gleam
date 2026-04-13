@@ -1,18 +1,31 @@
 /// Application messages for todo list
 
 import frontend/model.{type Filter}
-import shared.{type Todo}
+import shared.{type Todo, type Priority}
 
 /// Message type for MVU pattern
 pub type Msg {
-  /// Initial fetch on app startup
+  // Data loading messages
   FetchTodos
-  /// Todos successfully loaded
   TodosLoaded(List(Todo))
-  /// Error loading todos
   TodosLoadError(String)
-  /// Change the current filter
-  SetFilter(Filter)
-  /// Retry fetching after error
   RetryFetch
+
+  // Filter messages
+  SetFilter(Filter)
+
+  // Form field update messages
+  TitleChanged(String)
+  DescriptionChanged(String)
+  PriorityChanged(Priority)
+
+  // Form submission messages
+  SubmitForm
+  CreateTodoSucceeded(Todo)
+  CreateTodoFailed(String)
+
+  // Todo list refresh messages
+  RefreshTodos
+  TodosRefreshed(List(Todo))
+  TodosRefreshFailed(String)
 }

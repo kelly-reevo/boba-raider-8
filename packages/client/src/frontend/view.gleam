@@ -1,14 +1,14 @@
-/// View functions for todo list UI
+/// View rendering - HTML generation
 
-import frontend/model.{
-  type Filter, type Model, All, Active, Completed, Loading, Loaded, Error,
-}
+import frontend/model.{type Filter, type Model, All, Active, Completed, Loading, Loaded, Idle, Submitting}
 import frontend/msg.{type Msg, SetFilter, RetryFetch}
+import gleam/list
+import gleam/string
 import lustre/attribute
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
-import shared.{type Todo}
+import shared.{type Todo, Low, Medium, High}
 
 /// Main view function
 pub fn view(model: Model) -> Element(Msg) {
@@ -22,7 +22,7 @@ pub fn view(model: Model) -> Element(Msg) {
 fn render_data_state(model: Model) -> Element(Msg) {
   case model.data_state {
     Loading -> render_loading()
-    Error(msg) -> render_error(msg)
+    model.Error(msg) -> render_error(msg)
     Loaded -> render_loaded(model)
   }
 }
@@ -45,14 +45,113 @@ fn render_error(error_msg: String) -> Element(Msg) {
   ])
 }
 
-/// Render the loaded state (todos or empty message)
+/// Render the loaded state (form, filters, todos)
 fn render_loaded(model: Model) -> Element(Msg) {
   html.div([], [
+    render_form(model),
+    render_error_display(model),
     render_filters(model.filter),
     html.div([attribute.id("todo-list")], [
       render_todos_or_empty(model),
     ]),
   ])
+}
+
+/// Render the todo creation form
+fn render_form(model: Model) -> Element(Msg) {
+  html.form(
+    [
+      attribute.id("todo-form"),
+      attribute.attribute("onsubmit", "event.preventDefault(); return false;"),
+    ],
+    [
+      // Title input
+      html.div([attribute.class("form-group")], [
+        html.label([attribute.for("todo-title")], [element.text("Title")]),
+        html.input([
+          attribute.id("todo-title"),
+          attribute.type_("text"),
+          attribute.value(model.form.title),
+          event.on_input(msg.TitleChanged),
+        ]),
+      ]),
+
+      // Description textarea
+      html.div([attribute.class("form-group")], [
+        html.label([attribute.for("todo-description")], [element.text("Description")]),
+        html.textarea(
+          [
+            attribute.id("todo-description"),
+            attribute.value(model.form.description),
+            event.on_input(msg.DescriptionChanged),
+          ],
+          "",
+        ),
+      ]),
+
+      // Priority select
+      html.div([attribute.class("form-group")], [
+        html.label([attribute.for("todo-priority")], [element.text("Priority")]),
+        html.select(
+          [
+            attribute.id("todo-priority"),
+            event.on_input(fn(value) {
+              case value {
+                "low" -> msg.PriorityChanged(Low)
+                "medium" -> msg.PriorityChanged(Medium)
+                "high" -> msg.PriorityChanged(High)
+                _ -> msg.PriorityChanged(Medium)
+              }
+            }),
+          ],
+          [
+            html.option(
+              [attribute.value("low"), attribute.selected(model.form.priority == Low)],
+              "Low",
+            ),
+            html.option(
+              [attribute.value("medium"), attribute.selected(model.form.priority == Medium)],
+              "Medium",
+            ),
+            html.option(
+              [attribute.value("high"), attribute.selected(model.form.priority == High)],
+              "High",
+            ),
+          ],
+        ),
+      ]),
+
+      // Submit button
+      html.button(
+        [
+          attribute.type_("button"),
+          attribute.disabled(model.submit_state == Submitting),
+          event.on_click(msg.SubmitForm),
+        ],
+        case model.submit_state {
+          Submitting -> [element.text("Adding...")]
+          _ -> [element.text("Add")]
+        },
+      ),
+    ],
+  )
+}
+
+/// Render error display area for form submission
+fn render_error_display(model: Model) -> Element(Msg) {
+  html.div(
+    [
+      attribute.id("error-display"),
+      attribute.class(case string.is_empty(model.error) {
+        True -> "error-display hidden"
+        False -> "error-display"
+      }),
+    ],
+    case string.is_empty(model.error) {
+      True -> []
+      False -> [element.text(model.error)]
+    },
+  )
 }
 
 /// Render filter buttons
@@ -84,8 +183,8 @@ fn filter_button(name: String, filter: Filter, current: Filter) -> Element(Msg) 
 fn render_todos_or_empty(model: Model) -> Element(Msg) {
   let filtered = case model.filter {
     All -> model.todos
-    Active -> list_filter(model.todos, fn(t) { !t.completed })
-    Completed -> list_filter(model.todos, fn(t) { t.completed })
+    Active -> list.filter(model.todos, fn(t) { !t.completed })
+    Completed -> list.filter(model.todos, fn(t) { t.completed })
   }
 
   case filtered {
@@ -106,34 +205,42 @@ fn render_empty_message(filter: Filter) -> Element(Msg) {
 
 /// Render the list of todos
 fn render_todo_list(todos: List(Todo)) -> Element(Msg) {
-  html.ul([], list_map(todos, render_todo_item))
+  html.ul([], list.map(todos, render_todo_item))
 }
 
 /// Render a single todo item
-fn render_todo_item(todo_item: Todo) -> Element(Msg) {
-  html.li([attribute.class(case todo_item.completed {
-    True -> "completed"
-    False -> "active"
-  })], [
-    element.text(todo_item.title),
-  ])
+fn render_todo_item(item: Todo) -> Element(Msg) {
+  let priority_class = priority_class_from_string(item.priority)
+
+  html.li(
+    [
+      attribute.data("id", item.id),
+      attribute.class(case item.completed {
+        True -> "completed"
+        False -> ""
+      }),
+    ],
+    [
+      html.span([attribute.class("title")], [element.text(item.title)]),
+      html.span(
+        [attribute.class("priority " <> priority_class)],
+        [element.text(item.priority)],
+      ),
+      html.input([
+        attribute.type_("checkbox"),
+        attribute.checked(item.completed),
+      ]),
+      html.button([attribute.class("delete")], [element.text("Delete")]),
+    ],
+  )
 }
 
-/// Filter a list (helper since list.filter may have target issues)
-fn list_filter(list: List(a), predicate: fn(a) -> Bool) -> List(a) {
-  case list {
-    [] -> []
-    [head, ..tail] -> case predicate(head) {
-      True -> [head, ..list_filter(tail, predicate)]
-      False -> list_filter(tail, predicate)
-    }
-  }
-}
-
-/// Map over a list (helper)
-fn list_map(list: List(a), transform: fn(a) -> b) -> List(b) {
-  case list {
-    [] -> []
-    [head, ..tail] -> [transform(head), ..list_map(tail, transform)]
+/// Get CSS class from priority string
+fn priority_class_from_string(priority: String) -> String {
+  case priority {
+    "low" -> "priority-low"
+    "medium" -> "priority-medium"
+    "high" -> "priority-high"
+    _ -> "priority-medium"
   }
 }

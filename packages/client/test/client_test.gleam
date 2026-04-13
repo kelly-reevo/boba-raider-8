@@ -1,7 +1,7 @@
 import gleeunit
 import gleeunit/should
-import frontend/model.{Loading, All}
-import shared.{Todo}
+import frontend/model.{Loading, All, Idle}
+import shared.{Todo, Medium}
 import gleam/option.{None}
 
 pub fn main() {
@@ -19,6 +19,13 @@ pub fn default_model_test() {
 
   m.data_state
   |> should.equal(Loading)
+
+  // Verify model has expected default state
+  m.error |> should.equal("")
+  m.form.title |> should.equal("")
+  m.form.description |> should.equal("")
+  m.form.priority |> should.equal(Medium)
+  m.submit_state |> should.equal(Idle)
 }
 
 pub fn filter_todos_all_test() {

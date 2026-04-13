@@ -2,6 +2,7 @@
 import gleam/list
 import gleeunit
 import gleeunit/should
+import shared.{ValidationError}
 import todo_data_model
 
 pub fn main() {

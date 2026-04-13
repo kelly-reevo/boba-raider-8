@@ -1,6 +1,7 @@
 import gleam/dict.{type Dict}
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/order
 import gleam/string
 
 /// Store record representing a boba store
@@ -43,7 +44,12 @@ pub type PaginationParams {
 
 /// Paginated result for list operations
 pub type PaginatedStores {
-  PaginatedStores(stores: List(BobaStore), total: Int, limit: Int, offset: Int)
+  PaginatedStores(
+    stores: List(BobaStore),
+    total: Int,
+    limit: Int,
+    offset: Int,
+  )
 }
 
 /// Error types for store operations
@@ -51,6 +57,30 @@ pub type StoreError {
   StoreNotFound(String)
   StoreInvalidInput(String)
   StoreInternalError(String)
+}
+
+/// Sort field options
+pub type SortBy {
+  SortByName
+  SortByCity
+  SortByCreatedAt
+}
+
+/// Sort order options
+pub type SortOrder {
+  Asc
+  Desc
+}
+
+/// List stores input parameters
+pub type ListStoresInput {
+  ListStoresInput(
+    limit: Int,
+    offset: Int,
+    search: Option(String),
+    sort_by: SortBy,
+    sort_order: SortOrder,
+  )
 }
 
 /// In-memory store state using Dict
@@ -126,23 +156,19 @@ fn current_timestamp() -> String {
 }
 
 /// Create a new store
-pub fn create(
-  state: StoreState,
-  input: CreateStoreInput,
-) -> #(StoreState, BobaStore) {
+pub fn create(state: StoreState, input: CreateStoreInput) -> #(StoreState, BobaStore) {
   let id = generate_uuid(state.next_id)
   let timestamp = current_timestamp()
 
-  let store =
-    BobaStore(
-      id: id,
-      name: input.name,
-      address: input.address,
-      city: input.city,
-      phone: input.phone,
-      created_at: timestamp,
-      updated_at: timestamp,
-    )
+  let store = BobaStore(
+    id: id,
+    name: input.name,
+    address: input.address,
+    city: input.city,
+    phone: input.phone,
+    created_at: timestamp,
+    updated_at: timestamp,
+  )
 
   let new_stores = dict.insert(state.stores, id, store)
   let new_state = StoreState(stores: new_stores, next_id: state.next_id + 1)
@@ -163,13 +189,11 @@ pub fn list(state: StoreState, params: PaginationParams) -> PaginatedStores {
   let all_stores = dict.values(state.stores)
   let total = list.length(all_stores)
 
-  let sorted_stores =
-    list.sort(all_stores, fn(a, b) {
-      string.compare(a.created_at, b.created_at)
-    })
+  let sorted_stores = list.sort(all_stores, fn(a, b) {
+    string.compare(a.created_at, b.created_at)
+  })
 
-  let paginated =
-    sorted_stores
+  let paginated = sorted_stores
     |> list.drop(params.offset)
     |> list.take(params.limit)
 
@@ -190,16 +214,15 @@ pub fn update(
   case dict.get(state.stores, id) {
     Error(_) -> #(state, Error(StoreNotFound("Store not found: " <> id)))
     Ok(existing) -> {
-      let updated =
-        BobaStore(
-          id: existing.id,
-          name: option.unwrap(input.name, existing.name),
-          address: merge_option(input.address, existing.address),
-          city: merge_option(input.city, existing.city),
-          phone: merge_option(input.phone, existing.phone),
-          created_at: existing.created_at,
-          updated_at: current_timestamp(),
-        )
+      let updated = BobaStore(
+        id: existing.id,
+        name: option.unwrap(input.name, existing.name),
+        address: merge_option(input.address, existing.address),
+        city: merge_option(input.city, existing.city),
+        phone: merge_option(input.phone, existing.phone),
+        created_at: existing.created_at,
+        updated_at: current_timestamp(),
+      )
 
       let new_stores = dict.insert(state.stores, id, updated)
       let new_state = StoreState(..state, stores: new_stores)
@@ -218,10 +241,7 @@ fn merge_option(new: Option(String), existing: Option(String)) -> Option(String)
 }
 
 /// Delete a store by ID
-pub fn delete(
-  state: StoreState,
-  id: String,
-) -> #(StoreState, Result(Nil, StoreError)) {
+pub fn delete(state: StoreState, id: String) -> #(StoreState, Result(Nil, StoreError)) {
   case dict.get(state.stores, id) {
     Error(_) -> #(state, Error(StoreNotFound("Store not found: " <> id)))
     Ok(_) -> {
@@ -237,9 +257,69 @@ pub fn list_all(state: StoreState) -> List(BobaStore) {
   dict.values(state.stores)
 }
 
-/// Global state accessor for test compatibility
-/// In production, this would be backed by an OTP actor
-/// For tests, returns a fresh empty state
-pub fn global_state() -> StoreState {
-  new_state()
+/// List stores with pagination, search, and sorting
+pub fn list_with_params(state: StoreState, params: ListStoresInput) -> PaginatedStores {
+  let all_stores = dict.values(state.stores)
+
+  // Apply search filter if provided
+  let filtered_stores = case params.search {
+    None -> all_stores
+    Some(search_term) -> filter_stores_by_search(all_stores, search_term)
+  }
+
+  let total = list.length(filtered_stores)
+
+  // Apply sorting
+  let sorted_stores = sort_stores(filtered_stores, params.sort_by, params.sort_order)
+
+  // Apply pagination
+  let paginated = sorted_stores
+    |> list.drop(params.offset)
+    |> list.take(params.limit)
+
+  PaginatedStores(
+    stores: paginated,
+    total: total,
+    limit: params.limit,
+    offset: params.offset,
+  )
+}
+
+/// Filter stores by search term (matches name or city, case-insensitive)
+fn filter_stores_by_search(stores: List(BobaStore), search_term: String) -> List(BobaStore) {
+  let trimmed_term = string.trim(search_term)
+  case string.is_empty(trimmed_term) {
+    True -> stores
+    False -> {
+      let lower_term = string.lowercase(trimmed_term)
+      list.filter(stores, fn(store) {
+        let name_match = string.contains(string.lowercase(store.name), lower_term)
+        let city_match = case store.city {
+          Some(city) -> string.contains(string.lowercase(city), lower_term)
+          None -> False
+        }
+        name_match || city_match
+      })
+    }
+  }
+}
+
+/// Sort stores by specified field and order
+fn sort_stores(stores: List(BobaStore), sort_by: SortBy, sort_order: SortOrder) -> List(BobaStore) {
+  let compare_fn: fn(BobaStore, BobaStore) -> order.Order = case sort_by {
+    SortByName -> fn(a: BobaStore, b: BobaStore) { string.compare(a.name, b.name) }
+    SortByCity -> fn(a: BobaStore, b: BobaStore) {
+      let city_a = option.unwrap(a.city, "")
+      let city_b = option.unwrap(b.city, "")
+      string.compare(city_a, city_b)
+    }
+    SortByCreatedAt -> fn(a: BobaStore, b: BobaStore) { string.compare(a.created_at, b.created_at) }
+  }
+
+  let sorted = list.sort(stores, compare_fn)
+
+  case sort_order {
+    Asc -> sorted
+    Desc -> list.reverse(sorted)
+  }
 }

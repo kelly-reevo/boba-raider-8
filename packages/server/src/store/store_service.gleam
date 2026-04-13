@@ -1,6 +1,6 @@
 import gleam/erlang/process.{type Subject}
 import gleam/list
-import gleam/option.{type Option, None, Some}
+import gleam/option.{type Option, Some, None}
 import gleam/otp/actor
 import gleam/string
 import store/store_data_access as data_access
@@ -48,12 +48,33 @@ type ServiceState {
   )
 }
 
+/// Input for listing stores with pagination, search, and sorting
+pub type ListStoresInput {
+  ListStoresInput(
+    limit: Int,
+    offset: Int,
+    search: Option(String),
+    sort_by: data_access.SortBy,
+    sort_order: data_access.SortOrder,
+  )
+}
+
+/// Paginated response for stores
+pub type PaginatedStoresResponse {
+  PaginatedStoresResponse(
+    stores: List(StoreWithDrinkCount),
+    total: Int,
+    limit: Int,
+    offset: Int,
+  )
+}
+
 /// Actor message types
 pub type StoreServiceMsg {
   CreateStore(CreateStoreInput, Subject(Result(StoreWithDrinkCount, String)))
   GetStoreWithDrinkCount(String, Subject(Result(StoreWithDrinkCount, String)))
   SearchStores(String, Subject(Result(List(StoreWithDrinkCount), String)))
-  DeleteStore(String, Subject(Result(Nil, String)))
+  ListStores(ListStoresInput, Subject(Result(PaginatedStoresResponse, String)))
 }
 
 pub type StoreService =
@@ -83,38 +104,32 @@ fn count_drinks_for_store(_store_id: String) -> Int {
 }
 
 /// Actor message handler
-fn handle_message(
-  state: ServiceState,
-  msg: StoreServiceMsg,
-) -> actor.Next(ServiceState, StoreServiceMsg) {
+fn handle_message(state: ServiceState, msg: StoreServiceMsg) -> actor.Next(ServiceState, StoreServiceMsg) {
   case msg {
     CreateStore(input, reply_to) -> {
       // Validate input first - inline validation matching robustness branch contract
       let name_trimmed = string.trim(input.name)
-      let name_valid =
-        string.length(name_trimmed) > 0 && string.length(name_trimmed) <= 100
+      let name_valid = string.length(name_trimmed) > 0 && string.length(name_trimmed) <= 100
 
       case name_valid {
         False -> {
-          actor.send(
-            reply_to,
-            Error("Store name is required and must be at most 100 characters"),
-          )
+          actor.send(reply_to, Error("Store name is required and must be at most 100 characters"))
           actor.continue(state)
         }
         True -> {
           // Convert input to data access format
-          let data_input =
-            data_access.CreateStoreInput(
-              name: string.trim(input.name),
-              address: input.address,
-              city: input.city,
-              phone: input.phone,
-            )
+          let data_input = data_access.CreateStoreInput(
+            name: string.trim(input.name),
+            address: input.address,
+            city: input.city,
+            phone: input.phone,
+          )
 
           // Create in data access layer
-          let #(new_data_state, created_store) =
-            data_access.create(state.data_access_state, data_input)
+          let #(new_data_state, created_store) = data_access.create(
+            state.data_access_state,
+            data_input,
+          )
 
           // Convert to output format with drink count
           let store_with_count = to_store_with_count(created_store, 0)
@@ -128,11 +143,10 @@ fn handle_message(
           }
 
           // Update state and reply
-          let new_state =
-            ServiceState(
-              data_access_state: new_data_state,
-              event_publisher: state.event_publisher,
-            )
+          let new_state = ServiceState(
+            data_access_state: new_data_state,
+            event_publisher: state.event_publisher,
+          )
           actor.send(reply_to, Ok(store_with_count))
           actor.continue(new_state)
         }
@@ -141,8 +155,7 @@ fn handle_message(
 
     GetStoreWithDrinkCount(store_id, reply_to) -> {
       // Validate UUID format - basic check: non-empty and contains dashes
-      let is_valid_id =
-        string.length(store_id) > 0 && string.contains(store_id, "-")
+      let is_valid_id = string.length(store_id) > 0 && string.contains(store_id, "-")
       case is_valid_id {
         False -> {
           actor.send(reply_to, Error("Invalid store ID format"))
@@ -182,23 +195,18 @@ fn handle_message(
 
       case term_valid {
         False -> {
-          actor.send(
-            reply_to,
-            Error("Search term must be at least 2 characters"),
-          )
+          actor.send(reply_to, Error("Search term must be at least 2 characters"))
           actor.continue(state)
         }
         True -> {
           // Search in data access layer
-          let results =
-            search_stores_in_state(state.data_access_state, trimmed_term)
+          let results = search_stores_in_state(state.data_access_state, trimmed_term)
 
           // Convert results to stores with drink counts
-          let results_with_count =
-            list.map(results, fn(store) {
-              let drink_count = count_drinks_for_store(store.id)
-              to_store_with_count(store, drink_count)
-            })
+          let results_with_count = list.map(results, fn(store) {
+            let drink_count = count_drinks_for_store(store.id)
+            to_store_with_count(store, drink_count)
+          })
 
           actor.send(reply_to, Ok(results_with_count))
           actor.continue(state)
@@ -206,47 +214,48 @@ fn handle_message(
       }
     }
 
-    DeleteStore(store_id, reply_to) -> {
-      // Validate UUID format - basic check: non-empty and contains dashes
-      let is_valid_id = string.length(store_id) > 0 && string.contains(store_id, "-")
-      case is_valid_id {
-        False -> {
-          actor.send(reply_to, Error("Invalid store ID format"))
+    ListStores(input, reply_to) -> {
+      // Validate pagination parameters
+      let limit_valid = input.limit > 0 && input.limit <= 100
+      let offset_valid = input.offset >= 0
+
+      case limit_valid, offset_valid {
+        False, _ -> {
+          actor.send(reply_to, Error("Limit must be between 1 and 100"))
           actor.continue(state)
         }
-        True -> {
-          // Try to delete store from data access layer
-          case data_access.delete(state.data_access_state, store_id) {
-            #(_, Error(data_access.StoreNotFound(_))) -> {
-              actor.send(reply_to, Error("Store not found"))
-              actor.continue(state)
-            }
-            #(_, Error(data_access.StoreInvalidInput(msg))) -> {
-              actor.send(reply_to, Error(msg))
-              actor.continue(state)
-            }
-            #(_, Error(data_access.StoreInternalError(msg))) -> {
-              actor.send(reply_to, Error(msg))
-              actor.continue(state)
-            }
-            #(new_data_state, Ok(_)) -> {
-              // Publish event if publisher exists
-              case state.event_publisher {
-                Some(publisher) -> {
-                  publisher.publish("store.deleted", StoreDeleted(store_id))
-                }
-                None -> Nil
-              }
+        _, False -> {
+          actor.send(reply_to, Error("Offset must be non-negative"))
+          actor.continue(state)
+        }
+        True, True -> {
+          // Convert to data access input format
+          let data_input = data_access.ListStoresInput(
+            limit: input.limit,
+            offset: input.offset,
+            search: input.search,
+            sort_by: input.sort_by,
+            sort_order: input.sort_order,
+          )
 
-              // Update state and reply
-              let new_state = ServiceState(
-                data_access_state: new_data_state,
-                event_publisher: state.event_publisher,
-              )
-              actor.send(reply_to, Ok(Nil))
-              actor.continue(new_state)
-            }
-          }
+          // Query data access layer
+          let result = data_access.list_with_params(state.data_access_state, data_input)
+
+          // Convert stores to include drink counts
+          let stores_with_count = list.map(result.stores, fn(store) {
+            let drink_count = count_drinks_for_store(store.id)
+            to_store_with_count(store, drink_count)
+          })
+
+          let response = PaginatedStoresResponse(
+            stores: stores_with_count,
+            total: result.total,
+            limit: result.limit,
+            offset: result.offset,
+          )
+
+          actor.send(reply_to, Ok(response))
+          actor.continue(state)
         }
       }
     }
@@ -279,14 +288,11 @@ pub fn start() -> Result(StoreService, String) {
 }
 
 /// Start with an optional event publisher
-pub fn start_with_publisher(
-  publisher: Option(EventPublisher),
-) -> Result(StoreService, String) {
-  let initial_state =
-    ServiceState(
-      data_access_state: data_access.new_state(),
-      event_publisher: publisher,
-    )
+pub fn start_with_publisher(publisher: Option(EventPublisher)) -> Result(StoreService, String) {
+  let initial_state = ServiceState(
+    data_access_state: data_access.new_state(),
+    event_publisher: publisher,
+  )
 
   case
     actor.new(initial_state)
@@ -340,13 +346,13 @@ pub fn search_stores(
   }
 }
 
-/// Delete a store by ID
-pub fn delete_store(
+/// List stores with pagination, search, and sorting
+pub fn list_stores(
   service: StoreService,
-  store_id: String,
-) -> Result(Nil, String) {
+  input: ListStoresInput,
+) -> Result(PaginatedStoresResponse, String) {
   let reply_subject = process.new_subject()
-  actor.send(service, DeleteStore(store_id, reply_subject))
+  actor.send(service, ListStores(input, reply_subject))
 
   case process.receive(reply_subject, within: 5000) {
     Ok(result) -> result

@@ -44,7 +44,8 @@ export default defineConfig({
       '__cyclone_tests__/edit-drink-form/*.test.js',
       '__cyclone_tests__/edit-drink-form/*.test.ts',
       '__cyclone_tests__/edit-drink-form/*.test.jsx',
-      '__cyclone_tests__/boba-rating-form/*'
+      '__cyclone_tests__/boba-rating-form/*',
+      '__cyclone_tests__/store-search-component/*'
     ],
     exclude: [
       '__cyclone_tests__/test-db-setup.js',

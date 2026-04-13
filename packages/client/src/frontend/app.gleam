@@ -18,29 +18,29 @@ pub type Model {
   Model(
     current_route: Route,
     store_list: store_list_model.Model,
-    store_detail: Option(store_detail_model.Model),
+    store_detail: Option(StoreDetailModel),
   )
 }
 
 /// Application messages
 pub type Msg {
   StoreListMsg(store_list_msg.Msg)
-  StoreDetailMsg(store_detail_msg.Msg)
+  StoreDetailMsg(StoreDetailMsg)
 }
 
 // Store detail sub-module types (inline to avoid circular deps)
 pub type StoreDetailState {
   Loading
-  Loaded(store_detail_model.StoreData)
+  Loaded(StoreData)
   Error(String)
 }
 
-pub type store_detail_model {
-  Model(store_id: String, state: StoreDetailState)
+pub type StoreDetailModel {
+  StoreDetailModel(store_id: String, state: StoreDetailState)
 }
 
-pub type store_detail_msg {
-  StoreDataReceived(Result(store_detail_model.StoreData, String))
+pub type StoreDetailMsg {
+  StoreDataReceived(Result(StoreData, String))
   NavigateBack
 }
 
@@ -83,14 +83,9 @@ fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       let #(updated_store_list, effect) = store_list_update.update(model.store_list, store_msg)
       #(Model(..model, store_list: updated_store_list), effect.map(effect, StoreListMsg))
     }
-    StoreDetailMsg(detail_msg) -> {
-      // Handle store detail messages
-      case detail_msg {
-        StoreDetailMsg(inner) -> {
-          // Handle store detail update
-          #(model, effect.none())
-        }
-      }
+    StoreDetailMsg(_detail_msg) -> {
+      // Handle store detail messages - placeholder implementation
+      #(model, effect.none())
     }
   }
 }

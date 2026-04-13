@@ -8,6 +8,6 @@ pub fn main() {
 
 pub fn default_model_test() {
   let m = model.default()
-  m.count
-  |> should.equal(0)
+  m.todos
+  |> should.equal([])
 }

@@ -1,9 +1,11 @@
+import shared.{type Todo}
+
 /// Application state
 
 pub type Model {
-  Model(count: Int, error: String)
+  Model(todos: List(Todo), error: String)
 }
 
 pub fn default() -> Model {
-  Model(count: 0, error: "")
+  Model(todos: [], error: "")
 }

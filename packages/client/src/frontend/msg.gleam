@@ -11,8 +11,11 @@ pub type Msg {
   TodosLoadError(String)
   RetryFetch
 
-  // Filter messages
+  // Filter messages - support both string-based and Filter type
   SetFilter(Filter)
+  FilterChanged(String)
+  TodosFetched(List(Todo))
+  FetchError(String)
 
   // Form field update messages
   TitleChanged(String)

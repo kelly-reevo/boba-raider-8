@@ -1,7 +1,7 @@
 /// Application update logic - state transitions and side effects
 
 import frontend/effects
-import frontend/model.{type Model, Loading, Loaded}
+import frontend/model.{type Model, Loading, Loaded, All, Active, Completed}
 import frontend/msg.{type Msg}
 import gleam/string
 import lustre/effect.{type Effect}
@@ -30,8 +30,28 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       effects.fetch_todos()
     )
 
+    // Filter messages
     msg.SetFilter(filter) -> #(
       Model(..model, filter: filter),
+      effects.get_todos(filter)
+    )
+
+    msg.FilterChanged(filter_str) -> {
+      let new_filter = case filter_str {
+        "active" -> Active
+        "completed" -> Completed
+        _ -> All
+      }
+      #(Model(..model, filter: new_filter), effects.get_todos(new_filter))
+    }
+
+    msg.TodosFetched(todos) -> #(
+      Model(..model, todos: todos, data_state: Loaded),
+      effect.none()
+    )
+
+    msg.FetchError(error) -> #(
+      Model(..model, data_state: model.Error(error)),
       effect.none()
     )
 

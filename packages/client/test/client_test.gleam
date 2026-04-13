@@ -1,6 +1,6 @@
 import gleeunit
 import gleeunit/should
-import frontend/model.{Loading, All, Idle}
+import frontend/model.{Loading, All, Idle, Active, Completed}
 import shared.{Todo, Medium}
 import gleam/option.{None}
 import gleam/list
@@ -38,7 +38,7 @@ pub fn filter_todos_active_test() {
   let completed_todo = Todo("2", "Completed", None, "medium", True, 0, 0)
   let todos = [active_todo, completed_todo]
 
-  model.filter_todos(todos, model.Active)
+  model.filter_todos(todos, Active)
   |> should.equal([active_todo])
 }
 
@@ -47,7 +47,7 @@ pub fn filter_todos_completed_test() {
   let completed_todo = Todo("2", "Completed", None, "medium", True, 0, 0)
   let todos = [active_todo, completed_todo]
 
-  model.filter_todos(todos, model.Completed)
+  model.filter_todos(todos, Completed)
   |> should.equal([completed_todo])
 }
 

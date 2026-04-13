@@ -1,5 +1,5 @@
 import frontend/effects
-import frontend/model.{type Model, default}
+import frontend/model.{type Model, default, All}
 import frontend/msg.{type Msg}
 import frontend/update
 import frontend/view
@@ -13,5 +13,5 @@ pub fn main() {
 }
 
 fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
-  #(default(), effects.fetch_todos())
+  #(default(), effects.get_todos(All))
 }

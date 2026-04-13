@@ -1,6 +1,7 @@
 /// HTTP effects for todo operations
 
-import frontend/msg.{type Msg, TodosLoaded, TodosLoadError, CreateTodoSucceeded, Deleted, DeleteError, TodoToggledOk, TodoToggledError, SetError}
+import frontend/model.{type Filter}
+import frontend/msg.{type Msg, TodosLoaded, TodosLoadError, CreateTodoSucceeded, CreateTodoFailed, Deleted, DeleteError, TodoToggledOk, TodoToggledError, SetError, TodosFetched, FetchError}
 import gleam/dynamic/decode
 import gleam/http
 import gleam/http/request
@@ -18,26 +19,35 @@ fn priority_to_string(priority: Priority) -> String {
   }
 }
 
-/// Effect to fetch all todos from GET /api/todos
-pub fn fetch_todos() -> Effect(Msg) {
+/// Effect to fetch todos with optional filter
+pub fn get_todos(filter: Filter) -> Effect(Msg) {
   effect.from(fn(dispatch) {
-    case request.to("http://localhost:3000/api/todos") {
-      Error(_) -> dispatch(TodosLoadError("Failed to load todos"))
+    case request.to("http://localhost:3000/api/todos" <> filter_to_query(filter)) {
+      Error(_) -> dispatch(FetchError("Failed to load todos"))
       Ok(req) -> {
         do_fetch(req, fn(response) {
           case response {
             Ok(json_string) -> {
               case decode_todo_list(json_string) {
-                Ok(todos) -> dispatch(TodosLoaded(todos))
-                Error(_) -> dispatch(TodosLoadError("Failed to parse todos"))
+                Ok(todos) -> dispatch(TodosFetched(todos))
+                Error(_) -> dispatch(FetchError("Failed to parse todos"))
               }
             }
-            Error(_) -> dispatch(TodosLoadError("Failed to load todos"))
+            Error(_) -> dispatch(FetchError("Failed to load todos"))
           }
         })
       }
     }
   })
+}
+
+/// Convert filter to query string
+fn filter_to_query(filter: Filter) -> String {
+  case filter {
+    All -> ""
+    Active -> "?filter=active"
+    Completed -> "?filter=completed"
+  }
 }
 
 /// Decode a list of Todos from JSON string
@@ -76,6 +86,28 @@ fn decode_todo(json_string: String) -> Result(Todo, Nil) {
     Ok(todo_item) -> Ok(todo_item)
     Error(_) -> Error(Nil)
   }
+}
+
+/// Fetch todos from the API
+pub fn fetch_todos() -> Effect(Msg) {
+  effect.from(fn(dispatch) {
+    case request.to("http://localhost:3000/api/todos") {
+      Error(_) -> dispatch(TodosLoadError("Failed to load todos"))
+      Ok(req) -> {
+        do_fetch(req, fn(response) {
+          case response {
+            Ok(json_string) -> {
+              case decode_todo_list(json_string) {
+                Ok(todos) -> dispatch(TodosLoaded(todos))
+                Error(_) -> dispatch(TodosLoadError("Failed to parse todos"))
+              }
+            }
+            Error(_) -> dispatch(TodosLoadError("Failed to load todos"))
+          }
+        })
+      }
+    }
+  })
 }
 
 /// Create a new todo via API

@@ -52,7 +52,7 @@ fn render_loaded(model: Model) -> Element(Msg) {
     render_form(model),
     render_error_display(model),
     render_delete_error(model),
-    render_filters(model.filter),
+    render_filter_tabs(model.filter),
     html.div([attribute.id("todo-list")], [
       render_todos_or_empty(model),
     ]),
@@ -167,29 +167,38 @@ fn render_delete_error(model: Model) -> Element(Msg) {
   }
 }
 
-/// Render filter buttons
-fn render_filters(current_filter: Filter) -> Element(Msg) {
-  html.div([attribute.class("filters")], [
-    filter_button("all", All, current_filter),
-    filter_button("active", Active, current_filter),
-    filter_button("completed", Completed, current_filter),
+/// Render filter tabs
+fn render_filter_tabs(active_filter: Filter) -> Element(Msg) {
+  html.div([attribute.class("filter-tabs")], [
+    filter_tab_button("all", "All", active_filter == All),
+    filter_tab_button("active", "Active", active_filter == Active),
+    filter_tab_button("completed", "Completed", active_filter == Completed),
   ])
 }
 
-/// Create a single filter button
-fn filter_button(name: String, filter: Filter, current: Filter) -> Element(Msg) {
-  let is_active = case filter == current {
-    True -> "active"
-    False -> ""
+/// Create a single filter tab button
+fn filter_tab_button(filter: String, label: String, is_active: Bool) -> Element(Msg) {
+  let attrs = case is_active {
+    True -> [
+      attribute.class("filter-tab active"),
+      attribute.attribute("data-filter", filter),
+      event.on_click(case filter {
+        "active" -> SetFilter(Active)
+        "completed" -> SetFilter(Completed)
+        _ -> SetFilter(All)
+      }),
+    ]
+    False -> [
+      attribute.class("filter-tab"),
+      attribute.attribute("data-filter", filter),
+      event.on_click(case filter {
+        "active" -> SetFilter(Active)
+        "completed" -> SetFilter(Completed)
+        _ -> SetFilter(All)
+      }),
+    ]
   }
-  html.button(
-    [
-      attribute.class(is_active),
-      attribute.attribute("data-filter", name),
-      event.on_click(SetFilter(filter)),
-    ],
-    [element.text(name)]
-  )
+  html.button(attrs, [element.text(label)])
 }
 
 /// Render todos list or appropriate empty message

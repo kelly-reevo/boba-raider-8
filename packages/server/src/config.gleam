@@ -10,7 +10,7 @@ pub fn load() -> Config {
   let port =
     envoy.get("PORT")
     |> result.try(int.parse)
-    |> result.unwrap(3000)
+    |> result.unwrap(3777)
 
   Config(port: port)
 }

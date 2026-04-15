@@ -75,7 +75,7 @@ pub fn post_reset() -> Effect(Msg)         // POST /api/counter/reset
 
 ### Adding a New API Call
 
-1. Add a route on the server (`packages/server/src/web/router.gleam`)
+1. Add a route on the server (`packages/server/src/web/router.gleam`) — routes use wisp patterns with `wisp.path_segments(req)` matching and `wisp.require_method`
 2. Add a `Msg` variant for the response in `msg.gleam`
 3. Add a decoder if the response shape differs from `{"count": N}`
 4. Add a public function in `effects.gleam` using `api_get` or `api_post`

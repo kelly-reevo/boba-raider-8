@@ -5,7 +5,7 @@
 This is a full-stack Gleam monorepo web application with three independent packages that share types across compilation targets:
 
 - **Lustre frontend** (JavaScript target) - Browser UI using the Model-View-Update pattern
-- **OTP backend** (Erlang target) - HTTP server with actor-based concurrency and supervision
+- **OTP backend** (Erlang target) - HTTP server using mist + wisp with actor-based concurrency
 - **Shared types** (no target) - Domain types compiled to both JavaScript and Erlang
 
 ## Project Structure
@@ -33,16 +33,12 @@ boba-raider-8/
 │       ├── gleam.toml
 │       ├── src/
 │       │   ├── server.gleam          # Entry point
-│       │   ├── app.gleam             # Main application module
+│       │   ├── app.gleam             # Application startup (mist + wisp)
 │       │   ├── config.gleam          # Environment config loading
-│       │   ├── app_supervisor.gleam  # OTP supervisor tree
-│       │   ├── http_server.erl       # Low-level TCP server (Erlang)
-│       │   ├── server_ffi.erl        # FFI bridge layer (Erlang)
+│       │   ├── counter.gleam         # OTP actor for counter state
 │       │   └── web/
-│       │       ├── http_server_actor.gleam  # Actor wrapper for HTTP server
-│       │       ├── router.gleam      # HTTP routing
-│       │       ├── server.gleam      # Request/Response types & builders
-│       │       └── static.gleam      # Static file serving
+│       │       ├── context.gleam     # Request context (counter, static dir)
+│       │       └── router.gleam      # HTTP routing with wisp
 │       └── priv/static/
 │           ├── index.html            # Frontend HTML shell
 │           ├── css/styles.css        # Styles
@@ -86,96 +82,68 @@ The client compiles Gleam to ES modules. During build, `lustre/dev build` bundle
 ### packages/server
 
 - **Target:** Erlang
-- **Purpose:** HTTP server with OTP supervision, static file serving, and API endpoints
+- **Purpose:** HTTP server with static file serving and API endpoints
 - **Entry:** `src/server.gleam` -> `app.gleam`
-- **Dependencies:** `gleam_stdlib`, `gleam_erlang`, `gleam_json`, `gleam_otp`, `gleam_http`, `simplifile`, `envoy`, `shared` (local)
+- **HTTP Stack:** mist (HTTP server) + wisp (web framework)
+- **Dependencies:** `gleam_stdlib`, `gleam_erlang`, `gleam_json`, `gleam_otp`, `gleam_http`, `mist`, `wisp`, `envoy`, `shared` (local)
 
-The server uses two Erlang FFI modules (`server_ffi.erl` and `http_server.erl`) to implement a raw TCP-based HTTP server, wrapped in Gleam's OTP actor system for lifecycle management.
+The server uses **mist** as the HTTP server and **wisp** as the web framework. Wisp provides routing, static file serving, and request/response helpers. Mist handles the low-level HTTP protocol under its own OTP supervision tree.
 
-## Server Startup & OTP Supervision
+## Server Startup
 
 ```
 server.gleam (entry point)
   └── app.main()
-      ├── config.load() - Reads PORT from environment (default 3000)
-      └── app_supervisor.start(config)
-          └── HttpServerActor (gleam_otp actor)
-              └── server_ffi:start/2 (Erlang FFI)
-                  └── http_server:start/2 (raw TCP)
-                      ├── gen_tcp:listen(Port)
-                      ├── accept_loop (spawned process)
-                      │   ├── gen_tcp:accept(Socket)
-                      │   ├── spawn(handle_client) per connection
-                      │   └── loops back to accept
-                      └── handle_client
-                          ├── Parse HTTP request
-                          ├── Call Gleam handler function
-                          └── Send HTTP response
+      ├── wisp.configure_logger()
+      ├── config.load() - Reads PORT from environment (default 3777)
+      ├── counter.start() - Starts counter OTP actor
+      ├── wisp.priv_directory("server") - Resolves priv/static path
+      ├── Context { counter, static_directory }
+      ├── wisp_mist.handler(handler, secret_key_base)
+      │   └── Adapts wisp handler to mist's expected shape
+      ├── mist.new → mist.port → mist.start
+      │   └── Starts HTTP server under mist's OTP supervisor
+      └── process.sleep_forever()
 ```
 
-The `HttpServerActor` wraps the raw Erlang TCP server in an OTP actor that responds to `Shutdown` messages, enabling proper lifecycle management. The supervisor monitors this actor and can restart it on crashes.
-
-After starting the supervision tree, `app.main()` calls `process.sleep_forever()` to keep the Erlang VM alive.
+Mist manages its own OTP supervision tree internally. The counter actor runs independently as a standard `gleam_otp` actor.
 
 ## HTTP Request/Response Flow
 
 ```
-TCP Socket (gen_tcp)
+Client HTTP Request
   ↓
-http_server.erl
-  Parses raw HTTP: method, path, headers, body
+mist (HTTP server)
+  Handles TCP, HTTP/1.1 protocol, keep-alive, connection management
   ↓
-server_ffi.erl
-  Converts Erlang maps → Gleam types (Request record)
-  Converts Erlang header maps → Gleam Dict
+wisp_mist.handler
+  Converts mist Connection → wisp Request
   ↓
-router.gleam
-  Pattern matches on {method, path segments}:
-    GET /           → static.serve_index()
-    GET /health     → json health response
-    GET /api/health → json health response
-    GET /static/*   → static.serve(path)
-    _               → 404 not found
+router.handle_request(req, ctx)
+  ├── wisp.serve_static (middleware)
+  │   Checks /static/* prefix, serves files from priv/static/
+  │   Content-type detection is automatic
+  ├── cors_middleware
+  │   OPTIONS → 204 with CORS headers
+  │   Other methods → adds CORS headers to response
+  └── Route matching on wisp.path_segments(req):
+        GET  /                    → redirect to /static/index.html
+        GET  /health              → {"status": "ok"}
+        GET  /api/health          → {"status": "ok"}
+        GET  /api/counter         → {"count": N}
+        POST /api/counter/increment → {"count": N+1}
+        POST /api/counter/decrement → {"count": N-1}
+        POST /api/counter/reset   → {"count": 0}
+        _                         → 404
   ↓
-Response builders (web/server.gleam)
-  json_response(status, json_string)
-  html_response(status, html_string)
-  text_response(status, text_string)
+wisp Response
   ↓
-server_ffi.erl
-  Converts Gleam Response → Erlang map
+wisp_mist (converts back to mist ResponseData)
   ↓
-http_server.erl
-  Formats HTTP/1.1 response with status line, headers, Content-Length, body
+mist (sends HTTP response)
   ↓
-TCP Socket → Client
+Client
 ```
-
-## FFI Architecture (Two-Layer Bridge)
-
-Gleam uses `@external` annotations to call into platform-native code. This project has two Erlang FFI modules:
-
-### Layer 1: server_ffi.erl (Gleam-Erlang Bridge)
-
-Translates between Gleam's type system and Erlang's runtime representations:
-- Converts Gleam `Dict` to/from Erlang maps for HTTP headers
-- Handles binary/string conversions (Gleam strings are Erlang binaries)
-- Provides the `start/2` and `stop/1` functions called from `http_server_actor.gleam`
-
-Gleam-side declaration:
-```gleam
-@external(erlang, "server_ffi", "start")
-fn start_http_server(port: Int, handler: fn(Request) -> Response)
-    -> Result(ServerHandle, String)
-```
-
-### Layer 2: http_server.erl (Low-Level TCP Server)
-
-Raw `gen_tcp` socket handling:
-- Creates TCP listener with `{packet, http_bin}` for Erlang's built-in HTTP parsing
-- Spawns a process per connection for concurrent request handling
-- Parses HTTP request lines, headers, and body
-- Serializes HTTP responses back to wire format
 
 ## Lustre Frontend (MVU Pattern)
 
@@ -210,9 +178,11 @@ Msg (frontend/msg.gleam)
        ▼
 Update (frontend/update.gleam)
   (Model, Msg) → #(Model, Effect(Msg))
-  Increment → count + 1, effect.none()
-  Decrement → count - 1, effect.none()
-  Reset     → count = 0, effect.none()
+  Increment → POST /api/counter/increment
+  Decrement → POST /api/counter/decrement
+  Reset     → POST /api/counter/reset
+  GotCounter(Ok(count)) → Model(count: count, error: "")
+  GotCounter(Error(_))  → Model(..model, error: "...")
        │
        ▼ (Lustre re-renders automatically)
 View (re-invoked with new Model)
@@ -220,21 +190,15 @@ View (re-invoked with new Model)
 
 ### Effects
 
-`effects.gleam` contains a placeholder `fetch_data()` function for future HTTP API calls. Lustre effects are first-class: update functions return `#(Model, Effect(Msg))` tuples, where effects describe async operations (HTTP requests, timers, etc.) that eventually produce new messages.
+`effects.gleam` handles all HTTP communication with the server. User actions dispatch HTTP POST effects (no local state mutation). The model only updates when the server responds via `GotCounter`.
 
 ## Static File Serving
 
-`static.gleam` serves files from the `priv/` directory using `simplifile` for file I/O. Content-Type detection is based on file extension:
+Static files are served by wisp's `serve_static` middleware from the `priv/static/` directory. The middleware is configured with:
+- **Prefix:** `/static` — requests to `/static/*` are checked against the filesystem
+- **Directory:** `priv/static/` — resolved at startup via `wisp.priv_directory("server")`
 
-| Extension | Content-Type |
-|-----------|-------------|
-| `.html` | `text/html; charset=utf-8` |
-| `.css` | `text/css` |
-| `.js`, `.mjs` | `application/javascript` |
-| `.json` | `application/json` |
-| `.png` | `image/png` |
-| `.svg` | `image/svg+xml` |
-| Default | `application/octet-stream` |
+Content-type detection is automatic based on file extension. The `GET /` route redirects to `/static/index.html`.
 
 ## Configuration
 
@@ -242,12 +206,12 @@ Environment variables loaded via the `envoy` package, following 12-factor app pr
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | 3000 | HTTP server port |
+| `PORT` | 3777 | HTTP server port |
 
 ```gleam
 envoy.get("PORT")
   |> result.try(int.parse)
-  |> result.unwrap(3000)
+  |> result.unwrap(3777)
 ```
 
 ## Dependency Graph
@@ -260,7 +224,8 @@ gleam_erlang 1.3.0     → gleam_stdlib
 gleam_json 3.1.0       → gleam_stdlib
 gleam_otp 1.2.0        → gleam_erlang, gleam_stdlib
 gleam_http 4.3.0       → gleam_stdlib
-simplifile 2.3.2       → filepath 1.1.2, gleam_stdlib
+mist 5.0.4             → gleam_erlang, gleam_http, gleam_otp, gleam_stdlib, glisten, gramps, logging
+wisp 2.2.1             → gleam_http, gleam_json, gleam_stdlib, mist, simplifile, logging, marceau
 envoy 1.1.0            → gleam_stdlib
 shared (local)         → gleam_stdlib, gleam_json
 ```
@@ -306,6 +271,5 @@ gleeunit 1.9.0         (testing framework, used by all packages)
 
 1. **Import errors**: Check package dependencies in `gleam.toml` - each package must explicitly declare its deps
 2. **Target mismatch**: Erlang-only modules (e.g., `gleam/otp/actor`) cannot be imported in the client package. JavaScript-only modules (e.g., Lustre DOM) cannot be imported in the server package
-3. **String types**: Gleam strings are Erlang binaries at runtime - FFI code must handle `<<>>` binary syntax, not Erlang strings (charlists)
-4. **Frontend not updating**: Run `make build` or `make release` to rebundle the Lustre app into `priv/static/js/app.js`
-5. **Port already in use**: The HTTP server will crash if the port is occupied - check with `lsof -i :3000`
+3. **Frontend not updating**: Run `make build` or `make release` to rebundle the Lustre app into `priv/static/js/app.js`
+4. **Port already in use**: The HTTP server will crash if the port is occupied - check with `lsof -i :3777`

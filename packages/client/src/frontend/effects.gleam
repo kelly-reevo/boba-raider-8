@@ -8,7 +8,7 @@ import gleam/javascript/promise
 import gleam/json
 import lustre/effect.{type Effect}
 
-@external(javascript, "./origin_ffi.mjs", "get_origin")
+@external(javascript, "./origin_impl.mjs", "get_origin")
 fn get_origin() -> String
 
 fn count_decoder() -> decode.Decoder(Int) {

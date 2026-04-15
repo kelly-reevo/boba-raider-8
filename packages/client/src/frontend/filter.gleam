@@ -1,7 +1,14 @@
-/// Todo filtering logic for the frontend
+/// Todo filtering logic and types for the frontend
 
 import gleam/bool
 import gleam/list
+
+/// Filter variants for todo list filtering
+pub type Filter {
+  All
+  Active
+  Completed
+}
 
 /// Represents a todo item with all its fields
 pub type TodoItem {
@@ -14,13 +21,6 @@ pub type TodoItem {
     created_at: String,
     updated_at: String,
   )
-}
-
-/// Filter variants for todo list filtering
-pub type Filter {
-  All
-  Active
-  Completed
 }
 
 /// Filter a list of todos based on the current filter state.

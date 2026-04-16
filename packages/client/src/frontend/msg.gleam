@@ -7,6 +7,7 @@ pub type HttpError {
   NetworkError
   DecodeError
   ServerError(Int)
+  ValidationError(List(String))
 }
 
 /// Msg type includes both legacy counter and new todo messages

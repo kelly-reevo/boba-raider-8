@@ -124,11 +124,11 @@ fn random_byte() -> Int {
 @external(erlang, "erlang", "system_time")
 fn erlang_system_time_microsecond() -> Int
 
-@external(erlang, "erlang", "phash2")
-fn erlang_self_hash() -> Int
+@external(erlang, "erlang", "unique_integer")
+fn erlang_unique_integer() -> Int
 
 fn erlang_self() -> Int {
-  erlang_self_hash()
+  erlang_unique_integer()
 }
 
 fn format_uuid(bytes: List(Int)) -> String {

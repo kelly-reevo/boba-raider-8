@@ -138,6 +138,32 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       let refresh_effect = effects.fetch_todos(filter_opt)
       #(Model(..model, loading: False, error: error_msg), refresh_effect)
     }
+
+    // ===== Retry Operations =====
+    msg.Retry(op) -> {
+      case op {
+        msg.LoadTodosOp -> {
+          let filter_opt = filter_state_to_string(model.filter)
+          #(Model(..model, loading: True, error: ""), effects.fetch_todos(filter_opt))
+        }
+        msg.SubmitTodoOp -> {
+          // Re-submit the form if we have valid data
+          case validate_create_form(model) {
+            True -> {
+              let effect = effects.create_todo(
+                model.form_title,
+                model.form_description,
+                model.form_priority,
+              )
+              #(Model(..model, loading: True, error: ""), effect)
+            }
+            False -> {
+              #(Model(..model, error: ""), effect.none())
+            }
+          }
+        }
+      }
+    }
   }
 }
 

@@ -44,8 +44,21 @@ fn render_error(error: String) -> Element(Msg) {
       html.div([], [])
     _ ->
       html.div(
-        [attribute.class("error-message"), attribute.attribute("data-testid", "todo-error")],
-        [element.text(error)],
+        [
+          attribute.class("error-banner"),
+          attribute.attribute("data-testid", "error-banner"),
+        ],
+        [
+          html.span([], [element.text(error)]),
+          html.button(
+            [
+              event.on_click(msg.Retry(msg.LoadTodosOp)),
+              attribute.class("retry-btn"),
+              attribute.attribute("data-testid", "retry-button"),
+            ],
+            [element.text("Retry")],
+          ),
+        ],
       )
   }
 }
@@ -153,22 +166,42 @@ fn render_content(model: Model) -> Element(Msg) {
 /// Render loading state
 fn render_loading() -> Element(Msg) {
   html.div(
-    [attribute.class("loading-state"), attribute.attribute("data-testid", "todos-loading")],
+    [
+      attribute.class("loading-indicator"),
+      attribute.attribute("data-testid", "loading-indicator"),
+    ],
     [element.text("Loading...")],
   )
 }
 
 /// Render empty state based on current filter
 fn render_empty_state(filter_state: FilterState) -> Element(Msg) {
-  let message = case filter_state {
-    model.All -> "No todos yet. Create one above!"
-    model.Active -> "No active todos. Great job!"
-    model.Completed -> "No completed todos yet."
+  case filter_state {
+    model.All ->
+      html.div(
+        [attribute.class("empty-state"), attribute.attribute("data-testid", "todos-list")],
+        [
+          html.div(
+            [attribute.attribute("data-testid", "empty-state-message")],
+            [element.text("No todos yet.")],
+          ),
+          html.div(
+            [attribute.attribute("data-testid", "empty-state-prompt")],
+            [element.text("Create your first todo above!")],
+          ),
+        ],
+      )
+    model.Active ->
+      html.div(
+        [attribute.class("empty-state"), attribute.attribute("data-testid", "todos-list")],
+        [element.text("No active todos. Great job!")],
+      )
+    model.Completed ->
+      html.div(
+        [attribute.class("empty-state"), attribute.attribute("data-testid", "todos-list")],
+        [element.text("No completed todos yet.")],
+      )
   }
-  html.div(
-    [attribute.class("empty-state"), attribute.attribute("data-testid", "todos-empty")],
-    [element.text(message)],
-  )
 }
 
 /// Render the todo list

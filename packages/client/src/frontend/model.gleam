@@ -2,7 +2,7 @@
 /// Extended MVU model with server-authoritative patterns
 
 import gleam/option.{type Option}
-import shared.{type Priority, type Todo}
+import shared.{type Priority, type Todo, Medium}
 
 /// Filter variants for todo list filtering
 pub type FilterState {

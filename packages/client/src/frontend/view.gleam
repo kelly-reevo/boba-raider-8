@@ -144,7 +144,7 @@ fn render_content(model: Model) -> Element(Msg) {
     False -> {
       let visible_todos = model.filter_todos(model)
       case list.is_empty(visible_todos) {
-        True -> render_empty_state(model.filter)
+        True -> render_empty_state(model.filter, model.todos)
         False -> render_todo_list(model, visible_todos)
       }
     }
@@ -159,15 +159,20 @@ fn render_loading() -> Element(Msg) {
   )
 }
 
-/// Render empty state based on current filter
-fn render_empty_state(filter_state: FilterState) -> Element(Msg) {
-  let message = case filter_state {
-    All -> "No todos yet. Create one above!"
-    Active -> "No active todos. Great job!"
-    Completed -> "No completed todos yet."
+/// Render empty state based on current filter and total todos
+fn render_empty_state(filter_state: FilterState, all_todos: List(shared.Todo)) -> Element(Msg) {
+  let message = case all_todos {
+    [] -> "No todos yet"
+    _ -> {
+      case filter_state {
+        All -> "No todos yet"
+        Active -> "No active todos. Great job!"
+        Completed -> "No completed todos yet."
+      }
+    }
   }
   html.div(
-    [attribute.class("empty-state"), attribute.attribute("data-testid", "todos-empty")],
+    [attribute.class("empty-state"), attribute.attribute("data-testid", "todo-list-empty")],
     [element.text(message)],
   )
 }
@@ -250,44 +255,63 @@ fn render_todo_item(model: Model, item: shared.Todo) -> Element(Msg) {
     False -> ""
   }
 
+  // Title attributes based on completion state
+  let title_attributes = case item.completed {
+    True -> [
+      attribute.class("todo-title todo-title-completed"),
+      attribute.style("text-decoration", "line-through"),
+      attribute.attribute("data-testid", "todo-title-" <> item.id),
+    ]
+    False -> [
+      attribute.class("todo-title"),
+      attribute.attribute("data-testid", "todo-title-" <> item.id),
+    ]
+  }
+
+  // Description element (only rendered if present)
+  let description_element = case item.description {
+    option.Some(desc) ->
+      html.div(
+        [attribute.class("todo-description"), attribute.attribute("data-testid", "todo-description-" <> item.id)],
+        [element.text(desc)],
+      )
+    option.None -> html.div([], [])
+  }
+
   html.li(
     [
       attribute.class("todo-item" <> completed_class <> priority_class <> confirming_class),
       attribute.attribute("data-testid", "todo-item-" <> item.id),
     ],
     [
-      // Checkbox for toggle
+      // Checkbox for toggle completion
       html.input([
         attribute.type_("checkbox"),
         attribute.checked(item.completed),
         event.on_check(fn(checked) { msg.ToggleTodo(item.id, checked) }),
-        attribute.attribute("data-testid", "toggle-todo-" <> item.id),
+        attribute.attribute("data-testid", "todo-checkbox-" <> item.id),
       ]),
       // Todo content
       html.div([attribute.class("todo-content")], [
+        html.span(title_attributes, [element.text(item.title)]),
+        description_element,
         html.span(
-          [attribute.class("todo-title"), attribute.attribute("data-testid", "todo-title-" <> item.id)],
-          [element.text(item.title)],
+          [attribute.class("todo-priority " <> priority_class), attribute.attribute("data-testid", "todo-priority-" <> item.id)],
+          [element.text(priority_text(item.priority))],
         ),
-        // Optional description
-        case item.description {
-          option.Some(desc) ->
-            html.span([attribute.class("todo-description")], [element.text(desc)])
-          option.None ->
-            html.span([], [])
-        },
-        html.span([attribute.class("todo-priority")], [
-          element.text(case item.priority {
-            shared.High -> "High"
-            shared.Medium -> "Medium"
-            shared.Low -> "Low"
-          }),
-        ]),
       ]),
       // Delete button or confirmation UI
       render_delete_section(model, item),
     ],
   )
+}
+
+fn priority_text(priority: shared.Priority) -> String {
+  case priority {
+    shared.High -> "High"
+    shared.Medium -> "Medium"
+    shared.Low -> "Low"
+  }
 }
 
 /// Render stats footer

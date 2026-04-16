@@ -1,10 +1,9 @@
-/// Todo filtering logic and re-exports for the frontend
-/// Types are now defined in model.gleam - this module provides filtering utilities
+/// Todo filtering logic and types for the frontend
 
 import gleam/list
 import shared.{type Todo}
 
-/// Re-export FilterState from model for backward compatibility
+/// Filter variants for todo list filtering
 pub type FilterState {
   All
   Active

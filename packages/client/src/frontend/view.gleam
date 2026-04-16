@@ -1,8 +1,7 @@
 /// HTML rendering for the todo application
 /// Includes all states: loading, empty, error, and populated
 
-import frontend/filter
-import frontend/model.{type FilterState, type Model}
+import frontend/model.{type FilterState, type Model, All, Active, Completed}
 import frontend/msg.{type Msg}
 import gleam/int
 import gleam/list
@@ -112,18 +111,20 @@ fn handle_priority_change(value: String) -> Msg {
 /// Render filter buttons
 fn render_filter_buttons(current_filter: FilterState) -> Element(Msg) {
   html.div([attribute.class("filters")], [
-    filter_button("All", model.All, current_filter),
-    filter_button("Active", model.Active, current_filter),
-    filter_button("Completed", model.Completed, current_filter),
+    filter_button("All", All, current_filter),
+    filter_button("Active", Active, current_filter),
+    filter_button("Completed", Completed, current_filter),
   ])
 }
 
-fn filter_button(label: String, filter_state: FilterState, current: FilterState) -> Element(Msg) {
+/// Public filter button element for rendering and testing
+/// Shows active state when filter_state matches current filter
+pub fn filter_button(label: String, filter_state: FilterState, current: FilterState) -> Element(Msg) {
   let is_active = filter_state == current
   let base_testid = case filter_state {
-    model.All -> "all"
-    model.Active -> "active"
-    model.Completed -> "completed"
+    All -> "all"
+    Active -> "active"
+    Completed -> "completed"
   }
   html.button(
     [
@@ -161,9 +162,9 @@ fn render_loading() -> Element(Msg) {
 /// Render empty state based on current filter
 fn render_empty_state(filter_state: FilterState) -> Element(Msg) {
   let message = case filter_state {
-    model.All -> "No todos yet. Create one above!"
-    model.Active -> "No active todos. Great job!"
-    model.Completed -> "No completed todos yet."
+    All -> "No todos yet. Create one above!"
+    Active -> "No active todos. Great job!"
+    Completed -> "No completed todos yet."
   }
   html.div(
     [attribute.class("empty-state"), attribute.attribute("data-testid", "todos-empty")],

@@ -1,4 +1,4 @@
-import frontend/msg.{type Msg}
+import frontend/msg.{type Msg, type HttpError, NetworkError, DecodeError, ServerError}
 import gleam/dynamic/decode
 import gleam/fetch
 import gleam/http
@@ -10,9 +10,6 @@ import gleam/option.{type Option, None, Some}
 import lustre/effect.{type Effect}
 import shared.{type Priority, type Todo}
 
-// Explicitly import Result constructors to avoid naming conflicts
-import gleam.{Ok, Error}
-
 @external(javascript, "./origin_ffi.mjs", "get_origin")
 fn get_origin() -> String
 
@@ -21,7 +18,7 @@ fn count_decoder() -> decode.Decoder(Int) {
   decode.success(count)
 }
 
-fn api_get(path: String, to_msg: fn(Result(Int, msg.HttpError)) -> Msg) -> Effect(Msg) {
+fn api_get(path: String, to_msg: fn(Result(Int, HttpError)) -> Msg) -> Effect(Msg) {
   effect.from(fn(dispatch) {
     let assert Ok(req) = request.to(get_origin() <> path)
     fetch.send(req)
@@ -29,7 +26,7 @@ fn api_get(path: String, to_msg: fn(Result(Int, msg.HttpError)) -> Msg) -> Effec
     |> promise.map(fn(result) {
       case result {
         Ok(resp) -> decode_counter_response(resp, to_msg)
-        Error(_) -> to_msg(Error(msg.NetworkError))
+        Error(_) -> to_msg(Error(NetworkError))
       }
     })
     |> promise.tap(dispatch)
@@ -37,7 +34,7 @@ fn api_get(path: String, to_msg: fn(Result(Int, msg.HttpError)) -> Msg) -> Effec
   })
 }
 
-fn api_post(path: String, to_msg: fn(Result(Int, msg.HttpError)) -> Msg) -> Effect(Msg) {
+fn api_post(path: String, to_msg: fn(Result(Int, HttpError)) -> Msg) -> Effect(Msg) {
   effect.from(fn(dispatch) {
     let assert Ok(req) = request.to(get_origin() <> path)
     let req =
@@ -50,7 +47,7 @@ fn api_post(path: String, to_msg: fn(Result(Int, msg.HttpError)) -> Msg) -> Effe
     |> promise.map(fn(result) {
       case result {
         Ok(resp) -> decode_counter_response(resp, to_msg)
-        Error(_) -> to_msg(Error(msg.NetworkError))
+        Error(_) -> to_msg(Error(NetworkError))
       }
     })
     |> promise.tap(dispatch)
@@ -60,15 +57,15 @@ fn api_post(path: String, to_msg: fn(Result(Int, msg.HttpError)) -> Msg) -> Effe
 
 fn decode_counter_response(
   resp: response.Response(String),
-  to_msg: fn(Result(Int, msg.HttpError)) -> Msg,
+  to_msg: fn(Result(Int, HttpError)) -> Msg,
 ) -> Msg {
   case resp.status {
     status if status >= 200 && status <= 299 ->
       case json.parse(resp.body, count_decoder()) {
         Ok(count) -> to_msg(Ok(count))
-        Error(_) -> to_msg(Error(msg.DecodeError))
+        Error(_) -> to_msg(Error(DecodeError))
       }
-    status -> to_msg(Error(msg.ServerError(status)))
+    status -> to_msg(Error(ServerError(status)))
   }
 }
 
@@ -115,10 +112,34 @@ fn todo_list_decoder() -> decode.Decoder(List(Todo)) {
   decode.list(todo_decoder())
 }
 
+/// Effect type representing an HTTP operation with URL and decoder
+/// Used for testing API integration
+pub type HttpEffect {
+  HttpEffect(url: String, decoder: decode.Decoder(List(Todo)))
+}
+
+/// Fetch todos with optional filter query parameter
+/// Returns an Effect for Lustre integration
+pub fn fetch_todos(filter: Option(String)) -> Effect(Msg) {
+  let path = case filter {
+    Some(f) -> "/api/todos?filter=" <> f
+    None -> "/api/todos"
+  }
+  todo_api_get(path, msg.TodosLoaded)
+}
+
+/// Decode a todos response - exposed for testing
+pub fn decode_todos_response(json_str: String) -> Result(List(Todo), HttpError) {
+  case json.parse(json_str, todo_list_decoder()) {
+    Ok(todos) -> Ok(todos)
+    Error(_) -> Error(DecodeError)
+  }
+}
+
 /// Generic API GET for todo endpoints
 fn todo_api_get(
   path: String,
-  to_msg: fn(Result(List(Todo), msg.HttpError)) -> Msg,
+  to_msg: fn(Result(List(Todo), HttpError)) -> Msg,
 ) -> Effect(Msg) {
   effect.from(fn(dispatch) {
     let assert Ok(req) = request.to(get_origin() <> path)
@@ -127,7 +148,7 @@ fn todo_api_get(
     |> promise.map(fn(result) {
       case result {
         Ok(resp) -> decode_todo_list_response(resp, to_msg)
-        Error(_) -> to_msg(Error(msg.NetworkError))
+        Error(_) -> to_msg(Error(NetworkError))
       }
     })
     |> promise.tap(dispatch)
@@ -137,15 +158,15 @@ fn todo_api_get(
 
 fn decode_todo_list_response(
   resp: response.Response(String),
-  to_msg: fn(Result(List(Todo), msg.HttpError)) -> Msg,
+  to_msg: fn(Result(List(Todo), HttpError)) -> Msg,
 ) -> Msg {
   case resp.status {
     status if status >= 200 && status <= 299 ->
       case json.parse(resp.body, todo_list_decoder()) {
         Ok(todos) -> to_msg(Ok(todos))
-        Error(_) -> to_msg(Error(msg.DecodeError))
+        Error(_) -> to_msg(Error(DecodeError))
       }
-    status -> to_msg(Error(msg.ServerError(status)))
+    status -> to_msg(Error(ServerError(status)))
   }
 }
 
@@ -153,7 +174,7 @@ fn decode_todo_list_response(
 fn todo_api_post(
   path: String,
   body: String,
-  to_msg: fn(Result(Todo, msg.HttpError)) -> Msg,
+  to_msg: fn(Result(Todo, HttpError)) -> Msg,
 ) -> Effect(Msg) {
   effect.from(fn(dispatch) {
     let assert Ok(req) = request.to(get_origin() <> path)
@@ -167,7 +188,7 @@ fn todo_api_post(
     |> promise.map(fn(result) {
       case result {
         Ok(resp) -> decode_todo_response(resp, to_msg)
-        Error(_) -> to_msg(Error(msg.NetworkError))
+        Error(_) -> to_msg(Error(NetworkError))
       }
     })
     |> promise.tap(dispatch)
@@ -177,15 +198,15 @@ fn todo_api_post(
 
 fn decode_todo_response(
   resp: response.Response(String),
-  to_msg: fn(Result(Todo, msg.HttpError)) -> Msg,
+  to_msg: fn(Result(Todo, HttpError)) -> Msg,
 ) -> Msg {
   case resp.status {
     status if status >= 200 && status <= 299 ->
       case json.parse(resp.body, todo_decoder()) {
         Ok(item) -> to_msg(Ok(item))
-        Error(_) -> to_msg(Error(msg.DecodeError))
+        Error(_) -> to_msg(Error(DecodeError))
       }
-    status -> to_msg(Error(msg.ServerError(status)))
+    status -> to_msg(Error(ServerError(status)))
   }
 }
 
@@ -193,7 +214,7 @@ fn decode_todo_response(
 fn todo_api_patch(
   path: String,
   body: String,
-  to_msg: fn(Result(Todo, msg.HttpError)) -> Msg,
+  to_msg: fn(Result(Todo, HttpError)) -> Msg,
 ) -> Effect(Msg) {
   effect.from(fn(dispatch) {
     let assert Ok(req) = request.to(get_origin() <> path)
@@ -207,7 +228,7 @@ fn todo_api_patch(
     |> promise.map(fn(result) {
       case result {
         Ok(resp) -> decode_todo_response(resp, to_msg)
-        Error(_) -> to_msg(Error(msg.NetworkError))
+        Error(_) -> to_msg(Error(NetworkError))
       }
     })
     |> promise.tap(dispatch)
@@ -218,7 +239,7 @@ fn todo_api_patch(
 /// Generic API DELETE for todo deletion
 fn todo_api_delete(
   path: String,
-  to_msg: fn(Result(String, msg.HttpError)) -> Msg,
+  to_msg: fn(Result(String, HttpError)) -> Msg,
 ) -> Effect(Msg) {
   effect.from(fn(dispatch) {
     let assert Ok(req) = request.to(get_origin() <> path)
@@ -236,10 +257,10 @@ fn todo_api_delete(
               let id = extract_id_from_path(path)
               to_msg(Ok(id))
             }
-            status -> to_msg(Error(msg.ServerError(status)))
+            status -> to_msg(Error(ServerError(status)))
           }
         }
-        Error(_) -> to_msg(Error(msg.NetworkError))
+        Error(_) -> to_msg(Error(NetworkError))
       }
     })
     |> promise.tap(dispatch)
@@ -256,15 +277,6 @@ fn extract_id_from_path(path: String) -> String {
 }
 
 // ===== Public Todo Effect Functions =====
-
-/// Fetch all todos with optional filter
-pub fn fetch_todos(filter: Option(String)) -> Effect(Msg) {
-  let path = case filter {
-    Some(f) -> "/api/todos?filter=" <> f
-    None -> "/api/todos"
-  }
-  todo_api_get(path, msg.TodosLoaded)
-}
 
 /// Create a new todo
 pub fn create_todo(title: String, description: String, priority: Priority) -> Effect(Msg) {

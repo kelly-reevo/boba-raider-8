@@ -1,7 +1,7 @@
 /// Message type for user actions and API responses in the application
 
 import frontend/model.{type FilterState}
-import shared.{type AppError, type Priority, type Todo}
+import shared.{type Priority, type Todo}
 
 /// HTTP error types for API operations
 pub type HttpError {

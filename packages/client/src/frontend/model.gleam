@@ -1,7 +1,7 @@
 /// Application state for the todo app
 /// Extended MVU model with server-authoritative patterns
 
-import gleam/option.{type Option}
+import gleam/list
 import shared.{type Priority, type Todo}
 
 /// Filter variants for todo list filtering
@@ -66,42 +66,19 @@ fn do_count_active(todos: List(Todo), acc: Int) -> Int {
   }
 }
 
-/// Filter todos based on current filter state
+/// Filter a list of todos based on the filter state
+/// - All: returns all todos regardless of completion status
+/// - Active: returns only todos with completed=False
+/// - Completed: returns only todos with completed=True
+pub fn apply_filter(todos: List(Todo), filter_state: FilterState) -> List(Todo) {
+  case filter_state {
+    All -> todos
+    Active -> list.filter(todos, fn(t) { !t.completed })
+    Completed -> list.filter(todos, fn(t) { t.completed })
+  }
+}
+
+/// Filter todos based on current model's filter state
 pub fn filter_todos(model: Model) -> List(Todo) {
-  case model.filter {
-    All -> model.todos
-    Active -> filter_active(model.todos, [])
-    Completed -> filter_completed(model.todos, [])
-  }
-}
-
-fn filter_active(todos: List(Todo), acc: List(Todo)) -> List(Todo) {
-  case todos {
-    [] -> acc |> reverse_list([])
-    [first, ..rest] -> {
-      case first.completed {
-        False -> filter_active(rest, [first, ..acc])
-        True -> filter_active(rest, acc)
-      }
-    }
-  }
-}
-
-fn filter_completed(todos: List(Todo), acc: List(Todo)) -> List(Todo) {
-  case todos {
-    [] -> acc |> reverse_list([])
-    [first, ..rest] -> {
-      case first.completed {
-        True -> filter_completed(rest, [first, ..acc])
-        False -> filter_completed(rest, acc)
-      }
-    }
-  }
-}
-
-fn reverse_list(list: List(a), acc: List(a)) -> List(a) {
-  case list {
-    [] -> acc
-    [first, ..rest] -> reverse_list(rest, [first, ..acc])
-  }
+  apply_filter(model.todos, model.filter)
 }

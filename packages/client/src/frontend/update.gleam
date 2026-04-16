@@ -2,7 +2,7 @@
 /// Server-authoritative: user actions fire API calls, responses update state
 
 import frontend/effects
-import frontend/model.{type FilterState, type Model, Model}
+import frontend/model.{type FilterState, type Model, Model, All, Active, Completed}
 import frontend/msg.{type Msg}
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -144,9 +144,9 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 /// Convert FilterState to optional query parameter
 fn filter_state_to_string(filter: FilterState) -> Option(String) {
   case filter {
-    model.All -> None
-    model.Active -> Some("active")
-    model.Completed -> Some("completed")
+    All -> None
+    Active -> Some("active")
+    Completed -> Some("completed")
   }
 }
 

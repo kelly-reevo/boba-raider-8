@@ -61,13 +61,13 @@ pub type Msg {
   SetFilter(FilterState)
 
   // Form field updates
-  SetFormTitle(String)
-  SetFormDescription(String)
-  SetFormPriority(Priority)
+  UpdateFormTitle(String)
+  UpdateFormDescription(String)
+  UpdateFormPriority(String)
 
   // Todo creation
   SubmitCreateTodo
-  CreateTodoResult(Result(Todo, HttpError))
+  CreateTodoResponse(Result(Todo, HttpError))
 
   // Todo toggle (complete/incomplete)
   ToggleTodo(id: String, completed: Bool)

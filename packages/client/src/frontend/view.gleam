@@ -44,7 +44,7 @@ fn render_error(error: String) -> Element(Msg) {
       html.div([], [])
     _ ->
       html.div(
-        [attribute.class("error-message"), attribute.attribute("data-testid", "todo-error")],
+        [attribute.class("error-message"), attribute.attribute("data-testid", "form-error-message")],
         [element.text(error)],
       )
   }
@@ -60,8 +60,8 @@ fn render_create_form(model: Model) -> Element(Msg) {
         attribute.type_("text"),
         attribute.placeholder("What needs to be done?"),
         attribute.value(model.form_title),
-        event.on_input(msg.SetFormTitle),
-        attribute.attribute("data-testid", "form-title-input"),
+        event.on_input(msg.UpdateFormTitle),
+        attribute.attribute("data-testid", "todo-title-input"),
       ]),
     ]),
     // Description input
@@ -70,20 +70,23 @@ fn render_create_form(model: Model) -> Element(Msg) {
       html.input([
         attribute.type_("text"),
         attribute.placeholder("Add details (optional)"),
-        attribute.value(model.form_description),
-        event.on_input(msg.SetFormDescription),
-        attribute.attribute("data-testid", "form-description-input"),
+        attribute.value(case model.form_description {
+          option.Some(desc) -> desc
+          option.None -> ""
+        }),
+        event.on_input(msg.UpdateFormDescription),
+        attribute.attribute("data-testid", "todo-description-input"),
       ]),
     ]),
     // Priority select
     html.div([attribute.class("form-field")], [
       html.label([], [element.text("Priority")]),
       html.select(
-        [event.on_input(handle_priority_change), attribute.attribute("data-testid", "form-priority-input")],
+        [event.on_input(msg.UpdateFormPriority), attribute.attribute("data-testid", "todo-priority-select")],
         [
-          html.option([attribute.value("high"), attribute.selected(model.form_priority == shared.High)], "High"),
-          html.option([attribute.value("medium"), attribute.selected(model.form_priority == shared.Medium)], "Medium"),
-          html.option([attribute.value("low"), attribute.selected(model.form_priority == shared.Low)], "Low"),
+          html.option([attribute.value("high"), attribute.selected(model.form_priority == "high")], "High"),
+          html.option([attribute.value("medium"), attribute.selected(model.form_priority == "medium")], "Medium"),
+          html.option([attribute.value("low"), attribute.selected(model.form_priority == "low")], "Low"),
         ],
       ),
     ]),
@@ -92,21 +95,11 @@ fn render_create_form(model: Model) -> Element(Msg) {
       [
         event.on_click(msg.SubmitCreateTodo),
         attribute.disabled(model.loading),
-        attribute.attribute("data-testid", "submit-create-todo-btn"),
+        attribute.attribute("data-testid", "todo-submit-btn"),
       ],
       [element.text("Add Todo")],
     ),
   ])
-}
-
-/// Handle priority dropdown change
-fn handle_priority_change(value: String) -> Msg {
-  case value {
-    "high" -> msg.SetFormPriority(shared.High)
-    "medium" -> msg.SetFormPriority(shared.Medium)
-    "low" -> msg.SetFormPriority(shared.Low)
-    _ -> msg.SetFormPriority(shared.Medium)
-  }
 }
 
 /// Render filter buttons

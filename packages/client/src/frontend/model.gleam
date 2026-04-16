@@ -1,8 +1,8 @@
 /// Application state for the todo app
 /// Extended MVU model with server-authoritative patterns
 
-import gleam/option.{type Option}
-import shared.{type Priority, type Todo}
+import gleam/option.{type Option, None}
+import shared.{type Todo}
 
 /// Filter variants for todo list filtering
 pub type FilterState {
@@ -19,8 +19,8 @@ pub type Model {
     filter: FilterState,
     // Form fields for creating todos
     form_title: String,
-    form_description: String,
-    form_priority: Priority,
+    form_description: Option(String),
+    form_priority: String,
     // UI state
     loading: Bool,
     error: String,
@@ -33,11 +33,16 @@ pub fn default() -> Model {
     todos: [],
     filter: All,
     form_title: "",
-    form_description: "",
-    form_priority: shared.Medium,
+    form_description: None,
+    form_priority: "medium",
     loading: False,
     error: "",
   )
+}
+
+/// Empty model helper for tests
+pub fn empty_model() -> Model {
+  default()
 }
 
 /// Check if there are any todos

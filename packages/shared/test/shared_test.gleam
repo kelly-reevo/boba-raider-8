@@ -7,7 +7,7 @@ pub fn main() {
 }
 
 pub fn error_message_test() {
-  shared.NotFound("item")
+  shared.NotFound
   |> shared.error_message
-  |> should.equal("Not found: item")
+  |> should.equal("Not found")
 }

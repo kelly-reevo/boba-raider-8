@@ -3,6 +3,7 @@ import frontend/model.{type Model}
 import frontend/msg.{type Msg}
 import frontend/update
 import frontend/view
+import gleam/option.{None}
 import lustre
 import lustre/effect.{type Effect}
 
@@ -13,5 +14,5 @@ pub fn main() {
 }
 
 fn init(_flags: Nil) -> #(Model, Effect(Msg)) {
-  #(model.default(), effects.fetch_counter())
+  #(model.default(), effects.fetch_todos(option.None))
 }

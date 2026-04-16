@@ -1,7 +1,6 @@
 /// HTML rendering for the todo application
 /// Includes all states: loading, empty, error, and populated
 
-import frontend/filter
 import frontend/model.{type FilterState, type Model}
 import frontend/msg.{type Msg}
 import gleam/int
@@ -44,7 +43,7 @@ fn render_error(error: String) -> Element(Msg) {
       html.div([], [])
     _ ->
       html.div(
-        [attribute.class("error-message"), attribute.attribute("data-testid", "todo-error")],
+        [attribute.class("error-message"), attribute.attribute("data-testid", "error-message")],
         [element.text(error)],
       )
   }
@@ -144,7 +143,7 @@ fn render_content(model: Model) -> Element(Msg) {
       let visible_todos = model.filter_todos(model)
       case list.is_empty(visible_todos) {
         True -> render_empty_state(model.filter)
-        False -> render_todo_list(visible_todos)
+        False -> render_todo_list(model, visible_todos)
       }
     }
   }
@@ -172,29 +171,86 @@ fn render_empty_state(filter_state: FilterState) -> Element(Msg) {
 }
 
 /// Render the todo list
-fn render_todo_list(todos: List(shared.Todo)) -> Element(Msg) {
+fn render_todo_list(model: Model, todos: List(shared.Todo)) -> Element(Msg) {
   html.ul(
     [attribute.class("todo-list"), attribute.attribute("data-testid", "todo-list")],
-    list.map(todos, render_todo_item),
+    list.map(todos, fn(t) { render_todo_item(model, t) }),
   )
 }
 
+/// Check if a specific todo is in confirmation state
+fn is_confirming_delete(model: Model, todo_id: String) -> Bool {
+  case model.delete_confirming_id {
+    option.Some(id) if id == todo_id -> True
+    _ -> False
+  }
+}
+
+/// Render delete button or confirmation dialog
+fn render_delete_section(model: Model, item: shared.Todo) -> Element(Msg) {
+  let is_confirming = is_confirming_delete(model, item.id)
+
+  case is_confirming {
+    // Normal delete button
+    False ->
+      html.button(
+        [
+          event.on_click(msg.DeleteClicked(item.id)),
+          attribute.class("delete-btn"),
+          attribute.attribute("data-testid", "delete-btn-" <> item.id),
+        ],
+        [element.text("Delete")],
+      )
+
+    // Confirmation dialog
+    True ->
+      html.div(
+        [attribute.class("confirm-dialog"), attribute.attribute("data-testid", "confirm-dialog")],
+        [
+          html.span([attribute.class("confirm-text")], [element.text("Delete?")]),
+          html.button(
+            [
+              event.on_click(msg.DeleteClicked(item.id)),
+              attribute.class("confirm-delete-btn"),
+              attribute.attribute("data-testid", "confirm-delete-btn"),
+            ],
+            [element.text("Yes")],
+          ),
+          html.button(
+            [
+              event.on_click(msg.CancelDelete),
+              attribute.class("cancel-delete-btn"),
+              attribute.attribute("data-testid", "cancel-delete-btn"),
+            ],
+            [element.text("No")],
+          ),
+        ],
+      )
+  }
+}
+
 /// Render a single todo item
-fn render_todo_item(item: shared.Todo) -> Element(Msg) {
+fn render_todo_item(model: Model, item: shared.Todo) -> Element(Msg) {
   let completed_class = case item.completed {
-    True -> "completed"
+    True -> " completed"
     False -> ""
   }
 
   let priority_class = case item.priority {
-    shared.High -> "priority-high"
-    shared.Medium -> "priority-medium"
-    shared.Low -> "priority-low"
+    shared.High -> " priority-high"
+    shared.Medium -> " priority-medium"
+    shared.Low -> " priority-low"
+  }
+
+  let is_confirming = is_confirming_delete(model, item.id)
+  let confirming_class = case is_confirming {
+    True -> " confirming-delete"
+    False -> ""
   }
 
   html.li(
     [
-      attribute.class("todo-item " <> completed_class <> " " <> priority_class),
+      attribute.class("todo-item" <> completed_class <> priority_class <> confirming_class),
       attribute.attribute("data-testid", "todo-item-" <> item.id),
     ],
     [
@@ -207,7 +263,10 @@ fn render_todo_item(item: shared.Todo) -> Element(Msg) {
       ]),
       // Todo content
       html.div([attribute.class("todo-content")], [
-        html.span([attribute.class("todo-title")], [element.text(item.title)]),
+        html.span(
+          [attribute.class("todo-title"), attribute.attribute("data-testid", "todo-title-" <> item.id)],
+          [element.text(item.title)],
+        ),
         // Optional description
         case item.description {
           option.Some(desc) ->
@@ -223,15 +282,8 @@ fn render_todo_item(item: shared.Todo) -> Element(Msg) {
           }),
         ]),
       ]),
-      // Delete button
-      html.button(
-        [
-          event.on_click(msg.DeleteTodo(item.id)),
-          attribute.class("delete-btn"),
-          attribute.attribute("data-testid", "delete-todo-" <> item.id),
-        ],
-        [element.text("Delete")],
-      ),
+      // Delete button or confirmation UI
+      render_delete_section(model, item),
     ],
   )
 }

@@ -73,7 +73,9 @@ pub type Msg {
   ToggleTodo(id: String, completed: Bool)
   ToggleResult(Result(Todo, HttpError))
 
-  // Todo deletion
+  // Todo deletion (two-phase with confirmation)
+  DeleteClicked(id: String)
+  CancelDelete
   DeleteTodo(id: String)
-  DeleteResult(Result(String, HttpError))
+  TodoDeleted(Result(String, HttpError))
 }

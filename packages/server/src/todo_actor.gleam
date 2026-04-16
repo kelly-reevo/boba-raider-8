@@ -4,7 +4,7 @@ import gleam/list
 import gleam/option.{type Option}
 import gleam/result
 import shared.{type AppError, type Priority, type Todo, NotFound, Todo}
-import todo_validation.{type TodoPatch}
+import shared/todo_validation.{type TodoPatch}
 
 /// Messages supported by the todo actor
 pub type TodoMsg {

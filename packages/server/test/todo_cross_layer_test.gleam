@@ -9,7 +9,7 @@ import shared.{type AppError, type Priority, type Todo, High, Low, Medium}
 import todo_actor.{
   type TodoMsg, CreateTodo, DeleteTodo, GetAllTodos, GetTodoById, UpdateTodo,
 }
-import todo_validation
+import shared/todo_validation
 
 pub fn main() {
   gleeunit.main()

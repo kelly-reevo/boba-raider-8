@@ -38,13 +38,9 @@ pub fn validation_returns_valid_priority_test() {
 pub fn validation_rejects_invalid_priority_test() {
   let result = todo_validation.validate_todo_input("Task", None, "urgent")
 
-  case result {
-    Error(errors) -> {
-      list.any(errors, fn(e) { string.contains(e, "priority") })
-      |> should.be_true
-    }
-    Ok(_) -> should.fail()
-  }
+  let assert Error(errors) = result
+  list.any(errors, fn(e) { string.contains(e, "priority") })
+  |> should.be_true
 }
 
 /// Bridge: Validation produces error format compatible with shared.AppError
@@ -52,10 +48,7 @@ pub fn validation_rejects_invalid_priority_test() {
 pub fn validation_errors_compatible_with_app_error_test() {
   let result = todo_validation.validate_todo_input("", None, "invalid")
 
-  let errors = case result {
-    Error(errs) -> errs
-    Ok(_) -> should.fail()
-  }
+  let assert Error(errors) = result
 
   // These errors can be wrapped in shared.InvalidInput for API responses
   let app_error = shared.InvalidInput(errors)
@@ -98,14 +91,14 @@ pub fn validation_output_feeds_actor_create_test() {
 pub fn actor_create_returns_shared_todo_type_test() {
   let assert Ok(todo_subject) = todo_actor.start()
 
-  let todo = todo_actor.create_todo(todo_subject, "Test task", None, High)
+  let created = todo_actor.create_todo(todo_subject, "Test task", None, High)
 
   // Verify it's the shared.Todo type with all expected fields
-  todo.id |> string.length |> should.equal(36) // UUID length
-  todo.title |> should.equal("Test task")
-  todo.description |> should.equal(None)
-  todo.priority |> should.equal(High)
-  todo.completed |> should.be_false
+  created.id |> string.length |> should.equal(36) // UUID length
+  created.title |> should.equal("Test task")
+  created.description |> should.equal(None)
+  created.priority |> should.equal(High)
+  created.completed |> should.be_false
 }
 
 /// Bridge: Actor stores and returns List(Todo) from shared package
@@ -136,7 +129,7 @@ pub fn actor_get_by_id_returns_shared_result_type_test() {
   // Get existing returns Ok(Todo)
   let result = todo_actor.get_todo(todo_subject, created.id)
   case result {
-    Ok(todo) -> todo.id |> should.equal(created.id)
+    Ok(t) -> t.id |> should.equal(created.id)
     Error(_) -> should.fail()
   }
 
@@ -299,10 +292,7 @@ pub fn full_update_flow_validation_patch_to_actor_test() {
 pub fn validation_errors_convert_to_shared_app_error_test() {
   let result = todo_validation.validate_todo_input("", Some("x"), "invalid")
 
-  let errors = case result {
-    Error(errs) -> errs
-    Ok(_) -> should.fail()
-  }
+  let assert Error(errors) = result
 
   // Convert to shared error type for API response
   let app_error: AppError = shared.InvalidInput(errors)

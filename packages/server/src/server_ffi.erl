@@ -1,5 +1,5 @@
 -module(server_ffi).
--export([start/2, stop/1]).
+-export([start/2, stop/1, generate_uuid/0]).
 
 start(Port, Handler) ->
     ErlHandler = fun(ErlRequest) ->
@@ -41,3 +41,13 @@ gleam_to_erl_response({response, Status, Headers, Body}) ->
 to_binary(V) when is_binary(V) -> V;
 to_binary(V) when is_list(V) -> list_to_binary(V);
 to_binary(V) when is_atom(V) -> atom_to_binary(V).
+
+generate_uuid() ->
+    % Generate a unique ID using erlang:unique_integer and format as 36-char hex
+    % This produces a UUID-like string (without dashes) that's 36 characters
+    Int1 = erlang:unique_integer([positive]),
+    Int2 = erlang:unique_integer([positive]),
+    Int3 = erlang:unique_integer([positive]),
+    % Format as 36 character hex string (12+12+12 = 36)
+    Fmt = io_lib:format("~12.16.0b~12.16.0b~12.16.0b", [Int1, Int2, Int3]),
+    list_to_binary(Fmt).

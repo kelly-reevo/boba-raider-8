@@ -203,7 +203,7 @@ fn render_todo_item(item: shared.Todo) -> Element(Msg) {
         attribute.type_("checkbox"),
         attribute.checked(item.completed),
         event.on_check(fn(checked) { msg.ToggleTodo(item.id, checked) }),
-        attribute.attribute("data-testid", "toggle-todo-" <> item.id),
+        attribute.attribute("data-testid", "todo-checkbox-" <> item.id),
       ]),
       // Todo content
       html.div([attribute.class("todo-content")], [

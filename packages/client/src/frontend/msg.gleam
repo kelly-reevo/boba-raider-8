@@ -72,6 +72,7 @@ pub type Msg {
   // Todo toggle (complete/incomplete)
   ToggleTodo(id: String, completed: Bool)
   ToggleResult(Result(Todo, HttpError))
+  GotToggleResult(Result(Todo, HttpError))
 
   // Todo deletion
   DeleteTodo(id: String)

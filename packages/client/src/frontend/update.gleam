@@ -9,6 +9,11 @@ import gleam/option.{type Option, None, Some}
 import lustre/effect.{type Effect}
 import shared.{type Todo}
 
+/// No-op effect for testing
+pub fn none() -> Effect(Msg) {
+  effect.none()
+}
+
 /// Main update function handling all message types
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
@@ -93,30 +98,40 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
     // ===== Todo Toggle =====
     msg.ToggleTodo(id, completed) -> {
-      // Optimistic UI update - update local state immediately
+      // Don't optimistically update - wait for server confirmation
+      #(Model(..model, loading: True), effects.toggle_todo(id, completed))
+    }
+
+    msg.ToggleResult(Ok(updated_todo)) -> {
+      // Server confirmed - update the specific todo in the list
       let new_todos = list.map(model.todos, fn(t) {
-        case t.id == id {
-          True -> shared.Todo(..t, completed: completed)
+        case t.id == updated_todo.id {
+          True -> updated_todo
           False -> t
         }
       })
-      let optimistic_model = Model(..model, todos: new_todos, loading: True)
-      let effect = effects.toggle_todo(id, completed)
-      #(optimistic_model, effect)
+      #(Model(..model, todos: new_todos, loading: False, error: ""), effect.none())
     }
 
-    msg.ToggleResult(Ok(_updated_todo)) -> {
-      // Server confirmed - refresh the full list to ensure consistency
-      let filter_opt = filter_state_to_string(model.filter)
-      #(Model(..model, loading: False), effects.fetch_todos(filter_opt))
+    msg.ToggleResult(Error(_http_error)) -> {
+      // Revert by keeping original model state, show error
+      #(Model(..model, loading: False, error: "Failed to toggle todo. Please try again."), effect.none())
     }
 
-    msg.ToggleResult(Error(http_error)) -> {
-      let error_msg = msg.http_error_to_string(http_error)
-      // Revert optimistic update by fetching current server state
-      let filter_opt = filter_state_to_string(model.filter)
-      let refresh_effect = effects.fetch_todos(filter_opt)
-      #(Model(..model, loading: False, error: error_msg), refresh_effect)
+    msg.GotToggleResult(Ok(updated_todo)) -> {
+      // Server confirmed - update the specific todo in the list
+      let new_todos = list.map(model.todos, fn(t) {
+        case t.id == updated_todo.id {
+          True -> updated_todo
+          False -> t
+        }
+      })
+      #(Model(..model, todos: new_todos, loading: False, error: ""), effect.none())
+    }
+
+    msg.GotToggleResult(Error(_http_error)) -> {
+      // Revert by keeping original model state, show error
+      #(Model(..model, loading: False, error: "Failed to toggle todo. Please try again."), effect.none())
     }
 
     // ===== Todo Deletion =====

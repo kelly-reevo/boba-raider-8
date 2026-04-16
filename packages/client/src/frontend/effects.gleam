@@ -10,9 +10,6 @@ import gleam/option.{type Option, None, Some}
 import lustre/effect.{type Effect}
 import shared.{type Priority, type Todo}
 
-// Explicitly import Result constructors to avoid naming conflicts
-import gleam.{Ok, Error}
-
 @external(javascript, "./origin_ffi.mjs", "get_origin")
 fn get_origin() -> String
 

@@ -1,92 +1,159 @@
-import frontend/effects
-import frontend/filter.{type TodoItem, TodoItem}
-import frontend/model.{type Model, Model}
-import frontend/msg.{type Msg}
-import gleam/int
-import gleam/list
-import lustre/effect.{type Effect}
+/// State transitions for the MVU architecture
+/// Server-authoritative: user actions fire API calls, responses update state
 
+import frontend/effects
+import frontend/model.{type FilterState, type Model, Model}
+import frontend/msg.{type Msg}
+import gleam/list
+import gleam/option.{type Option, None, Some}
+import lustre/effect.{type Effect}
+import shared.{type Todo}
+
+/// Main update function handling all message types
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
-    // Legacy counter messages - for backward compatibility
+    // Legacy counter messages (backward compatibility)
     msg.Increment -> #(model, effects.post_increment())
     msg.Decrement -> #(model, effects.post_decrement())
     msg.Reset -> #(model, effects.post_reset())
     msg.GotCounter(Ok(_)) -> #(model, effect.none())
     msg.GotCounter(Error(_)) -> #(model, effect.none())
 
-    // New todo messages
-    msg.AddTodo -> {
-      case model.input_text {
-        "" -> #(model, effect.none())
-        text -> {
-          let now = current_timestamp()
-          let new_todo = TodoItem(
-            id: generate_id(model.todos),
-            title: text,
-            description: "",
-            priority: "medium",
-            completed: False,
-            created_at: now,
-            updated_at: now,
-          )
+    // ===== Todo Loading =====
+    msg.LoadTodos -> {
+      let filter_opt = filter_state_to_string(model.filter)
+      #(Model(..model, loading: True), effects.fetch_todos(filter_opt))
+    }
+
+    msg.TodosLoaded(Ok(todos)) -> {
+      #(Model(..model, todos: todos, loading: False, error: ""), effect.none())
+    }
+
+    msg.TodosLoaded(Error(http_error)) -> {
+      let error_msg = msg.http_error_to_string(http_error)
+      #(Model(..model, loading: False, error: error_msg), effect.none())
+    }
+
+    // ===== Filter State =====
+    msg.SetFilter(filter) -> {
+      let filter_opt = filter_state_to_string(filter)
+      #(Model(..model, filter: filter, loading: True), effects.fetch_todos(filter_opt))
+    }
+
+    // ===== Form Field Updates (local state only) =====
+    msg.SetFormTitle(text) -> {
+      #(Model(..model, form_title: text), effect.none())
+    }
+
+    msg.SetFormDescription(text) -> {
+      #(Model(..model, form_description: text), effect.none())
+    }
+
+    msg.SetFormPriority(priority) -> {
+      #(Model(..model, form_priority: priority), effect.none())
+    }
+
+    // ===== Todo Creation =====
+    msg.SubmitCreateTodo -> {
+      // Validate form before submitting
+      case validate_create_form(model) {
+        True -> {
+          // Clear form and set loading
           let new_model = Model(
-            todos: [new_todo, ..model.todos],
-            filter: model.filter,
-            input_text: "",
+            ..model,
+            form_title: "",
+            form_description: "",
+            form_priority: shared.Medium,
+            loading: True,
           )
-          #(new_model, effect.none())
+          let effect = effects.create_todo(
+            model.form_title,
+            model.form_description,
+            model.form_priority,
+          )
+          #(new_model, effect)
+        }
+        False -> {
+          // Validation failed - show error
+          #(Model(..model, error: "Title is required"), effect.none())
         }
       }
     }
 
-    msg.ToggleTodo(id) -> {
-      let new_todos = list.map(model.todos, fn(item) {
-        case item.id == id {
-          True -> TodoItem(..item, completed: !item.completed)
-          False -> item
+    msg.CreateTodoResult(Ok(created_todo)) -> {
+      // Add new todo to list and clear loading
+      let new_todos = [created_todo, ..model.todos]
+      #(Model(..model, todos: new_todos, loading: False, error: ""), effect.none())
+    }
+
+    msg.CreateTodoResult(Error(http_error)) -> {
+      let error_msg = msg.http_error_to_string(http_error)
+      #(Model(..model, loading: False, error: error_msg), effect.none())
+    }
+
+    // ===== Todo Toggle =====
+    msg.ToggleTodo(id, completed) -> {
+      // Optimistic UI update - update local state immediately
+      let new_todos = list.map(model.todos, fn(t) {
+        case t.id == id {
+          True -> shared.Todo(..t, completed: completed)
+          False -> t
         }
       })
-      let new_model = Model(..model, todos: new_todos)
-      #(new_model, effect.none())
+      let optimistic_model = Model(..model, todos: new_todos, loading: True)
+      let effect = effects.toggle_todo(id, completed)
+      #(optimistic_model, effect)
     }
 
+    msg.ToggleResult(Ok(_updated_todo)) -> {
+      // Server confirmed - refresh the full list to ensure consistency
+      let filter_opt = filter_state_to_string(model.filter)
+      #(Model(..model, loading: False), effects.fetch_todos(filter_opt))
+    }
+
+    msg.ToggleResult(Error(http_error)) -> {
+      let error_msg = msg.http_error_to_string(http_error)
+      // Revert optimistic update by fetching current server state
+      let filter_opt = filter_state_to_string(model.filter)
+      let refresh_effect = effects.fetch_todos(filter_opt)
+      #(Model(..model, loading: False, error: error_msg), refresh_effect)
+    }
+
+    // ===== Todo Deletion =====
     msg.DeleteTodo(id) -> {
-      let new_todos = list.filter(model.todos, fn(item) { item.id != id })
-      let new_model = Model(..model, todos: new_todos)
-      #(new_model, effect.none())
+      let effect = effects.delete_todo(id)
+      #(Model(..model, loading: True), effect)
     }
 
-    msg.SetFilter(filter) -> {
-      #(Model(..model, filter: filter), effect.none())
+    msg.DeleteResult(Ok(deleted_id)) -> {
+      // Remove from local list and clear loading
+      let new_todos = list.filter(model.todos, fn(t) { t.id != deleted_id })
+      #(Model(..model, todos: new_todos, loading: False, error: ""), effect.none())
     }
 
-    msg.UpdateInput(text) -> {
-      #(Model(..model, input_text: text), effect.none())
+    msg.DeleteResult(Error(http_error)) -> {
+      let error_msg = msg.http_error_to_string(http_error)
+      // Refresh from server to ensure consistency
+      let filter_opt = filter_state_to_string(model.filter)
+      let refresh_effect = effects.fetch_todos(filter_opt)
+      #(Model(..model, loading: False, error: error_msg), refresh_effect)
     }
   }
 }
 
-fn generate_id(todos: List(TodoItem)) -> String {
-  let max_id = list.fold(todos, 0, fn(acc, item) {
-    case parse_id(item.id) {
-      num if num > acc -> num
-      _ -> acc
-    }
-  })
-  "todo-" <> int.to_string(max_id + 1)
-}
-
-fn parse_id(id: String) -> Int {
-  case id {
-    "todo-" <> num ->
-      case int.parse(num) {
-        Ok(n) -> n
-        Error(_) -> 0
-      }
-    _ -> 0
+/// Convert FilterState to optional query parameter
+fn filter_state_to_string(filter: FilterState) -> Option(String) {
+  case filter {
+    model.All -> None
+    model.Active -> Some("active")
+    model.Completed -> Some("completed")
   }
 }
 
-@external(javascript, "./timestamp_ffi.mjs", "now")
-fn current_timestamp() -> String
+/// Validate create form has required fields
+fn validate_create_form(model: Model) -> Bool {
+  case model.form_title {
+    "" -> False
+    _ -> True
+  }
+}

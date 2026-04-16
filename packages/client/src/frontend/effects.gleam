@@ -6,7 +6,12 @@ import gleam/http/request
 import gleam/http/response
 import gleam/javascript/promise
 import gleam/json
+import gleam/option.{type Option, None, Some}
 import lustre/effect.{type Effect}
+import shared.{type Priority, type Todo}
+
+// Explicitly import Result constructors to avoid naming conflicts
+import gleam.{Ok, Error}
 
 @external(javascript, "./origin_ffi.mjs", "get_origin")
 fn get_origin() -> String
@@ -81,4 +86,216 @@ pub fn post_decrement() -> Effect(Msg) {
 
 pub fn post_reset() -> Effect(Msg) {
   api_post("/api/counter/reset", msg.GotCounter)
+}
+
+// ===== Todo API Effects =====
+
+/// Decoder for a single Todo
+fn todo_decoder() -> decode.Decoder(Todo) {
+  use id <- decode.field("id", decode.string)
+  use title <- decode.field("title", decode.string)
+  use description <- decode.field("description", decode.optional(decode.string))
+  use priority <- decode.field("priority", priority_decoder())
+  use completed <- decode.field("completed", decode.bool)
+  decode.success(shared.Todo(id:, title:, description:, priority:, completed:))
+}
+
+fn priority_decoder() -> decode.Decoder(Priority) {
+  use str <- decode.then(decode.string)
+  case str {
+    "high" -> decode.success(shared.High)
+    "medium" -> decode.success(shared.Medium)
+    "low" -> decode.success(shared.Low)
+    _ -> decode.failure(shared.Medium, "Priority")
+  }
+}
+
+/// Decoder for list of todos
+fn todo_list_decoder() -> decode.Decoder(List(Todo)) {
+  decode.list(todo_decoder())
+}
+
+/// Generic API GET for todo endpoints
+fn todo_api_get(
+  path: String,
+  to_msg: fn(Result(List(Todo), msg.HttpError)) -> Msg,
+) -> Effect(Msg) {
+  effect.from(fn(dispatch) {
+    let assert Ok(req) = request.to(get_origin() <> path)
+    fetch.send(req)
+    |> promise.try_await(fetch.read_text_body)
+    |> promise.map(fn(result) {
+      case result {
+        Ok(resp) -> decode_todo_list_response(resp, to_msg)
+        Error(_) -> to_msg(Error(msg.NetworkError))
+      }
+    })
+    |> promise.tap(dispatch)
+    Nil
+  })
+}
+
+fn decode_todo_list_response(
+  resp: response.Response(String),
+  to_msg: fn(Result(List(Todo), msg.HttpError)) -> Msg,
+) -> Msg {
+  case resp.status {
+    status if status >= 200 && status <= 299 ->
+      case json.parse(resp.body, todo_list_decoder()) {
+        Ok(todos) -> to_msg(Ok(todos))
+        Error(_) -> to_msg(Error(msg.DecodeError))
+      }
+    status -> to_msg(Error(msg.ServerError(status)))
+  }
+}
+
+/// Generic API POST for todo creation
+fn todo_api_post(
+  path: String,
+  body: String,
+  to_msg: fn(Result(Todo, msg.HttpError)) -> Msg,
+) -> Effect(Msg) {
+  effect.from(fn(dispatch) {
+    let assert Ok(req) = request.to(get_origin() <> path)
+    let req =
+      req
+      |> request.set_method(http.Post)
+      |> request.set_header("content-type", "application/json")
+      |> request.set_body(body)
+    fetch.send(req)
+    |> promise.try_await(fetch.read_text_body)
+    |> promise.map(fn(result) {
+      case result {
+        Ok(resp) -> decode_todo_response(resp, to_msg)
+        Error(_) -> to_msg(Error(msg.NetworkError))
+      }
+    })
+    |> promise.tap(dispatch)
+    Nil
+  })
+}
+
+fn decode_todo_response(
+  resp: response.Response(String),
+  to_msg: fn(Result(Todo, msg.HttpError)) -> Msg,
+) -> Msg {
+  case resp.status {
+    status if status >= 200 && status <= 299 ->
+      case json.parse(resp.body, todo_decoder()) {
+        Ok(item) -> to_msg(Ok(item))
+        Error(_) -> to_msg(Error(msg.DecodeError))
+      }
+    status -> to_msg(Error(msg.ServerError(status)))
+  }
+}
+
+/// Generic API PATCH for todo updates
+fn todo_api_patch(
+  path: String,
+  body: String,
+  to_msg: fn(Result(Todo, msg.HttpError)) -> Msg,
+) -> Effect(Msg) {
+  effect.from(fn(dispatch) {
+    let assert Ok(req) = request.to(get_origin() <> path)
+    let req =
+      req
+      |> request.set_method(http.Patch)
+      |> request.set_header("content-type", "application/json")
+      |> request.set_body(body)
+    fetch.send(req)
+    |> promise.try_await(fetch.read_text_body)
+    |> promise.map(fn(result) {
+      case result {
+        Ok(resp) -> decode_todo_response(resp, to_msg)
+        Error(_) -> to_msg(Error(msg.NetworkError))
+      }
+    })
+    |> promise.tap(dispatch)
+    Nil
+  })
+}
+
+/// Generic API DELETE for todo deletion
+fn todo_api_delete(
+  path: String,
+  to_msg: fn(Result(String, msg.HttpError)) -> Msg,
+) -> Effect(Msg) {
+  effect.from(fn(dispatch) {
+    let assert Ok(req) = request.to(get_origin() <> path)
+    let req =
+      req
+      |> request.set_method(http.Delete)
+    fetch.send(req)
+    |> promise.try_await(fetch.read_text_body)
+    |> promise.map(fn(result) {
+      case result {
+        Ok(resp) -> {
+          case resp.status {
+            status if status >= 200 && status <= 299 -> {
+              // Extract id from path /api/todos/:id
+              let id = extract_id_from_path(path)
+              to_msg(Ok(id))
+            }
+            status -> to_msg(Error(msg.ServerError(status)))
+          }
+        }
+        Error(_) -> to_msg(Error(msg.NetworkError))
+      }
+    })
+    |> promise.tap(dispatch)
+    Nil
+  })
+}
+
+fn extract_id_from_path(path: String) -> String {
+  // Path format: /api/todos/{id}
+  case path {
+    "/api/todos/" <> id -> id
+    _ -> ""
+  }
+}
+
+// ===== Public Todo Effect Functions =====
+
+/// Fetch all todos with optional filter
+pub fn fetch_todos(filter: Option(String)) -> Effect(Msg) {
+  let path = case filter {
+    Some(f) -> "/api/todos?filter=" <> f
+    None -> "/api/todos"
+  }
+  todo_api_get(path, msg.TodosLoaded)
+}
+
+/// Create a new todo
+pub fn create_todo(title: String, description: String, priority: Priority) -> Effect(Msg) {
+  let desc_json = case description {
+    "" -> "null"
+    d -> "\"" <> d <> "\""
+  }
+  let priority_str = case priority {
+    shared.High -> "high"
+    shared.Medium -> "medium"
+    shared.Low -> "low"
+  }
+  let body =
+    "{\"title\":\"" <> title <> "\",\"description\":" <> desc_json <> ",\"priority\":\"" <> priority_str <> "\"}"
+  todo_api_post("/api/todos", body, msg.CreateTodoResult)
+}
+
+/// Toggle a todo's completed state
+pub fn toggle_todo(id: String, completed: Bool) -> Effect(Msg) {
+  let body = "{\"completed\":" <> bool_to_string(completed) <> "}"
+  todo_api_patch("/api/todos/" <> id, body, msg.ToggleResult)
+}
+
+fn bool_to_string(b: Bool) -> String {
+  case b {
+    True -> "true"
+    False -> "false"
+  }
+}
+
+/// Delete a todo
+pub fn delete_todo(id: String) -> Effect(Msg) {
+  todo_api_delete("/api/todos/" <> id, msg.DeleteResult)
 }

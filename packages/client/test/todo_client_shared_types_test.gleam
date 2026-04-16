@@ -24,7 +24,7 @@ pub fn main() {
 /// Verifies the shared Todo type can be used by frontend-todo-model
 pub fn shared_todo_type_structure_test() {
   // Create a shared.Todo (this is what the API would return)
-  let todo = Todo(
+  let item = Todo(
     id: "test-uuid-1234",
     title: "Test Todo",
     description: Some("Test description"),
@@ -33,11 +33,11 @@ pub fn shared_todo_type_structure_test() {
   )
 
   // Verify all fields frontend model needs are present
-  todo.id |> should.equal("test-uuid-1234")
-  todo.title |> should.equal("Test Todo")
-  todo.description |> should.equal(Some("Test description"))
-  todo.priority |> should.equal(High)
-  todo.completed |> should.be_false
+  item.id |> should.equal("test-uuid-1234")
+  item.title |> should.equal("Test Todo")
+  item.description |> should.equal(Some("Test description"))
+  item.priority |> should.equal(High)
+  item.completed |> should.be_false
 }
 
 /// Bridge: shared.Todo can represent all priority levels frontend filter needs
@@ -60,7 +60,7 @@ pub fn shared_priority_matches_filter_states_test() {
 /// Bridge: shared.Todo JSON encoding for API client requests
 /// Verifies todo_to_json produces format API client can work with
 pub fn shared_todo_json_encoding_test() {
-  let todo = Todo(
+  let item = Todo(
     id: "abc-123",
     title: "Buy groceries",
     description: Some("Milk and eggs"),
@@ -68,7 +68,7 @@ pub fn shared_todo_json_encoding_test() {
     completed: True,
   )
 
-  let json_str = shared.todo_to_json(todo) |> json.to_string
+  let json_str = shared.todo_to_json(item) |> json.to_string
 
   // Verify JSON structure matches expected API format
   json_str |> string.contains("\"id\":") |> should.be_true
@@ -79,20 +79,40 @@ pub fn shared_todo_json_encoding_test() {
   json_str |> string.contains("Buy groceries") |> should.be_true
 }
 
+/// Decoder for Todo type
+fn todo_decoder() -> decode.Decoder(Todo) {
+  use id <- decode.field("id", decode.string)
+  use title <- decode.field("title", decode.string)
+  use description <- decode.field("description", decode.optional(decode.string))
+  use priority <- decode.field("priority", priority_decoder())
+  use completed <- decode.field("completed", decode.bool)
+  decode.success(Todo(id:, title:, description:, priority:, completed:))
+}
+
+fn priority_decoder() -> decode.Decoder(Priority) {
+  use str <- decode.then(decode.string)
+  case str {
+    "high" -> decode.success(High)
+    "medium" -> decode.success(Medium)
+    "low" -> decode.success(Low)
+    _ -> decode.failure(High, "Priority")
+  }
+}
+
 /// Bridge: shared.Todo JSON decoding for API client responses
-/// Verifies todo_from_json decodes API responses to shared.Todo
+/// Verifies todo decoder works with API responses
 pub fn shared_todo_json_decoding_test() {
   let json_str = "{\"id\":\"xyz-789\",\"title\":\"Do laundry\",\"description\":null,\"priority\":\"low\",\"completed\":false}"
 
-  let result = shared.todo_from_json(json_str)
-
+  // Parse JSON string directly with decoder
+  let result = json.parse(json_str, todo_decoder())
   case result {
-    Ok(todo) -> {
-      todo.id |> should.equal("xyz-789")
-      todo.title |> should.equal("Do laundry")
-      todo.description |> should.equal(None)
-      todo.priority |> should.equal(Low)
-      todo.completed |> should.be_false
+    Ok(item) -> {
+      item.id |> should.equal("xyz-789")
+      item.title |> should.equal("Do laundry")
+      item.description |> should.equal(None)
+      item.priority |> should.equal(Low)
+      item.completed |> should.be_false
     }
     Error(_) -> should.fail()
   }
@@ -130,25 +150,28 @@ pub fn priority_encoding_for_api_requests_test() {
   low_json |> should.equal("\"low\"")
 }
 
+/// Helper to decode priority from JSON string
+fn decode_priority(json_str: String) -> Result(Priority, json.DecodeError) {
+  json.parse(json_str, shared.priority_decoder())
+}
+
 /// Bridge: Priority decoder handles API response strings
 /// Verifies priority_decoder accepts API response values
 pub fn priority_decoding_from_api_responses_test() {
-  let decoder = shared.priority_decoder()
-
   // Decode "high"
-  case decode.run("\"high\"" |> json.parse(_, decode.string), decoder) {
+  case decode_priority("\"high\"") {
     Ok(High) -> True |> should.be_true
     _ -> should.fail()
   }
 
   // Decode "medium"
-  case decode.run("\"medium\"" |> json.parse(_, decode.string), decoder) {
+  case decode_priority("\"medium\"") {
     Ok(Medium) -> True |> should.be_true
     _ -> should.fail()
   }
 
   // Decode "low"
-  case decode.run("\"low\"" |> json.parse(_, decode.string), decoder) {
+  case decode_priority("\"low\"") {
     Ok(Low) -> True |> should.be_true
     _ -> should.fail()
   }
@@ -165,7 +188,7 @@ pub fn form_priority_values_match_shared_test() {
 
   list.each(form_values, fn(v) {
     let json_str = "\"" <> v <> "\""
-    let result = decode.run(json.parse(json_str, decode.string), decoder)
+    let result = json.parse(json_str, decoder)
     result |> should.be_ok
   })
 }

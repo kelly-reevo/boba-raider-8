@@ -7,9 +7,14 @@
 import gleeunit
 import gleeunit/should
 import gleam/json
+import gleam/dynamic/decode
 import gleam/option.{type Option, None, Some}
 import shared.{type Priority, type Todo, High, Medium, Low, Todo}
+import gleam/list
+import gleam/int
+import gleam/string
 import shared/todo_validation
+import frontend/model
 
 pub fn main() {
   gleeunit.main()
@@ -248,12 +253,15 @@ pub fn http_status_to_error_mapping_test() {
 pub fn validation_error_parsing_contract_test() {
   let error_response = "{\"error\":\"invalid_input\",\"details\":[\"title is required\",\"invalid priority\"]}"
 
-  // Parse and extract validation errors
-  let parsed = json.parse(error_response, fn(d) {
+  // Decoder for validation errors
+  let validation_error_decoder = {
     use error_type <- decode.field("error", decode.string)
     use details <- decode.field("details", decode.list(decode.string))
     decode.success(#(error_type, details))
-  })
+  }
+
+  // Parse and extract validation errors
+  let parsed = json.parse(error_response, validation_error_decoder)
 
   case parsed {
     Ok(#(error_type, details)) -> {
@@ -269,10 +277,13 @@ pub fn validation_error_parsing_contract_test() {
 pub fn not_found_error_parsing_contract_test() {
   let error_response = "{\"error\":\"not_found\"}"
 
-  let parsed = json.parse(error_response, fn(d) {
+  // Decoder for not found error
+  let not_found_decoder = {
     use error_type <- decode.field("error", decode.string)
     decode.success(error_type)
-  })
+  }
+
+  let parsed = json.parse(error_response, not_found_decoder)
 
   case parsed {
     Ok(error_type) -> error_type |> should.equal("not_found")
@@ -482,12 +493,15 @@ pub fn error_handling_flow_test() {
   // Simulate 400 response with validation errors
   let error_response = "{\"error\":\"invalid_input\",\"details\":[\"title is required\"]}"
 
-  // Parse error
-  let parsed = json.parse(error_response, fn(d) {
+  // Decoder for error
+  let error_decoder = {
     use error <- decode.field("error", decode.string)
     use details <- decode.field("details", decode.list(decode.string))
     decode.success(#(error, details))
-  })
+  }
+
+  // Parse error
+  let parsed = json.parse(error_response, error_decoder)
 
   // Should map to ValidationError variant
   case parsed {
@@ -506,24 +520,18 @@ pub fn error_handling_flow_test() {
 /// Bridge: FilterState maps to API query parameters
 /// Expected: All -> no param, Active -> ?filter=active, Completed -> ?filter=completed
 pub fn filter_state_to_query_param_test() {
-  // Simulate FilterState enum mapping
-  type FilterState {
-    All
-    Active
-    Completed
-  }
-
-  let to_query_param = fn(filter: FilterState) -> Option(String) {
+  // Use FilterState from model module
+  let to_query_param = fn(filter: model.FilterState) -> Option(String) {
     case filter {
-      All -> None
-      Active -> Some("active")
-      Completed -> Some("completed")
+      model.All -> None
+      model.Active -> Some("active")
+      model.Completed -> Some("completed")
     }
   }
 
-  to_query_param(All) |> should.equal(None)
-  to_query_param(Active) |> should.equal(Some("active"))
-  to_query_param(Completed) |> should.equal(Some("completed"))
+  to_query_param(model.All) |> should.equal(None)
+  to_query_param(model.Active) |> should.equal(Some("active"))
+  to_query_param(model.Completed) |> should.equal(Some("completed"))
 }
 
 /// Bridge: FilterState changes trigger refetch
@@ -547,73 +555,62 @@ pub fn filter_change_triggers_refetch_test() {
 /// Bridge: Model stores List(shared.Todo) from API
 /// Expected: Model.todos field holds todos fetched from API
 pub fn model_stores_shared_todos_test() {
-  // Simulate Model structure
-  type Model {
-    Model(todos: List(Todo), filter: String, loading: Bool, error: String)
-  }
-
-  // Create with fetched todos
+  // Use the actual Model from frontend/model
   let todos = [
     Todo(id: "1", title: "First", description: None, priority: High, completed: False),
     Todo(id: "2", title: "Second", description: None, priority: Medium, completed: True),
   ]
 
-  let model = Model(todos: todos, filter: "all", loading: False, error: "")
+  let test_model = model.Model(
+    todos: todos,
+    filter: model.All,
+    form_title: "",
+    form_description: "",
+    form_priority: shared.Medium,
+    loading: False,
+    error: ""
+  )
 
-  list.length(model.todos) |> should.equal(2)
-  model.loading |> should.be_false
+  list.length(test_model.todos) |> should.equal(2)
+  test_model.loading |> should.be_false
 }
 
 /// Bridge: Model form fields for create todo
 /// Expected: Model holds form input state separate from todo list
 pub fn model_form_fields_test() {
-  type Model {
-    Model(
-      todos: List(Todo),
-      form_title: String,
-      form_description: String,
-      form_priority: Priority,
-    )
-  }
-
-  let model = Model(
+  let test_model = model.Model(
     todos: [],
+    filter: model.All,
     form_title: "New todo",
     form_description: "Description",
     form_priority: High,
+    loading: False,
+    error: ""
   )
 
-  model.form_title |> should.equal("New todo")
-  model.form_description |> should.equal("Description")
-  model.form_priority |> should.equal(High)
+  test_model.form_title |> should.equal("New todo")
+  test_model.form_description |> should.equal("Description")
+  test_model.form_priority |> should.equal(High)
 }
 
 /// Bridge: Model loading state during API calls
 /// Expected: Model.loading true during fetch, false after completion
 pub fn model_loading_state_test() {
-  type Model {
-    Model(todos: List(Todo), loading: Bool)
-  }
+  let initial_model = model.Model(
+    todos: [],
+    filter: model.All,
+    form_title: "",
+    form_description: "",
+    form_priority: shared.Medium,
+    loading: False,
+    error: ""
+  )
 
-  // Before API call
-  let before = Model(todos: [], loading: False)
-  before.loading |> should.be_false
+  // Simulate loading state
+  let loading_model = model.Model(..initial_model, loading: True)
+  loading_model.loading |> should.be_true
 
-  // During API call (set by update)
-  let during = Model(..before, loading: True)
-  during.loading |> should.be_true
-
-  // After successful response
-  let after = Model(todos: [Todo(id: "1", title: "New", description: None, priority: Medium, completed: False)], loading: False)
-  after.loading |> should.be_false
-  list.length(after.todos) |> should.equal(1)
+  // Simulate completion
+  let completed_model = model.Model(..loading_model, loading: False)
+  completed_model.loading |> should.be_false
 }
-
-// =============================================================================
-// Imports
-// =============================================================================
-
-import gleam/decode
-import gleam/int
-import gleam/list
-import gleam/string

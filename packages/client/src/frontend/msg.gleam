@@ -11,12 +11,21 @@ pub type HttpError {
   ValidationError(List(String))
 }
 
-/// Convert AppError to display message
+/// Convert HttpError to display message
 pub fn http_error_to_string(error: HttpError) -> String {
   case error {
     NetworkError -> "Network error. Please check your connection."
     DecodeError -> "Failed to parse server response."
     ServerError(code) -> "Server error: " <> int_to_string(code)
+    ValidationError(errors) -> "Validation error: " <> join_errors(errors)
+  }
+}
+
+fn join_errors(errors: List(String)) -> String {
+  case errors {
+    [] -> ""
+    [first] -> first
+    [first, ..rest] -> first <> ", " <> join_errors(rest)
   }
 }
 

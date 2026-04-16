@@ -1,6 +1,7 @@
 import gleam/erlang/process.{type Subject}
 import gleam/otp/actor
 import gleam/list
+import gleam/int
 import gleam/option.{type Option}
 import gleam/result
 import shared.{type AppError, type Priority, type Todo, NotFound, Todo}
@@ -84,9 +85,6 @@ fn handle_message(
   }
 }
 
-import gleam/int
-import gleam/bytes
-
 fn create_new_todo(
   title: String,
   description: Option(String),
@@ -148,8 +146,8 @@ fn format_uuid(bytes: List(Int)) -> String {
 }
 
 fn byte_to_hex(byte: Int) -> String {
-  let high_nibble = int.bitwise_shift_right(byte, 4) && 0xF
-  let low_nibble = byte && 0xF
+  let high_nibble = int.bitwise_and(int.bitwise_shift_right(byte, 4), 0xF)
+  let low_nibble = int.bitwise_and(byte, 0xF)
   nibble_to_hex_char(high_nibble) <> nibble_to_hex_char(low_nibble)
 }
 
@@ -173,11 +171,6 @@ fn nibble_to_hex_char(nibble: Int) -> String {
     15 -> "f"
     _ -> "0"
   }
-}
-
-// Bitwise AND operator
-fn &&(a: Int, b: Int) -> Int {
-  int.bitwise_and(a, b)
 }
 
 fn find_todo_by_id(todos: List(Todo), id: String) -> Result(Todo, AppError) {

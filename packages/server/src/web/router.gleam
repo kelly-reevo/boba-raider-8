@@ -80,6 +80,10 @@ fn counter_response(count: Int) -> wisp.Response {
   |> wisp.json_response(200)
 }
 
+// FFI to read request body as string
+@external(erlang, "server_ffi", "read_body_string")
+fn read_body_string(req: wisp.Request) -> String
+
 // Todo handlers
 
 fn handle_todos_list_or_create(req: wisp.Request, ctx: Context) -> wisp.Response {
@@ -104,10 +108,11 @@ fn handle_todo_by_id(req: wisp.Request, ctx: Context, id: String) -> wisp.Respon
 fn list_todos_handler(req: wisp.Request, ctx: Context) -> wisp.Response {
   use <- wisp.require_method(req, http.Get)
 
-  // Parse filter from query string
-  let filter = case wisp.get_query(req) |> dict.get("filter") {
-    Ok("active") -> Some("active")
-    Ok("completed") -> Some("completed")
+  // Parse filter from query string (wisp.get_query returns List(#(String, String)))
+  let query_params = wisp.get_query(req)
+  let filter = case list.find(query_params, fn(p) { p.0 == "filter" }) {
+    Ok(#(_, "active")) -> Some("active")
+    Ok(#(_, "completed")) -> Some("completed")
     _ -> None
   }
 
@@ -125,7 +130,9 @@ fn list_todos_handler(req: wisp.Request, ctx: Context) -> wisp.Response {
 
 fn create_todo_handler(req: wisp.Request, ctx: Context) -> wisp.Response {
   use <- wisp.require_method(req, http.Post)
-  use json_body <- wisp.require_json(req)
+
+  // Read body as string
+  let body_string = read_body_string(req)
 
   // Decoder for create todo request
   let create_decoder = {
@@ -135,7 +142,7 @@ fn create_todo_handler(req: wisp.Request, ctx: Context) -> wisp.Response {
     decode.success(#(title, description, priority))
   }
 
-  case json.parse(json_body, create_decoder) {
+  case json.parse(body_string, create_decoder) {
     Ok(#(title_opt, description_opt, priority_opt)) -> {
       let title = option.unwrap(title_opt, "")
       let priority = option.unwrap(priority_opt, "")
@@ -206,7 +213,9 @@ fn get_todo_handler(req: wisp.Request, ctx: Context, id: String) -> wisp.Respons
 
 fn patch_todo_handler(req: wisp.Request, ctx: Context, id: String) -> wisp.Response {
   use <- wisp.require_method(req, http.Patch)
-  use json_body <- wisp.require_json(req)
+
+  // Read body as string
+  let body_string = read_body_string(req)
 
   // Build decoder for optional patch fields
   let patch_decoder = {
@@ -217,7 +226,7 @@ fn patch_todo_handler(req: wisp.Request, ctx: Context, id: String) -> wisp.Respo
     decode.success(#(title_opt, description_opt, priority_opt, completed_opt))
   }
 
-  case json.parse(json_body, patch_decoder) {
+  case json.parse(body_string, patch_decoder) {
     Ok(#(title_opt, description_opt, priority_opt, completed_opt)) -> {
       // Convert string priority to Priority type if present
       let parsed_priority = case priority_opt {

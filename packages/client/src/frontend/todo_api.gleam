@@ -1,7 +1,7 @@
 /// HTTP client functions for todo API operations
 /// Uses gleam_fetch to call backend endpoints with JSON encoding/decoding
 
-import frontend/filter.{type Filter}
+import frontend/filter.{type FilterState, All, Active, Completed}
 import frontend/msg.{type HttpError, DecodeError, NetworkError, ServerError, ValidationError}
 import gleam/dynamic/decode
 import gleam/fetch
@@ -255,16 +255,16 @@ fn api_delete(path: String) -> promise.Promise(Result(Bool, TodoApiError)) {
 }
 
 /// Build query string for filter parameter
-fn build_filter_query(filter: Filter) -> String {
+fn build_filter_query(filter: FilterState) -> String {
   case filter {
-    filter.All -> ""
-    filter.Active -> "?filter=active"
-    filter.Completed -> "?filter=completed"
+    All -> ""
+    Active -> "?filter=active"
+    Completed -> "?filter=completed"
   }
 }
 
 /// Fetch todos from the API with optional filter
-pub fn fetch_todos(filter_state: Filter) -> promise.Promise(Result(List(Todo), HttpError)) {
+pub fn fetch_todos(filter_state: FilterState) -> promise.Promise(Result(List(Todo), HttpError)) {
   let query = build_filter_query(filter_state)
   let path = todos_path <> query
 

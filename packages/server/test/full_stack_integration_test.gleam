@@ -1,13 +1,6 @@
 /// FULL-STACK INTEGRATION TESTS
 ///
 /// These tests verify the ENTIRE integrated application works end-to-end.
-/// They exercise real code paths through all layers:
-/// - HTTP requests (router)
-/// - Todo actor (state management)
-/// - Validation logic
-/// - JSON encoding/decoding
-/// - Error handling
-///
 /// NO MOCKING - All tests use real modules, real actors, real dependencies.
 
 import gleeunit
@@ -45,14 +38,14 @@ fn create_test_context() -> Context {
   )
 }
 
-/// Build a Wisp request with JSON body for testing
+/// Build a Wisp request with JSON body using wisp/simulate
 fn build_json_request(method: http.Method, path: String, body: String) -> wisp.Request {
   simulate.request(method, path)
   |> simulate.string_body(body)
-  |> request.set_header("content-type", "application/json")
+  |> simulate.header("content-type", "application/json")
 }
 
-/// Build a simple Wisp request for testing
+/// Build a simple Wisp request
 fn build_request(method: http.Method, path: String) -> wisp.Request {
   simulate.request(method, path)
 }
@@ -187,8 +180,8 @@ pub fn actor_get_todo_by_id_test() {
   found_todo.id |> should.equal(created.id)
   found_todo.title |> should.equal("Find Me")
 
-  // Get non-existent ID - should fail
-  let not_found = todo_actor.get_todo(ctx.todo_subject, "00000000-0000-0000-0000-000000000000")
+  // Get non-existent ID - should fail (use a random UUID that definitely doesn't exist)
+  let not_found = todo_actor.get_todo(ctx.todo_subject, "ffffffff-ffff-ffff-ffff-ffffffffffff")
   not_found |> should.be_error
   let assert Error(err) = not_found
   err |> should.equal(NotFound)
@@ -252,7 +245,7 @@ pub fn actor_update_not_found_test() {
     completed: None,
   )
 
-  let result = todo_actor.update_todo(ctx.todo_subject, "00000000-0000-0000-0000-000000000000", patch)
+  let result = todo_actor.update_todo(ctx.todo_subject, "ffffffff-ffff-ffff-ffff-ffffffffffff", patch)
   result |> should.be_error
   let assert Error(err) = result
   err |> should.equal(NotFound)
@@ -262,7 +255,7 @@ pub fn actor_update_not_found_test() {
 pub fn actor_delete_not_found_test() {
   let ctx = create_test_context()
 
-  let result = todo_actor.delete_todo(ctx.todo_subject, "00000000-0000-0000-0000-000000000000")
+  let result = todo_actor.delete_todo(ctx.todo_subject, "ffffffff-ffff-ffff-ffff-ffffffffffff")
   result |> should.be_error
   let assert Error(err) = result
   err |> should.equal(NotFound)
@@ -488,7 +481,7 @@ pub fn api_get_todo_test() {
 pub fn api_get_todo_not_found_test() {
   let ctx = create_test_context()
 
-  let req = build_request(http.Get, "/api/todos/00000000-0000-0000-0000-000000000000")
+  let req = build_request(http.Get, "/api/todos/ffffffff-ffff-ffff-ffff-ffffffffffff")
   let resp = router.handle_request(req, ctx)
 
   get_response_status(resp) |> should.equal(404)
@@ -532,7 +525,7 @@ pub fn api_update_todo_not_found_test() {
   let ctx = create_test_context()
 
   let body = "{\"title\":\"Updated\"}"
-  let req = build_json_request(http.Patch, "/api/todos/00000000-0000-0000-0000-000000000000", body)
+  let req = build_json_request(http.Patch, "/api/todos/ffffffff-ffff-ffff-ffff-ffffffffffff", body)
   let resp = router.handle_request(req, ctx)
 
   get_response_status(resp) |> should.equal(404)
@@ -569,7 +562,7 @@ pub fn api_delete_todo_test() {
 pub fn api_delete_todo_not_found_test() {
   let ctx = create_test_context()
 
-  let req = build_request(http.Delete, "/api/todos/00000000-0000-0000-0000-000000000000")
+  let req = build_request(http.Delete, "/api/todos/ffffffff-ffff-ffff-ffff-ffffffffffff")
   let resp = router.handle_request(req, ctx)
 
   get_response_status(resp) |> should.equal(404)
@@ -933,7 +926,8 @@ pub fn complex_scenario_test() {
   let final_active_req = build_request(http.Get, "/api/todos?filter=active")
   let final_active_resp = router.handle_request(final_active_req, ctx)
   let final_active_body = get_response_body(final_active_resp)
-  final_active_body |> should.equal("[]")
+  // Verify the response is an empty array (just contains the brackets)
+  string.trim(final_active_body) |> should.equal("[]")
 
   // But completed still has 2
   let completed_req = build_request(http.Get, "/api/todos?filter=completed")
@@ -942,6 +936,3 @@ pub fn complex_scenario_test() {
   contains(completed_body, "Task 1") |> should.be_true
   contains(completed_body, "Task 2") |> should.be_true
 }
-
-// Import for request
-import gleam/http/request

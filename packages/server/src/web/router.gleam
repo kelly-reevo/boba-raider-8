@@ -1,4 +1,5 @@
 import counter.{type CounterMsg}
+import gleam/bit_array
 import gleam/dict
 import gleam/dynamic/decode
 import gleam/erlang/process.{type Subject}
@@ -80,9 +81,18 @@ fn counter_response(count: Int) -> wisp.Response {
   |> wisp.json_response(200)
 }
 
-// FFI to read request body as string
-@external(erlang, "server_ffi", "read_body_string")
-fn read_body_string(req: wisp.Request) -> String
+// Helper to read request body as string using wisp's native function
+fn read_body_string(req: wisp.Request) -> String {
+  case wisp.read_body_bits(req) {
+    Ok(bits) -> {
+      case bit_array.to_string(bits) {
+        Ok(str) -> str
+        Error(_) -> "{}"
+      }
+    }
+    Error(_) -> "{}"
+  }
+}
 
 // Todo handlers
 

@@ -8,6 +8,7 @@ pub type HttpError {
   NetworkError
   DecodeError
   ServerError(Int)
+  ValidationError(List(String))
 }
 
 /// Convert AppError to display message

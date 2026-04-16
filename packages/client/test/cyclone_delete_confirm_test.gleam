@@ -24,8 +24,8 @@ pub fn first_delete_click_shows_confirmation_test() {
     delete_confirming_id: None,
     filter: model.All,
     form_title: "",
-    form_description: "",
-    form_priority: Medium,
+    form_description: None,
+    form_priority: "medium",
     loading: False,
   )
 
@@ -47,8 +47,8 @@ pub fn second_delete_click_confirms_deletion_test() {
     delete_confirming_id: Some(todo_id),
     filter: model.All,
     form_title: "",
-    form_description: "",
-    form_priority: Medium,
+    form_description: None,
+    form_priority: "medium",
     loading: False,
   )
 
@@ -74,8 +74,8 @@ pub fn clicking_different_todo_switches_confirmation_test() {
     delete_confirming_id: Some(todo1_id),
     filter: model.All,
     form_title: "",
-    form_description: "",
-    form_priority: Medium,
+    form_description: None,
+    form_priority: "medium",
     loading: False,
   )
 
@@ -97,8 +97,8 @@ pub fn cancel_delete_clears_confirmation_test() {
     delete_confirming_id: Some(todo_id),
     filter: model.All,
     form_title: "",
-    form_description: "",
-    form_priority: Medium,
+    form_description: None,
+    form_priority: "medium",
     loading: False,
   )
 

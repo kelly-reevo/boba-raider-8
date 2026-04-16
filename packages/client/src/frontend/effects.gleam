@@ -152,6 +152,7 @@ pub type HttpEffect {
 /// Fetch todos with optional filter query parameter
 /// Returns an Effect for Lustre integration
 pub fn fetch_todos(filter: Option(String)) -> Effect(Msg) {
+  set_effect_fetch()
   let path = case filter {
     Some(f) -> "/api/todos?filter=" <> f
     None -> "/api/todos"

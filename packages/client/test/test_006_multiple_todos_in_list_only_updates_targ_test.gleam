@@ -54,13 +54,14 @@ pub fn toggle_only_affects_targeted_todo_test() {
     todos: [test_todo1, test_todo2, test_todo3],
     filter: model.All,
     error: "",
+    delete_confirming_id: None,
     loading: False,
     form_title: "",
-    form_description: "",
-    form_priority: shared.Medium
+    form_description: None,
+    form_priority: "medium"
   )
 
-  let msg = msg.GotToggleResult(Ok(test_updated_todo2))
+  let msg = msg.ToggleResult(Ok(test_updated_todo2))
   let #(new_model, _effect) = update.update(initial_model, msg)
 
   case new_model.todos {

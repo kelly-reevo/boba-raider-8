@@ -39,13 +39,14 @@ pub fn toggle_off_updates_todo_to_uncompleted_test() {
     todos: [test_completed_todo],
     filter: model.All,
     error: "",
+    delete_confirming_id: None,
     loading: True,
     form_title: "",
-    form_description: "",
-    form_priority: shared.Medium
+    form_description: None,
+    form_priority: "medium"
   )
 
-  let msg = msg.GotToggleResult(Ok(test_uncompleted_todo))
+  let msg = msg.ToggleResult(Ok(test_uncompleted_todo))
   let #(new_model, _effect) = update.update(initial_model, msg)
 
   case new_model.todos {

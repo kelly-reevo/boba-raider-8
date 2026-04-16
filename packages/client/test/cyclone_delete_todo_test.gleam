@@ -25,8 +25,8 @@ pub fn delete_todo_triggers_api_effect_test() {
     filter: model.All,
     delete_confirming_id: None,
     form_title: "",
-    form_description: "",
-    form_priority: Medium,
+    form_description: None,
+    form_priority: "medium",
     loading: False,
   )
 
@@ -52,8 +52,8 @@ pub fn delete_success_removes_todo_test() {
     filter: model.All,
     delete_confirming_id: None,
     form_title: "",
-    form_description: "",
-    form_priority: Medium,
+    form_description: None,
+    form_priority: "medium",
     loading: False,
   )
 
@@ -77,8 +77,8 @@ pub fn delete_failure_preserves_todo_and_shows_error_test() {
     filter: model.All,
     delete_confirming_id: None,
     form_title: "",
-    form_description: "",
-    form_priority: Medium,
+    form_description: None,
+    form_priority: "medium",
     loading: False,
   )
 

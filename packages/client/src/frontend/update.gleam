@@ -175,7 +175,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         msg.SubmitTodoOp -> {
           // Re-submit the form if we have valid data
           case validate_create_form(model) {
-            True -> {
+            Ok(_) -> {
               let effect = effects.create_todo(
                 model.form_title,
                 model.form_description,
@@ -183,7 +183,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               )
               #(Model(..model, loading: True, error: ""), effect)
             }
-            False -> {
+            Error(_) -> {
               #(Model(..model, error: ""), effects.none())
             }
           }

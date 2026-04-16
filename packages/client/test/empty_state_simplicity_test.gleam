@@ -6,7 +6,7 @@ import frontend/msg
 import lustre/element
 import gleam/string
 import shared
-import gleam/option.{None}
+import gleam/option.{None, Some}
 
 pub fn main() {
   gleeunit.main()
@@ -18,10 +18,11 @@ pub fn empty_state_shows_no_todos_message_test() {
     todos: [],
     loading: False,
     error: "",
+    delete_confirming_id: None,
     filter: model.All,
     form_title: "",
-    form_description: "",
-    form_priority: shared.Medium
+    form_description: None,
+    form_priority: "medium"
   )
 
   // When: View is rendered
@@ -40,10 +41,11 @@ pub fn empty_state_hides_loading_indicator_test() {
     todos: [],
     loading: False,
     error: "",
+    delete_confirming_id: None,
     filter: model.All,
     form_title: "",
-    form_description: "",
-    form_priority: shared.Medium
+    form_description: None,
+    form_priority: "medium"
   )
 
   // When: View is rendered
@@ -61,10 +63,11 @@ pub fn loading_state_shows_spinner_test() {
     todos: [],
     loading: True,
     error: "",
+    delete_confirming_id: None,
     filter: model.All,
     form_title: "",
-    form_description: "",
-    form_priority: shared.Medium
+    form_description: None,
+    form_priority: "medium"
   )
 
   // When: View is rendered
@@ -82,10 +85,11 @@ pub fn loading_state_disables_form_submit_test() {
     todos: [],
     loading: True,
     error: "",
+    delete_confirming_id: None,
     filter: model.All,
     form_title: "New Todo",
-    form_description: "Description",
-    form_priority: shared.Medium
+    form_description: Some("Description"),
+    form_priority: "medium"
   )
 
   // When: View is rendered
@@ -102,10 +106,11 @@ pub fn error_state_shows_error_banner_test() {
     todos: [],
     loading: False,
     error: "Failed to load todos",
+    delete_confirming_id: None,
     filter: model.All,
     form_title: "",
-    form_description: "",
-    form_priority: shared.Medium
+    form_description: None,
+    form_priority: "medium"
   )
 
   // When: View is rendered
@@ -123,10 +128,11 @@ pub fn error_state_shows_retry_button_test() {
     todos: [],
     loading: False,
     error: "Failed to load todos",
+    delete_confirming_id: None,
     filter: model.All,
     form_title: "",
-    form_description: "",
-    form_priority: shared.Medium
+    form_description: None,
+    form_priority: "medium"
   )
 
   // When: View is rendered
@@ -168,10 +174,11 @@ pub fn error_state_with_empty_error_hides_banner_test() {
     todos: [shared.Todo(id: "1", title: "Test", completed: False, priority: shared.Medium, description: None)],
     loading: False,
     error: "",
+    delete_confirming_id: None,
     filter: model.All,
     form_title: "",
-    form_description: "",
-    form_priority: shared.Medium
+    form_description: None,
+    form_priority: "medium"
   )
 
   // When: View is rendered

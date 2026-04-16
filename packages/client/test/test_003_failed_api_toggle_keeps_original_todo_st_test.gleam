@@ -31,13 +31,14 @@ pub fn failed_toggle_preserves_original_state_and_shows_error_test() {
     todos: [test_original_todo],
     filter: model.All,
     error: "",
+    delete_confirming_id: None,
     loading: True,
     form_title: "",
-    form_description: "",
-    form_priority: shared.Medium
+    form_description: None,
+    form_priority: "medium"
   )
 
-  let msg = msg.GotToggleResult(Error(msg.NetworkError))
+  let msg = msg.ToggleResult(Error(msg.NetworkError))
   let #(new_model, effect) = update.update(initial_model, msg)
 
   case new_model.todos {

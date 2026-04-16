@@ -29,10 +29,11 @@ pub fn checked_checkbox_click_dispatches_toggle_false_test() {
     todos: [test_todo],
     filter: model.All,
     error: "",
+    delete_confirming_id: None,
     loading: False,
     form_title: "",
-    form_description: "",
-    form_priority: shared.Medium
+    form_description: None,
+    form_priority: "medium"
   )
 
   let msg = msg.ToggleTodo("todo-123", False)

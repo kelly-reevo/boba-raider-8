@@ -309,16 +309,6 @@ fn extract_id_from_path(path: String) -> String {
 
 // ===== Public Todo Effect Functions =====
 
-/// Fetch all todos with optional filter
-pub fn fetch_todos(filter: Option(String)) -> Effect(Msg) {
-  set_effect_fetch()
-  let path = case filter {
-    Some(f) -> "/api/todos?filter=" <> f
-    None -> "/api/todos"
-  }
-  todo_api_get(path, msg.TodosLoaded)
-}
-
 /// Create a new todo
 pub fn create_todo(title: String, description: Option(String), priority: String) -> Effect(Msg) {
   let desc_json = case description {

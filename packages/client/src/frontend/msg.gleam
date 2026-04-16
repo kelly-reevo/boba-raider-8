@@ -72,13 +72,12 @@ pub type Msg {
   // Todo toggle (complete/incomplete)
   ToggleTodo(id: String, completed: Bool)
   ToggleResult(Result(Todo, HttpError))
-  GotToggleResult(Result(Todo, HttpError))
 
   // Todo deletion (two-phase with confirmation)
   DeleteClicked(id: String)
   CancelDelete
   DeleteTodo(id: String)
-  DeleteResult(Result(String, HttpError))
+  TodoDeleted(Result(String, HttpError))
 
   // Retry failed operation
   Retry(op: RetryableOp)

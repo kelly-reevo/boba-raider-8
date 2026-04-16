@@ -14,7 +14,7 @@ import shared.{type Priority, type Todo}
 
 /// No-op effect for testing
 pub fn none() -> Effect(Msg) {
-  effect.none()
+  effects.none()
 }
 
 /// Main update function handling all message types
@@ -122,28 +122,12 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           False -> t
         }
       })
-      #(Model(..model, todos: new_todos, loading: False, error: ""), effect.none())
+      #(Model(..model, todos: new_todos, loading: False, error: ""), effects.none())
     }
 
     msg.ToggleResult(Error(_http_error)) -> {
       // Revert by keeping original model state, show error
-      #(Model(..model, loading: False, error: "Failed to toggle todo. Please try again."), effect.none())
-    }
-
-    msg.GotToggleResult(Ok(updated_todo)) -> {
-      // Server confirmed - update the specific todo in the list
-      let new_todos = list.map(model.todos, fn(t) {
-        case t.id == updated_todo.id {
-          True -> updated_todo
-          False -> t
-        }
-      })
-      #(Model(..model, todos: new_todos, loading: False, error: ""), effect.none())
-    }
-
-    msg.GotToggleResult(Error(_http_error)) -> {
-      // Revert by keeping original model state, show error
-      #(Model(..model, loading: False, error: "Failed to toggle todo. Please try again."), effect.none())
+      #(Model(..model, loading: False, error: "Failed to toggle todo. Please try again."), effects.none())
     }
 
     // ===== Todo Deletion (Two-Phase with Confirmation) =====
@@ -200,7 +184,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               #(Model(..model, loading: True, error: ""), effect)
             }
             False -> {
-              #(Model(..model, error: ""), effect.none())
+              #(Model(..model, error: ""), effects.none())
             }
           }
         }

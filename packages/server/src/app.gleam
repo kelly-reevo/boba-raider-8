@@ -3,6 +3,7 @@ import counter
 import gleam/erlang/process
 import gleam/io
 import mist
+import todo_actor
 import web/context.{Context}
 import web/router
 import wisp
@@ -16,9 +17,14 @@ pub fn main() {
   io.println("Port: " <> config.port_to_string(cfg))
 
   let assert Ok(counter_subject) = counter.start()
+  let assert Ok(todo_subject) = todo_actor.start()
 
   let assert Ok(priv) = wisp.priv_directory("server")
-  let ctx = Context(counter: counter_subject, static_directory: priv <> "/static")
+  let ctx = Context(
+    counter: counter_subject,
+    todo_subject: todo_subject,
+    static_directory: priv <> "/static",
+  )
 
   let handler = fn(req) { router.handle_request(req, ctx) }
   let secret_key_base = wisp.random_string(64)

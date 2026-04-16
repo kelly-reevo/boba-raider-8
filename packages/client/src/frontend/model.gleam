@@ -2,6 +2,7 @@
 /// Extended MVU model with server-authoritative patterns
 
 import gleam/list
+import gleam/option.{type Option, None}
 import shared.{type Priority, type Todo}
 
 /// Filter variants for todo list filtering
@@ -24,6 +25,8 @@ pub type Model {
     // UI state
     loading: Bool,
     error: String,
+    // Delete confirmation state (two-phase delete)
+    delete_confirming_id: Option(String),
   )
 }
 
@@ -37,6 +40,7 @@ pub fn default() -> Model {
     form_priority: shared.Medium,
     loading: False,
     error: "",
+    delete_confirming_id: None,
   )
 }
 

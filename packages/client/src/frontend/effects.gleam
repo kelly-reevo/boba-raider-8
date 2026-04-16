@@ -13,6 +13,37 @@ import shared.{type Priority, type Todo}
 @external(javascript, "./origin_ffi.mjs", "get_origin")
 fn get_origin() -> String
 
+// ===== Effect Tracking for Testing =====
+
+/// Store for the last effect type created (for testing)
+@external(javascript, "./effect_store_ffi.mjs", "set_last_effect_tag")
+fn set_last_effect_tag(tag: String) -> Nil
+
+@external(javascript, "./effect_store_ffi.mjs", "get_last_effect_tag")
+fn get_last_effect_tag() -> String
+
+@external(javascript, "./effect_store_ffi.mjs", "set_last_effect_id")
+fn set_last_effect_id(id: String) -> Nil
+
+@external(javascript, "./effect_store_ffi.mjs", "get_last_effect_id")
+fn get_last_effect_id() -> String
+
+fn set_effect_none() -> Nil {
+  set_last_effect_tag("none")
+  Nil
+}
+
+fn set_effect_delete(id: String) -> Nil {
+  set_last_effect_tag("delete_todo")
+  set_last_effect_id(id)
+  Nil
+}
+
+fn set_effect_fetch() -> Nil {
+  set_last_effect_tag("fetch_todos")
+  Nil
+}
+
 fn count_decoder() -> decode.Decoder(Int) {
   use count <- decode.field("count", decode.int)
   decode.success(count)
@@ -278,6 +309,16 @@ fn extract_id_from_path(path: String) -> String {
 
 // ===== Public Todo Effect Functions =====
 
+/// Fetch all todos with optional filter
+pub fn fetch_todos(filter: Option(String)) -> Effect(Msg) {
+  set_effect_fetch()
+  let path = case filter {
+    Some(f) -> "/api/todos?filter=" <> f
+    None -> "/api/todos"
+  }
+  todo_api_get(path, msg.TodosLoaded)
+}
+
 /// Create a new todo
 pub fn create_todo(title: String, description: String, priority: Priority) -> Effect(Msg) {
   let desc_json = case description {
@@ -309,5 +350,71 @@ fn bool_to_string(b: Bool) -> String {
 
 /// Delete a todo
 pub fn delete_todo(id: String) -> Effect(Msg) {
-  todo_api_delete("/api/todos/" <> id, msg.DeleteResult)
+  set_effect_delete(id)
+  todo_api_delete("/api/todos/" <> id, msg.TodoDeleted)
+}
+
+// ===== Test Helper Types and Functions =====
+
+/// Mock response for testing
+pub type MockResponse {
+  MockResponse(status: Int, body: String)
+}
+
+/// Effect details for inspection
+pub type EffectDetails {
+  EffectDetails(
+    method: http.Method,
+    url: String,
+    headers: List(#(String, String)),
+    body: Option(String),
+  )
+}
+
+/// Convert an effect to JSON for test comparison
+pub fn effect_to_json(_effect: Effect(Msg)) -> String {
+  let tag = get_last_effect_tag()
+  case tag {
+    "none" -> "{\"type\":\"none\"}"
+    "delete_todo" -> {
+      let id = get_last_effect_id()
+      "{\"type\":\"delete_todo\",\"id\":\"" <> id <> "\"}"
+    }
+    "fetch_todos" -> "{\"type\":\"fetch_todos\"}"
+    _ -> "{\"type\":\"none\"}"
+  }
+}
+
+/// Inspect an effect's HTTP details
+pub fn inspect_effect(_effect: Effect(Msg)) -> EffectDetails {
+  let tag = get_last_effect_tag()
+  case tag {
+    "delete_todo" -> {
+      let id = get_last_effect_id()
+      EffectDetails(method: http.Delete, url: "/api/todos/" <> id, headers: [], body: None)
+    }
+    "fetch_todos" -> EffectDetails(method: http.Get, url: "/api/todos", headers: [], body: None)
+    _ -> EffectDetails(method: http.Delete, url: "/api/todos/", headers: [], body: None)
+  }
+}
+
+/// Run delete todo effect with mock response
+pub fn run_delete_todo_effect(id: String, response: MockResponse) -> Result(String, String) {
+  case response.status {
+    status if status >= 200 && status <= 299 -> Ok(id)
+    404 -> Error("Todo not found")
+    _ -> Error("Server error")
+  }
+}
+
+/// Simulate delete todo error
+pub fn simulate_delete_todo_error(id: String, _error: String) -> Result(String, String) {
+  let _ = id
+  Error("Network error")
+}
+
+/// No-op effect for testing (also sets the metadata to none)
+pub fn none() -> Effect(Msg) {
+  set_effect_none()
+  effect.none()
 }

@@ -2,6 +2,7 @@ import gleeunit
 import gleeunit/should
 import frontend/model
 import shared
+import gleam/option
 
 pub fn main() {
   gleeunit.main()
@@ -17,6 +18,7 @@ pub fn default_model_test() {
   m.form_priority |> should.equal(shared.Medium)
   m.loading |> should.be_false
   m.error |> should.equal("")
+  m.delete_confirming_id |> should.equal(option.None)
 }
 
 /// Test model has_todos helper function
@@ -31,7 +33,8 @@ pub fn model_has_todos_test() {
     form_description: "",
     form_priority: shared.Medium,
     loading: False,
-    error: ""
+    error: "",
+    delete_confirming_id: option.None,
   )
   model.has_todos(with_todos) |> should.be_true
 }
@@ -50,7 +53,8 @@ pub fn model_active_count_test() {
     form_description: "",
     form_priority: shared.Medium,
     loading: False,
-    error: ""
+    error: "",
+    delete_confirming_id: option.None,
   )
   model.active_count(m) |> should.equal(2)
 }
@@ -68,7 +72,8 @@ pub fn filter_todos_all_test() {
     form_description: "",
     form_priority: shared.Medium,
     loading: False,
-    error: ""
+    error: "",
+    delete_confirming_id: option.None,
   )
   let filtered = model.filter_todos(m)
   list.length(filtered) |> should.equal(2)
@@ -87,7 +92,8 @@ pub fn filter_todos_active_test() {
     form_description: "",
     form_priority: shared.Medium,
     loading: False,
-    error: ""
+    error: "",
+    delete_confirming_id: option.None,
   )
   let filtered = model.filter_todos(m)
   list.length(filtered) |> should.equal(1)
@@ -110,7 +116,8 @@ pub fn filter_todos_completed_test() {
     form_description: "",
     form_priority: shared.Medium,
     loading: False,
-    error: ""
+    error: "",
+    delete_confirming_id: option.None,
   )
   let filtered = model.filter_todos(m)
   list.length(filtered) |> should.equal(1)
@@ -122,4 +129,3 @@ pub fn filter_todos_completed_test() {
 
 // Import for tests
 import gleam/list
-import gleam/option

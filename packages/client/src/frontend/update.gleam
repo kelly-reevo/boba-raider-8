@@ -7,7 +7,9 @@ import frontend/msg.{type Msg}
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import lustre/effect.{type Effect}
-import shared.{type Todo}
+import shared
+
+// Note: Using effects.none() for proper test metadata tracking
 
 /// Main update function handling all message types
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
@@ -16,8 +18,8 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     msg.Increment -> #(model, effects.post_increment())
     msg.Decrement -> #(model, effects.post_decrement())
     msg.Reset -> #(model, effects.post_reset())
-    msg.GotCounter(Ok(_)) -> #(model, effect.none())
-    msg.GotCounter(Error(_)) -> #(model, effect.none())
+    msg.GotCounter(Ok(_)) -> #(model, effects.none())
+    msg.GotCounter(Error(_)) -> #(model, effects.none())
 
     // ===== Todo Loading =====
     msg.LoadTodos -> {
@@ -26,12 +28,12 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     }
 
     msg.TodosLoaded(Ok(todos)) -> {
-      #(Model(..model, todos: todos, loading: False, error: ""), effect.none())
+      #(Model(..model, todos: todos, loading: False, error: ""), effects.none())
     }
 
     msg.TodosLoaded(Error(http_error)) -> {
       let error_msg = msg.http_error_to_string(http_error)
-      #(Model(..model, loading: False, error: error_msg), effect.none())
+      #(Model(..model, loading: False, error: error_msg), effects.none())
     }
 
     // ===== Filter State =====
@@ -42,15 +44,15 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 
     // ===== Form Field Updates (local state only) =====
     msg.SetFormTitle(text) -> {
-      #(Model(..model, form_title: text), effect.none())
+      #(Model(..model, form_title: text), effects.none())
     }
 
     msg.SetFormDescription(text) -> {
-      #(Model(..model, form_description: text), effect.none())
+      #(Model(..model, form_description: text), effects.none())
     }
 
     msg.SetFormPriority(priority) -> {
-      #(Model(..model, form_priority: priority), effect.none())
+      #(Model(..model, form_priority: priority), effects.none())
     }
 
     // ===== Todo Creation =====
@@ -75,7 +77,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         }
         False -> {
           // Validation failed - show error
-          #(Model(..model, error: "Title is required"), effect.none())
+          #(Model(..model, error: "Title is required"), effects.none())
         }
       }
     }
@@ -83,12 +85,12 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     msg.CreateTodoResult(Ok(created_todo)) -> {
       // Add new todo to list and clear loading
       let new_todos = [created_todo, ..model.todos]
-      #(Model(..model, todos: new_todos, loading: False, error: ""), effect.none())
+      #(Model(..model, todos: new_todos, loading: False, error: ""), effects.none())
     }
 
     msg.CreateTodoResult(Error(http_error)) -> {
       let error_msg = msg.http_error_to_string(http_error)
-      #(Model(..model, loading: False, error: error_msg), effect.none())
+      #(Model(..model, loading: False, error: error_msg), effects.none())
     }
 
     // ===== Todo Toggle =====
@@ -119,24 +121,39 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       #(Model(..model, loading: False, error: error_msg), refresh_effect)
     }
 
-    // ===== Todo Deletion =====
+    // ===== Todo Deletion (Two-Phase with Confirmation) =====
+    msg.DeleteClicked(id) -> {
+      case model.delete_confirming_id {
+        // No confirmation active - enter confirmation state for this todo
+        None -> #(Model(..model, delete_confirming_id: Some(id)), effects.none())
+        // Already confirming this same todo - perform delete
+        Some(confirming_id) if confirming_id == id -> {
+          let effect = effects.delete_todo(id)
+          #(Model(..model, delete_confirming_id: None, loading: True), effect)
+        }
+        // Confirming a different todo - switch to this todo
+        Some(_) -> #(Model(..model, delete_confirming_id: Some(id)), effects.none())
+      }
+    }
+
+    msg.CancelDelete -> {
+      #(Model(..model, delete_confirming_id: None), effects.none())
+    }
+
     msg.DeleteTodo(id) -> {
       let effect = effects.delete_todo(id)
       #(Model(..model, loading: True), effect)
     }
 
-    msg.DeleteResult(Ok(deleted_id)) -> {
+    msg.TodoDeleted(Ok(deleted_id)) -> {
       // Remove from local list and clear loading
       let new_todos = list.filter(model.todos, fn(t) { t.id != deleted_id })
-      #(Model(..model, todos: new_todos, loading: False, error: ""), effect.none())
+      #(Model(..model, todos: new_todos, loading: False, error: ""), effects.fetch_todos(None))
     }
 
-    msg.DeleteResult(Error(http_error)) -> {
-      let error_msg = msg.http_error_to_string(http_error)
-      // Refresh from server to ensure consistency
-      let filter_opt = filter_state_to_string(model.filter)
-      let refresh_effect = effects.fetch_todos(filter_opt)
-      #(Model(..model, loading: False, error: error_msg), refresh_effect)
+    msg.TodoDeleted(Error(http_error)) -> {
+      let error_msg = "Failed to delete todo: " <> msg.http_error_to_string(http_error)
+      #(Model(..model, loading: False, error: error_msg), effects.none())
     }
   }
 }

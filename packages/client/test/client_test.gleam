@@ -14,8 +14,8 @@ pub fn default_model_test() {
   m.todos |> should.equal([])
   m.filter |> should.equal(model.All)
   m.form_title |> should.equal("")
-  m.form_description |> should.equal("")
-  m.form_priority |> should.equal(shared.Medium)
+  m.form_description |> should.equal(option.None)
+  m.form_priority |> should.equal("medium")
   m.loading |> should.be_false
   m.error |> should.equal("")
   m.delete_confirming_id |> should.equal(option.None)
@@ -30,8 +30,8 @@ pub fn model_has_todos_test() {
     todos: [shared.Todo(id: "1", title: "Test", description: option.None, priority: shared.High, completed: False)],
     filter: model.All,
     form_title: "",
-    form_description: "",
-    form_priority: shared.Medium,
+    form_description: option.None,
+    form_priority: "medium",
     loading: False,
     error: "",
     delete_confirming_id: option.None,
@@ -50,8 +50,8 @@ pub fn model_active_count_test() {
     todos: todos,
     filter: model.All,
     form_title: "",
-    form_description: "",
-    form_priority: shared.Medium,
+    form_description: option.None,
+    form_priority: "medium",
     loading: False,
     error: "",
     delete_confirming_id: option.None,
@@ -69,8 +69,8 @@ pub fn filter_todos_all_test() {
     todos: todos,
     filter: model.All,
     form_title: "",
-    form_description: "",
-    form_priority: shared.Medium,
+    form_description: option.None,
+    form_priority: "medium",
     loading: False,
     error: "",
     delete_confirming_id: option.None,
@@ -89,8 +89,8 @@ pub fn filter_todos_active_test() {
     todos: todos,
     filter: model.Active,
     form_title: "",
-    form_description: "",
-    form_priority: shared.Medium,
+    form_description: option.None,
+    form_priority: "medium",
     loading: False,
     error: "",
     delete_confirming_id: option.None,
@@ -113,8 +113,8 @@ pub fn filter_todos_completed_test() {
     todos: todos,
     filter: model.Completed,
     form_title: "",
-    form_description: "",
-    form_priority: shared.Medium,
+    form_description: option.None,
+    form_priority: "medium",
     loading: False,
     error: "",
     delete_confirming_id: option.None,

@@ -20,8 +20,8 @@ pub type Model {
     filter: FilterState,
     // Form fields for creating todos
     form_title: String,
-    form_description: String,
-    form_priority: Priority,
+    form_description: Option(String),
+    form_priority: String,
     // UI state
     loading: Bool,
     error: String,
@@ -36,12 +36,17 @@ pub fn default() -> Model {
     todos: [],
     filter: All,
     form_title: "",
-    form_description: "",
-    form_priority: shared.Medium,
+    form_description: None,
+    form_priority: "medium",
     loading: False,
     error: "",
     delete_confirming_id: None,
   )
+}
+
+/// Empty model helper for tests
+pub fn empty_model() -> Model {
+  default()
 }
 
 /// Check if there are any todos

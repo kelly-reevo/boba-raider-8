@@ -320,19 +320,20 @@ pub fn fetch_todos(filter: Option(String)) -> Effect(Msg) {
 }
 
 /// Create a new todo
-pub fn create_todo(title: String, description: String, priority: Priority) -> Effect(Msg) {
+pub fn create_todo(title: String, description: Option(String), priority: String) -> Effect(Msg) {
   let desc_json = case description {
-    "" -> "null"
-    d -> "\"" <> d <> "\""
+    None -> "null"
+    Some(d) -> "\"" <> d <> "\""
   }
   let priority_str = case priority {
-    shared.High -> "high"
-    shared.Medium -> "medium"
-    shared.Low -> "low"
+    "high" -> "high"
+    "medium" -> "medium"
+    "low" -> "low"
+    _ -> "medium"
   }
   let body =
     "{\"title\":\"" <> title <> "\",\"description\":" <> desc_json <> ",\"priority\":\"" <> priority_str <> "\"}"
-  todo_api_post("/api/todos", body, msg.CreateTodoResult)
+  todo_api_post("/api/todos", body, msg.CreateTodoResponse)
 }
 
 /// Toggle a todo's completed state

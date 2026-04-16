@@ -6,8 +6,9 @@ import frontend/model.{type FilterState, type Model, Model, All, Active, Complet
 import frontend/msg.{type Msg}
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/string
 import lustre/effect.{type Effect}
-import shared
+import shared.{type Priority, type Todo}
 
 // Note: Using effects.none() for proper test metadata tracking
 
@@ -43,29 +44,33 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     }
 
     // ===== Form Field Updates (local state only) =====
-    msg.SetFormTitle(text) -> {
+    msg.UpdateFormTitle(text) -> {
       #(Model(..model, form_title: text), effects.none())
     }
 
-    msg.SetFormDescription(text) -> {
-      #(Model(..model, form_description: text), effects.none())
+    msg.UpdateFormDescription(text) -> {
+      let desc_opt = case string.trim(text) {
+        "" -> None
+        trimmed -> Some(trimmed)
+      }
+      #(Model(..model, form_description: desc_opt), effects.none())
     }
 
-    msg.SetFormPriority(priority) -> {
-      #(Model(..model, form_priority: priority), effects.none())
+    msg.UpdateFormPriority(priority_str) -> {
+      #(Model(..model, form_priority: priority_str), effects.none())
     }
 
     // ===== Todo Creation =====
     msg.SubmitCreateTodo -> {
       // Validate form before submitting
       case validate_create_form(model) {
-        True -> {
+        Ok(_) -> {
           // Clear form and set loading
           let new_model = Model(
             ..model,
             form_title: "",
-            form_description: "",
-            form_priority: shared.Medium,
+            form_description: None,
+            form_priority: "medium",
             loading: True,
           )
           let effect = effects.create_todo(
@@ -75,21 +80,26 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           )
           #(new_model, effect)
         }
-        False -> {
-          // Validation failed - show error
-          #(Model(..model, error: "Title is required"), effects.none())
+        Error(error_msg) -> {
+          // Validation failed - show error and preserve form values
+          #(Model(..model, error: error_msg), effects.none())
         }
       }
     }
 
-    msg.CreateTodoResult(Ok(created_todo)) -> {
-      // Add new todo to list and clear loading
+    msg.CreateTodoResponse(Ok(created_todo)) -> {
+      // Add new todo to list, clear loading, clear error, and reload todos
       let new_todos = [created_todo, ..model.todos]
-      #(Model(..model, todos: new_todos, loading: False, error: ""), effects.none())
+      let filter_opt = filter_state_to_string(model.filter)
+      #(Model(..model, todos: new_todos, loading: False, error: ""), effects.fetch_todos(filter_opt))
     }
 
-    msg.CreateTodoResult(Error(http_error)) -> {
-      let error_msg = msg.http_error_to_string(http_error)
+    msg.CreateTodoResponse(Error(http_error)) -> {
+      let error_msg = case http_error {
+        msg.NetworkError -> "Network error. Please check your connection."
+        _ -> "Failed to create todo. Please try again."
+      }
+      // Preserve form values on error
       #(Model(..model, loading: False, error: error_msg), effects.none())
     }
 
@@ -168,9 +178,17 @@ fn filter_state_to_string(filter: FilterState) -> Option(String) {
 }
 
 /// Validate create form has required fields
-fn validate_create_form(model: Model) -> Bool {
-  case model.form_title {
-    "" -> False
-    _ -> True
+/// Returns Ok(Nil) if valid, Error(String) with error message if invalid
+fn validate_create_form(model: Model) -> Result(Nil, String) {
+  // Check for empty title
+  case string.trim(model.form_title) {
+    "" -> Error("Title is required")
+    trimmed -> {
+      // Check title max length (200 chars)
+      case string.length(trimmed) > 200 {
+        True -> Error("Title must be 200 characters or less")
+        False -> Ok(Nil)
+      }
+    }
   }
 }

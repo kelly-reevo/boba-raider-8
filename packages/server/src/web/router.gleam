@@ -19,12 +19,22 @@ pub fn make_handler(
   fn(request: Request) { route(request, counter, todo_subject) }
 }
 
+fn get_path_without_query(path: String) -> String {
+  case string.split(path, "?") {
+    [base_path, ..] -> base_path
+    _ -> path
+  }
+}
+
 fn route(
   request: Request,
   counter: Subject(CounterMsg),
   todo_subject: Subject(TodoMsg),
 ) -> Response {
-  case request.method, request.path {
+  // Strip query string for exact path matching
+  let base_path = get_path_without_query(request.path)
+
+  case request.method, base_path {
     "GET", "/" -> static.serve_index()
     "GET", "/health" -> health_handler()
     "GET", "/api/health" -> health_handler()
@@ -36,7 +46,7 @@ fn route(
     "GET", "/api/todos" -> list_todos_handler(request, todo_subject)
     "POST", "/api/todos" -> create_todo_handler(request, todo_subject)
     "OPTIONS", "/api/todos" -> Response(status: 204, headers: cors_headers(), body: "")
-    // Todo endpoints with ID - match by pattern
+    // Todo endpoints with ID - match by pattern (use base_path for matching)
     "GET", path -> route_get_todo(path, todo_subject)
     "PATCH", path -> route_patch_todo(request, path, todo_subject)
     "DELETE", path -> route_delete_todo(path, todo_subject)
@@ -126,11 +136,13 @@ fn is_valid_hex_char(c: String) -> Bool {
 
 // GET /api/todos/:id handler
 fn get_todo_handler(id: String, todo_subject: Subject(TodoMsg)) -> Response {
+  // For REST API consistency, both invalid format and not-found return 404
+  // This prevents information leakage about valid ID formats
   case is_valid_uuid(id) {
     False ->
       json_response(
-        400,
-        json.object([#("error", json.string("invalid_id"))])
+        404,
+        json.object([#("error", json.string("not_found"))])
           |> json.to_string,
       )
     True -> {
@@ -244,19 +256,29 @@ fn delete_todo_handler(
   todo_subject: Subject(TodoMsg),
   id: String,
 ) -> Response {
-  case todo_actor.delete_todo(todo_subject, id) {
-    Ok(True) -> Response(status: 204, headers: cors_headers(), body: "")
-    Ok(False) | Error(NotFound) ->
+  // Validate UUID format first
+  case is_valid_uuid(id) {
+    False ->
       json_response(
         404,
         json.object([#("error", json.string("not_found"))]) |> json.to_string,
       )
-    Error(_) ->
-      json_response(
-        500,
-        json.object([#("error", json.string("internal_error"))])
-          |> json.to_string,
-      )
+    True -> {
+      case todo_actor.delete_todo(todo_subject, id) {
+        Ok(True) -> Response(status: 204, headers: cors_headers(), body: "")
+        Ok(False) | Error(NotFound) ->
+          json_response(
+            404,
+            json.object([#("error", json.string("not_found"))]) |> json.to_string,
+          )
+        Error(_) ->
+          json_response(
+            500,
+            json.object([#("error", json.string("internal_error"))])
+              |> json.to_string,
+          )
+      }
+    }
   }
 }
 
@@ -339,26 +361,38 @@ fn create_todo_handler(
   case json.parse(request.body, create_decoder) {
     Ok(#(title_opt, description_opt, priority_opt)) -> {
       let title = option.unwrap(title_opt, "")
+      // Priority is required - use unwrap with empty string then validate
       let priority = option.unwrap(priority_opt, "")
 
-      case
-        todo_validation.validate_todo_input(title, description_opt, priority)
-      {
-        Ok(validated_input) -> {
-          let created_todo =
-            todo_actor.create_todo(
-              todo_subject,
-              validated_input.title,
-              validated_input.description,
-              validated_input.priority,
-            )
-          json_response(201, todo_to_json(created_todo) |> json.to_string)
-        }
-        Error(validation_errors) -> {
+      // Validate that priority is not empty
+      case priority {
+        "" -> {
           let body =
-            json.object([#("errors", json.array(validation_errors, json.string))])
+            json.object([#("errors", json.array(["Priority is required"], json.string))])
             |> json.to_string
           json_response(400, body)
+        }
+        _ -> {
+          case
+            todo_validation.validate_todo_input(title, description_opt, priority)
+          {
+            Ok(validated_input) -> {
+              let created_todo =
+                todo_actor.create_todo(
+                  todo_subject,
+                  validated_input.title,
+                  validated_input.description,
+                  validated_input.priority,
+                )
+              json_response(201, todo_to_json(created_todo) |> json.to_string)
+            }
+            Error(validation_errors) -> {
+              let body =
+                json.object([#("errors", json.array(validation_errors, json.string))])
+                |> json.to_string
+              json_response(400, body)
+            }
+          }
         }
       }
     }

@@ -7,6 +7,8 @@ import shared.{type Priority, High, Medium, Low}
 pub type TodoPatch {
   TodoPatch(
     title: Option(String),
+    description: Option(String),
+    priority: Option(Priority),
     completed: Option(Bool),
   )
 }

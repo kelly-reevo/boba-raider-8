@@ -125,8 +125,8 @@ fn apply_patch(item: Todo, patch: TodoPatch) -> Todo {
   Todo(
     id: item.id,
     title: option.unwrap(patch.title, item.title),
-    description: item.description,
-    priority: item.priority,
+    description: option.or(patch.description, item.description),
+    priority: option.unwrap(patch.priority, item.priority),
     completed: option.unwrap(patch.completed, item.completed),
   )
 }

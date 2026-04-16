@@ -148,7 +148,7 @@ pub fn actor_update_returns_shared_result_type_test() {
   let created = todo_actor.create_todo(todo_subject, "Original", None, Low)
 
   // Update with valid patch
-  let patch = todo_validation.TodoPatch(title: Some("Updated"), completed: None)
+  let patch = todo_validation.TodoPatch(title: Some("Updated"), description: None, priority: None, completed: None)
   let result = todo_actor.update_todo(todo_subject, created.id, patch)
 
   case result {
@@ -165,7 +165,7 @@ pub fn actor_update_returns_shared_result_type_test() {
 pub fn actor_update_not_found_returns_shared_error_test() {
   let assert Ok(todo_subject) = todo_actor.start()
 
-  let patch = todo_validation.TodoPatch(title: Some("New title"), completed: None)
+  let patch = todo_validation.TodoPatch(title: Some("New title"), description: None, priority: None, completed: None)
   let result = todo_actor.update_todo(todo_subject, "missing-id", patch)
 
   case result {
@@ -205,7 +205,7 @@ pub fn actor_state_persists_across_operations_test() {
   let t3 = todo_actor.create_todo(todo_subject, "Three", None, High)
 
   // Update one
-  let patch = todo_validation.TodoPatch(title: None, completed: Some(True))
+  let patch = todo_validation.TodoPatch(title: None, description: None, priority: None, completed: Some(True))
   let assert Ok(updated) = todo_actor.update_todo(todo_subject, t2.id, patch)
   updated.completed |> should.be_true
 
@@ -276,6 +276,8 @@ pub fn full_update_flow_validation_patch_to_actor_test() {
   // Validate update patch
   let update_patch = todo_validation.TodoPatch(
     title: Some("Updated title"),
+    description: None,
+    priority: None,
     completed: Some(True),
   )
 
@@ -349,7 +351,7 @@ pub fn actor_message_types_use_shared_types_test() {
     )
 
   // UpdateTodo carries TodoPatch, returns Result(Todo, AppError)
-  let patch = todo_validation.TodoPatch(title: None, completed: Some(True))
+  let patch = todo_validation.TodoPatch(title: None, description: None, priority: None, completed: Some(True))
   let update_msg: TodoMsg =
     UpdateTodo(id: "123", changes: patch, reply_with: process.new_subject())
 

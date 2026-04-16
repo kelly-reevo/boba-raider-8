@@ -2,6 +2,7 @@ import config.{type Config}
 import counter
 import gleam/erlang/process
 import gleam/io
+import todo_actor
 import web/http_server_actor
 import web/router
 
@@ -12,8 +13,12 @@ pub fn start(cfg: Config) -> Result(Nil, String) {
   let assert Ok(counter_subject) = counter.start()
   io.println("Counter actor started")
 
-  // Create the HTTP handler with counter access
-  let handler = router.make_handler(counter_subject)
+  // Start todo actor
+  let assert Ok(todo_subject) = todo_actor.start()
+  io.println("Todo actor started")
+
+  // Create the HTTP handler with counter and todo actor access
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   // Start HTTP server actor
   case http_server_actor.start(cfg.port, handler) {

@@ -1,6 +1,7 @@
 import counter
 import gleam/dict
 import gleeunit/should
+import todo_actor
 import web/router
 import web/server.{type Request}
 
@@ -32,7 +33,8 @@ pub fn counter_api_get_test() {
   let assert Ok(counter_subject) = counter.start()
 
   // Create real router handler with actual actor
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   // Make request through full stack
   let request = make_request("GET", "/api/counter")
@@ -47,7 +49,8 @@ pub fn counter_api_get_test() {
 /// Verifies: POST /api/counter/increment updates actor and returns new count
 pub fn counter_api_increment_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   // Increment through API
   let request = make_request("POST", "/api/counter/increment")
@@ -66,7 +69,8 @@ pub fn counter_api_increment_test() {
 /// Verifies: POST /api/counter/decrement updates actor and returns new count
 pub fn counter_api_decrement_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   // First increment to positive value
   let _ = counter.increment(counter_subject)
@@ -84,7 +88,8 @@ pub fn counter_api_decrement_test() {
 /// Verifies: POST /api/counter/reset clears actor state to 0
 pub fn counter_api_reset_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   // Set non-zero value
   let _ = counter.increment(counter_subject)
@@ -103,7 +108,8 @@ pub fn counter_api_reset_test() {
 /// Verifies: Actor state persists correctly across multiple HTTP requests
 pub fn counter_api_multiple_operations_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   // Sequence: inc, inc, dec, inc, reset, inc
   let ops = [
@@ -132,7 +138,8 @@ pub fn counter_api_multiple_operations_test() {
 /// Verifies: Basic HTTP routing and JSON response generation
 pub fn health_endpoint_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   let request = make_request("GET", "/health")
   let response = handler(request)
@@ -146,7 +153,8 @@ pub fn health_endpoint_test() {
 /// Verifies: /api/health route is accessible
 pub fn api_health_endpoint_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   let request = make_request("GET", "/api/health")
   let response = handler(request)
@@ -158,7 +166,8 @@ pub fn api_health_endpoint_test() {
 /// Verifies: Static file serving integration
 pub fn root_path_serves_index_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   let request = make_request("GET", "/")
   let response = handler(request)
@@ -173,7 +182,8 @@ pub fn root_path_serves_index_test() {
 /// Verifies: /static/ path routing works for CSS
 pub fn static_css_served_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   let request = make_request("GET", "/static/css/styles.css")
   let response = handler(request)
@@ -192,7 +202,8 @@ pub fn static_css_served_test() {
 /// Verifies: CORS middleware applies to API responses
 pub fn counter_api_cors_headers_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   let request = make_request("GET", "/api/counter")
   let response = handler(request)
@@ -206,7 +217,8 @@ pub fn counter_api_cors_headers_test() {
 /// Verifies: CORS preflight returns 204 for API paths
 pub fn options_preflight_api_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   let request = make_request("OPTIONS", "/api/counter")
   let response = handler(request)
@@ -221,7 +233,8 @@ pub fn options_preflight_api_test() {
 /// Verifies: CORS preflight only applies to /api/* paths
 pub fn options_non_api_returns_404_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   let request = make_request("OPTIONS", "/some/other/path")
   let response = handler(request)
@@ -237,7 +250,8 @@ pub fn options_non_api_returns_404_test() {
 /// Verifies: Router correctly returns 404 for non-existent routes
 pub fn unknown_path_returns_404_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   let request = make_request("GET", "/api/unknown-endpoint")
   let response = handler(request)
@@ -249,7 +263,8 @@ pub fn unknown_path_returns_404_test() {
 /// Verifies: Router handles mismatched methods appropriately
 pub fn invalid_method_for_counter_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   // PUT is not a valid method for counter endpoint
   let request = make_request("PUT", "/api/counter")

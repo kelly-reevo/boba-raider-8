@@ -75,7 +75,8 @@ pub fn counter_actor_starts_and_responds_test() {
 /// Full-stack: Counter increment via HTTP handler
 pub fn counter_http_increment_integration_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   let request = make_post_request("/api/counter/increment", "")
   let response = handler(request)
@@ -87,7 +88,8 @@ pub fn counter_http_increment_integration_test() {
 /// Full-stack: Counter decrement via HTTP handler
 pub fn counter_http_decrement_integration_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   // First increment
   let _ = counter.increment(counter_subject)
@@ -104,7 +106,8 @@ pub fn counter_http_decrement_integration_test() {
 /// Full-stack: Counter reset via HTTP handler
 pub fn counter_http_reset_integration_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   // Set non-zero value
   let _ = counter.increment(counter_subject)
@@ -122,7 +125,8 @@ pub fn counter_http_reset_integration_test() {
 /// Full-stack: Counter state persists across multiple HTTP requests
 pub fn counter_state_persistence_across_requests_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   // Sequence of operations
   let ops = [
@@ -147,7 +151,8 @@ pub fn counter_state_persistence_across_requests_test() {
 /// Full-stack: Counter API CORS headers present
 pub fn counter_api_cors_headers_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   let request = make_get_request("/api/counter")
   let response = handler(request)
@@ -156,13 +161,14 @@ pub fn counter_api_cors_headers_test() {
   origin |> should.equal(Ok("*"))
 
   let methods = dict.get(response.headers, "Access-Control-Allow-Methods")
-  methods |> should.equal(Ok("GET, POST, OPTIONS"))
+  methods |> should.equal(Ok("GET, POST, PATCH, DELETE, OPTIONS"))
 }
 
 /// Full-stack: CORS preflight for counter endpoints
 pub fn counter_api_options_preflight_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   let request = make_options_request("/api/counter")
   let response = handler(request)
@@ -278,7 +284,7 @@ pub fn todo_actor_update_integration_test() {
 
   let created = todo_actor.create_todo(todo_subject, "Original", None, Low)
 
-  let patch = TodoPatch(title: Some("Updated"), completed: Some(True))
+  let patch = TodoPatch(title: Some("Updated"), description: None, priority: None, completed: Some(True))
   let result = todo_actor.update_todo(todo_subject, created.id, patch)
 
   case result {
@@ -296,7 +302,7 @@ pub fn todo_actor_update_integration_test() {
 pub fn todo_actor_update_not_found_test() {
   let assert Ok(todo_subject) = todo_actor.start()
 
-  let patch = TodoPatch(title: Some("New"), completed: None)
+  let patch = TodoPatch(title: Some("New"), description: None, priority: None, completed: None)
   let result = todo_actor.update_todo(todo_subject, "missing-id", patch)
 
   case result {
@@ -336,7 +342,7 @@ pub fn todo_actor_state_persistence_test() {
   let t3 = todo_actor.create_todo(todo_subject, "Three", None, High)
 
   // Update t2
-  let patch = TodoPatch(title: None, completed: Some(True))
+  let patch = TodoPatch(title: None, description: None, priority: None, completed: Some(True))
   let assert Ok(_) = todo_actor.update_todo(todo_subject, t2.id, patch)
 
   // Delete t1
@@ -427,7 +433,8 @@ pub fn complete_validation_create_flow_test() {
 /// Full-stack: Health endpoint returns ok
 pub fn health_endpoint_integration_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   let request = make_get_request("/health")
   let response = handler(request)
@@ -439,7 +446,8 @@ pub fn health_endpoint_integration_test() {
 /// Full-stack: API health endpoint
 pub fn api_health_endpoint_integration_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   let request = make_get_request("/api/health")
   let response = handler(request)
@@ -450,7 +458,8 @@ pub fn api_health_endpoint_integration_test() {
 /// Full-stack: Root path serves index HTML
 pub fn root_serves_index_integration_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   let request = make_get_request("/")
   let response = handler(request)
@@ -462,7 +471,8 @@ pub fn root_serves_index_integration_test() {
 /// Full-stack: 404 for unknown paths
 pub fn unknown_path_returns_404_integration_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   let request = make_get_request("/api/unknown")
   let response = handler(request)
@@ -473,7 +483,8 @@ pub fn unknown_path_returns_404_integration_test() {
 /// Full-stack: CORS preflight for API paths
 pub fn cors_preflight_integration_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   let request = make_options_request("/api/counter")
   let response = handler(request)
@@ -486,7 +497,8 @@ pub fn cors_preflight_integration_test() {
 /// Full-stack: CORS preflight only for /api/* paths
 pub fn cors_preflight_only_api_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   let request = make_options_request("/not-api/path")
   let response = handler(request)
@@ -497,7 +509,8 @@ pub fn cors_preflight_only_api_test() {
 /// Full-stack: Static file serving for CSS
 pub fn static_css_serving_integration_test() {
   let assert Ok(counter_subject) = counter.start()
-  let handler = router.make_handler(counter_subject)
+  let assert Ok(todo_subject) = todo_actor.start()
+  let handler = router.make_handler(counter_subject, todo_subject)
 
   let request = make_get_request("/static/css/styles.css")
   let response = handler(request)

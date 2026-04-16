@@ -78,5 +78,14 @@ pub type Msg {
   DeleteClicked(id: String)
   CancelDelete
   DeleteTodo(id: String)
-  TodoDeleted(Result(String, HttpError))
+  DeleteResult(Result(String, HttpError))
+
+  // Retry failed operation
+  Retry(op: RetryableOp)
+}
+
+/// Operations that can be retried after an error
+pub type RetryableOp {
+  LoadTodosOp
+  SubmitTodoOp
 }

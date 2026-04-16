@@ -43,8 +43,21 @@ fn render_error(error: String) -> Element(Msg) {
       html.div([], [])
     _ ->
       html.div(
-        [attribute.class("error-message"), attribute.attribute("data-testid", "form-error-message")],
-        [element.text(error)],
+        [
+          attribute.class("error-banner"),
+          attribute.attribute("data-testid", "error-banner"),
+        ],
+        [
+          html.span([], [element.text(error)]),
+          html.button(
+            [
+              event.on_click(msg.Retry(msg.LoadTodosOp)),
+              attribute.class("retry-btn"),
+              attribute.attribute("data-testid", "retry-button"),
+            ],
+            [element.text("Retry")],
+          ),
+        ],
       )
   }
 }
@@ -137,7 +150,7 @@ fn render_content(model: Model) -> Element(Msg) {
     False -> {
       let visible_todos = model.filter_todos(model)
       case list.is_empty(visible_todos) {
-        True -> render_empty_state(model.filter, model.todos)
+        True -> render_empty_state(model.filter)
         False -> render_todo_list(model, visible_todos)
       }
     }
@@ -147,27 +160,42 @@ fn render_content(model: Model) -> Element(Msg) {
 /// Render loading state
 fn render_loading() -> Element(Msg) {
   html.div(
-    [attribute.class("loading-state"), attribute.attribute("data-testid", "todos-loading")],
+    [
+      attribute.class("loading-indicator"),
+      attribute.attribute("data-testid", "loading-indicator"),
+    ],
     [element.text("Loading...")],
   )
 }
 
-/// Render empty state based on current filter and total todos
-fn render_empty_state(filter_state: FilterState, all_todos: List(shared.Todo)) -> Element(Msg) {
-  let message = case all_todos {
-    [] -> "No todos yet"
-    _ -> {
-      case filter_state {
-        All -> "No todos yet"
-        Active -> "No active todos. Great job!"
-        Completed -> "No completed todos yet."
-      }
-    }
+/// Render empty state based on current filter
+fn render_empty_state(filter_state: FilterState) -> Element(Msg) {
+  case filter_state {
+    All ->
+      html.div(
+        [attribute.class("empty-state"), attribute.attribute("data-testid", "todo-list-empty")],
+        [
+          html.div(
+            [attribute.attribute("data-testid", "empty-state-message")],
+            [element.text("No todos yet.")],
+          ),
+          html.div(
+            [attribute.attribute("data-testid", "empty-state-prompt")],
+            [element.text("Create your first todo above!")],
+          ),
+        ],
+      )
+    Active ->
+      html.div(
+        [attribute.class("empty-state"), attribute.attribute("data-testid", "todo-list-empty")],
+        [element.text("No active todos. Great job!")],
+      )
+    Completed ->
+      html.div(
+        [attribute.class("empty-state"), attribute.attribute("data-testid", "todo-list-empty")],
+        [element.text("No completed todos yet.")],
+      )
   }
-  html.div(
-    [attribute.class("empty-state"), attribute.attribute("data-testid", "todo-list-empty")],
-    [element.text(message)],
-  )
 }
 
 /// Render the todo list

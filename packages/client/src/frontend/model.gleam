@@ -1,5 +1,5 @@
 import atlas.{
-  type Atlas, type Graph, type Motion, type NodeId, type StageId, type ViewBox,
+  type Atlas, type Motion, type NodeId, type StageId, type ViewBox, ViewBox,
 }
 import atlas/seed
 import gleam/option.{type Option, None}
@@ -8,8 +8,7 @@ import gleam/set.{type Set}
 pub type Crumb {
   Crumb(
     level: atlas.Level,
-    parent: Option(NodeId),
-    viewbox: ViewBox,
+    active_breakdown: Option(NodeId),
     focused_stage: Option(StageId),
     label: String,
   )
@@ -18,11 +17,14 @@ pub type Crumb {
 pub type Model {
   Model(
     atlas: Atlas,
+    level: atlas.Level,
+    overview_viewbox: ViewBox,
+    activities_viewbox: ViewBox,
+    active_breakdown: Option(NodeId),
+    breakdown_viewbox: ViewBox,
     stack: List(Crumb),
-    current: Graph,
     hovered: Option(NodeId),
     motions: Set(Motion),
-    viewbox: ViewBox,
     focused_stage: Option(StageId),
     dragging: Bool,
     drag_moved: Bool,
@@ -33,11 +35,14 @@ pub fn init() -> Model {
   let a = seed.atlas()
   Model(
     atlas: a,
+    level: atlas.Overview,
+    overview_viewbox: a.overview.viewbox,
+    activities_viewbox: a.activity_map.viewbox,
+    active_breakdown: None,
+    breakdown_viewbox: ViewBox(-300.0, 0.0, 1800.0, 720.0),
     stack: [],
-    current: a.overview,
     hovered: None,
     motions: set.new(),
-    viewbox: a.overview.viewbox,
     focused_stage: None,
     dragging: False,
     drag_moved: False,

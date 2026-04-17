@@ -1,12 +1,13 @@
 import atlas.{
-  type Edge, type Motion, type Node, type StageBand, Activities, Activity,
-  Feedback, Flow, Handoff, HighTouch, Knot, LowTouch, MediumTouch, NoTouch,
-  Overview, Stage, Task,
+  type Edge, type Graph, type Motion, type Node, type StageBand, Activity,
+  Breakdown, Feedback, Flow, Handoff, HighTouch, Inbound, Knot, LowTouch,
+  MediumTouch, Neighbor, NoTouch, Outbound, Overview, Stage, Task,
 }
 import atlas/lookup
 import frontend/model.{type Model}
 import frontend/msg.{type Msg}
 import frontend/svg_helpers.{fattr, viewbox_transform}
+import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode
 import gleam/float
 import gleam/int
@@ -77,7 +78,7 @@ fn breadcrumb(model: Model) -> Element(Msg) {
 }
 
 fn current_label(model: Model) -> String {
-  case model.current.level, model.focused_stage {
+  case model.level, model.focused_stage {
     Overview, _ -> "Overview"
     atlas.Activities, Some(stage) ->
       atlas.stage_label(stage) <> " activities"
@@ -87,7 +88,7 @@ fn current_label(model: Model) -> String {
 }
 
 fn breakdown_label(model: Model) -> String {
-  case model.current.parent {
+  case model.active_breakdown {
     Some(id) ->
       case lookup.find_node(model.atlas.activity_map, id) {
         Some(n) -> n.label
@@ -101,7 +102,7 @@ fn level_legend(model: Model) -> Element(Msg) {
   html.div([class("level-indicator")], [
     html.span([class("level-label")], [element.text("Level")]),
     html.span([class("level-value")], [
-      element.text(atlas.level_label(model.current.level)),
+      element.text(atlas.level_label(model.level)),
     ]),
   ])
 }
@@ -148,21 +149,10 @@ fn motion_class(motion: Motion) -> String {
 // -------- main canvas ----------
 
 fn main_canvas(model: Model) -> Element(Msg) {
-  let pannable = model.current.level == Activities
   let wrap_classes =
-    "canvas-wrap"
-    <> case pannable {
-      True -> " pannable"
-      False -> ""
-    }
+    "canvas-wrap pannable"
     <> case model.dragging {
       True -> " dragging"
-      False -> ""
-    }
-  let zoom_classes =
-    "zoom-layer"
-    <> case model.dragging {
-      True -> " no-transition"
       False -> ""
     }
   html.main(
@@ -172,6 +162,7 @@ fn main_canvas(model: Model) -> Element(Msg) {
       event.on_mouse_up(msg.PanEnd),
       event.on_mouse_leave(msg.PanEnd),
       event.on("mousemove", pan_move_decoder()),
+      event.prevent_default(event.on("wheel", wheel_decoder())),
     ],
     [
       svg.svg(
@@ -188,21 +179,78 @@ fn main_canvas(model: Model) -> Element(Msg) {
         ],
         [
           svg_helpers.arrow_marker_defs(),
-          svg.g(
-            [
-              class(zoom_classes),
-              attribute("transform", viewbox_transform(model.viewbox)),
-            ],
-            [
-              bowtie_silhouette(model),
-              stage_bands_layer(model),
-              render_graph(model),
-            ],
-          ),
+          render_overview_layer(model),
+          render_activities_layer(model),
+          render_breakdown_layer(model),
         ],
       ),
     ],
   )
+}
+
+fn render_overview_layer(model: Model) -> Element(Msg) {
+  let graph = model.atlas.overview
+  svg.g(
+    [
+      class(layer_classes(model, Overview)),
+      attribute("transform", viewbox_transform(model.overview_viewbox)),
+    ],
+    [bowtie_silhouette(), render_graph(model, graph)],
+  )
+}
+
+fn render_activities_layer(model: Model) -> Element(Msg) {
+  let graph = model.atlas.activity_map
+  svg.g(
+    [
+      class(layer_classes(model, atlas.Activities)),
+      attribute("transform", viewbox_transform(model.activities_viewbox)),
+    ],
+    [stage_bands_layer(model, graph.bands), render_graph(model, graph)],
+  )
+}
+
+fn render_breakdown_layer(model: Model) -> Element(Msg) {
+  case model.active_breakdown {
+    Some(id) ->
+      case lookup.find_breakdown_graph(model.atlas, id) {
+        Some(graph) ->
+          svg.g(
+            [
+              class(layer_classes(model, Breakdown)),
+              attribute(
+                "transform",
+                viewbox_transform(model.breakdown_viewbox),
+              ),
+            ],
+            [render_graph(model, graph)],
+          )
+        None -> element.none()
+      }
+    None -> element.none()
+  }
+}
+
+fn layer_classes(model: Model, level: atlas.Level) -> String {
+  let active = model.level == level
+  let base = "layer " <> layer_class(level)
+  let active_cls = case active {
+    True -> " active"
+    False -> ""
+  }
+  let no_trans_cls = case model.dragging && active {
+    True -> " no-transition"
+    False -> ""
+  }
+  base <> active_cls <> no_trans_cls
+}
+
+fn layer_class(level: atlas.Level) -> String {
+  case level {
+    Overview -> "layer-overview"
+    atlas.Activities -> "layer-activities"
+    Breakdown -> "layer-breakdown"
+  }
 }
 
 fn pan_move_decoder() -> decode.Decoder(Msg) {
@@ -217,33 +265,44 @@ fn pan_move_decoder() -> decode.Decoder(Msg) {
   }
 }
 
-fn bowtie_silhouette(model: Model) -> Element(Msg) {
-  case model.current.level {
-    Overview ->
-      svg.g([class("bowtie-bg")], [
-        svg.polygon([
-          attribute("points", "80,200 800,450 80,700"),
-          attribute("fill", "#eef3ff"),
-          attribute("stroke", "#6b8ae0"),
-          attribute("stroke-width", "2"),
-          attribute("opacity", "0.55"),
-        ]),
-        svg.polygon([
-          attribute("points", "1520,200 800,450 1520,700"),
-          attribute("fill", "#eefaf3"),
-          attribute("stroke", "#4ca082"),
-          attribute("stroke-width", "2"),
-          attribute("opacity", "0.55"),
-        ]),
-      ])
-    _ -> element.none()
-  }
+fn wheel_decoder() -> decode.Decoder(Msg) {
+  let float_decoder =
+    decode.one_of(decode.float, [decode.map(decode.int, int.to_float)])
+  use delta_y <- decode.field("deltaY", float_decoder)
+  use raw <- decode.then(decode.dynamic)
+  let #(cx, cy) = pointer_canvas_pos(raw)
+  decode.success(msg.WheelScroll(delta_y, cx, cy))
 }
 
-fn stage_bands_layer(model: Model) -> Element(Msg) {
-  case model.current.bands {
+@external(javascript, "./wheel_ffi.mjs", "pointer_canvas_pos")
+fn pointer_canvas_pos(event: Dynamic) -> #(Float, Float)
+
+fn bowtie_silhouette() -> Element(Msg) {
+  svg.g([class("bowtie-bg")], [
+    svg.polygon([
+      attribute("points", "80,200 800,450 80,700"),
+      attribute("fill", "#eef3ff"),
+      attribute("stroke", "#6b8ae0"),
+      attribute("stroke-width", "2"),
+      attribute("opacity", "0.55"),
+    ]),
+    svg.polygon([
+      attribute("points", "1520,200 800,450 1520,700"),
+      attribute("fill", "#eefaf3"),
+      attribute("stroke", "#4ca082"),
+      attribute("stroke-width", "2"),
+      attribute("opacity", "0.55"),
+    ]),
+  ])
+}
+
+fn stage_bands_layer(
+  model: Model,
+  bands: List(StageBand),
+) -> Element(Msg) {
+  case bands {
     [] -> element.none()
-    bands ->
+    _ ->
       svg.g(
         [class("stage-bands")],
         list.flatten([
@@ -295,32 +354,39 @@ fn band_label(band: StageBand) -> Element(Msg) {
   )
 }
 
-fn render_graph(model: Model) -> Element(Msg) {
+fn render_graph(model: Model, graph: Graph) -> Element(Msg) {
   let edges_layer =
     svg.g(
       [class("edges")],
-      list.map(model.current.edges, fn(e) { render_edge(model, e) }),
+      list.map(graph.edges, fn(e) { render_edge(model, graph, e) }),
     )
   let nodes_layer =
     svg.g(
       [class("nodes")],
-      list.map(model.current.nodes, fn(n) { render_node(model, n) }),
+      list.map(graph.nodes, fn(n) { render_node(model, n) }),
     )
   svg.g([class("graph")], [edges_layer, nodes_layer])
 }
 
 // -------- edges ----------
 
-fn render_edge(model: Model, edge: Edge) -> Element(Msg) {
-  let from_node = lookup.find_node(model.current, edge.from)
-  let to_node = lookup.find_node(model.current, edge.to)
+fn render_edge(model: Model, graph: Graph, edge: Edge) -> Element(Msg) {
+  let from_node = lookup.find_node(graph, edge.from)
+  let to_node = lookup.find_node(graph, edge.to)
   case from_node, to_node {
-    Some(fnode), Some(tnode) -> draw_edge(model, edge, fnode, tnode)
+    Some(fnode), Some(tnode) ->
+      draw_edge(model, graph.level, edge, fnode, tnode)
     _, _ -> element.none()
   }
 }
 
-fn draw_edge(model: Model, edge: Edge, from: Node, to: Node) -> Element(Msg) {
+fn draw_edge(
+  model: Model,
+  level: atlas.Level,
+  edge: Edge,
+  from: Node,
+  to: Node,
+) -> Element(Msg) {
   let #(x1, y1) = endpoint(from, to)
   let #(x2, y2) = endpoint(to, from)
   let opacity = case model.motion_match(model, edge.motions) {
@@ -346,7 +412,7 @@ fn draw_edge(model: Model, edge: Edge, from: Node, to: Node) -> Element(Msg) {
         lbl,
       )
   }
-  case model.current.level {
+  case level {
     Overview ->
       svg.g([], [
         svg.line([
@@ -452,6 +518,7 @@ fn render_node(model: Model, node: Node) -> Element(Msg) {
     Stage(_) -> rect_shape(node, opacity, 16.0)
     Activity(_) -> rect_shape(node, opacity, 12.0)
     Task(_) -> rect_shape(node, opacity, 10.0)
+    Neighbor(_, _) -> hex_shape(node, opacity)
   }
   let extras = case node.kind {
     Task(owner) -> [owner_pill(node, owner, opacity)]
@@ -476,6 +543,16 @@ fn node_kind_class(kind: atlas.NodeKind) -> String {
     Knot(_) -> "knot"
     Activity(s) -> "activity activity-" <> string.lowercase(atlas.stage_label(s))
     Task(_) -> "task"
+    Neighbor(s, dir) -> {
+      let dir_cls = case dir {
+        Inbound -> "neighbor-in"
+        Outbound -> "neighbor-out"
+      }
+      "neighbor "
+      <> dir_cls
+      <> " neighbor-"
+      <> string.lowercase(atlas.stage_label(s))
+    }
   }
 }
 
@@ -511,6 +588,43 @@ fn knot_shape(node: Node, opacity: String) -> Element(msg) {
     <> float.to_string(cy +. half)
     <> " "
     <> float.to_string(cx -. half)
+    <> ","
+    <> float.to_string(cy)
+  svg.polygon([attribute("points", points), attribute("opacity", opacity)])
+}
+
+fn hex_shape(node: Node, opacity: String) -> Element(msg) {
+  let cx = node.position.x
+  let cy = node.position.y
+  let half_w = node.size.width /. 2.0
+  let half_h = node.size.height /. 2.0
+  let inset = half_w *. 0.28
+  let left = cx -. half_w
+  let right = cx +. half_w
+  let top = cy -. half_h
+  let bottom = cy +. half_h
+  let points =
+    float.to_string(left +. inset)
+    <> ","
+    <> float.to_string(top)
+    <> " "
+    <> float.to_string(right -. inset)
+    <> ","
+    <> float.to_string(top)
+    <> " "
+    <> float.to_string(right)
+    <> ","
+    <> float.to_string(cy)
+    <> " "
+    <> float.to_string(right -. inset)
+    <> ","
+    <> float.to_string(bottom)
+    <> " "
+    <> float.to_string(left +. inset)
+    <> ","
+    <> float.to_string(bottom)
+    <> " "
+    <> float.to_string(left)
     <> ","
     <> float.to_string(cy)
   svg.polygon([attribute("points", points), attribute("opacity", opacity)])

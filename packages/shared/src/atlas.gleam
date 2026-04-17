@@ -43,11 +43,17 @@ pub type StageBand {
   StageBand(stage: StageId, x: Float, width: Float, label: String)
 }
 
+pub type Direction {
+  Inbound
+  Outbound
+}
+
 pub type NodeKind {
   Stage(StageId)
   Knot(StageId)
   Activity(StageId)
   Task(owner: String)
+  Neighbor(stage: StageId, direction: Direction)
 }
 
 pub type Node {

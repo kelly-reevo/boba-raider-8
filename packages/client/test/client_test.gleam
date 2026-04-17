@@ -9,7 +9,7 @@ pub fn main() {
 
 pub fn init_starts_at_overview_test() {
   let m = model.init()
-  m.current.level
+  m.level
   |> should.equal(atlas.Overview)
 }
 

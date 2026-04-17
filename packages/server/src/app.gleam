@@ -1,5 +1,4 @@
 import config
-import counter
 import gleam/erlang/process
 import gleam/io
 import mist
@@ -10,15 +9,13 @@ import wisp/wisp_mist
 
 pub fn main() {
   wisp.configure_logger()
-  io.println("Starting boba-raider-8...")
+  io.println("Starting GTM Atlas server...")
 
   let cfg = config.load()
   io.println("Port: " <> config.port_to_string(cfg))
 
-  let assert Ok(counter_subject) = counter.start()
-
   let assert Ok(priv) = wisp.priv_directory("server")
-  let ctx = Context(counter: counter_subject, static_directory: priv <> "/static")
+  let ctx = Context(static_directory: priv <> "/static")
 
   let handler = fn(req) { router.handle_request(req, ctx) }
   let secret_key_base = wisp.random_string(64)

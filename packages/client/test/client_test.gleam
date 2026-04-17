@@ -1,13 +1,20 @@
+import atlas
+import frontend/model
 import gleeunit
 import gleeunit/should
-import frontend/model
 
 pub fn main() {
   gleeunit.main()
 }
 
-pub fn default_model_test() {
-  let m = model.default()
-  m.count
-  |> should.equal(0)
+pub fn init_starts_at_overview_test() {
+  let m = model.init()
+  m.level
+  |> should.equal(atlas.Overview)
+}
+
+pub fn init_has_no_stack_test() {
+  let m = model.init()
+  m.stack
+  |> should.equal([])
 }

@@ -1,4 +1,3 @@
-import counter
 import gleam/http
 import gleam/json
 import web/context.{type Context}
@@ -12,8 +11,6 @@ pub fn handle_request(req: wisp.Request, ctx: Context) -> wisp.Response {
     [] -> wisp.redirect(to: "/static/index.html")
     ["health"] -> health_handler(req)
     ["api", "health"] -> health_handler(req)
-    ["api", "counter"] -> get_counter(req, ctx)
-    ["api", "counter", action] -> counter_action(req, ctx, action)
     _ -> wisp.not_found()
   }
 }
@@ -39,31 +36,6 @@ fn cors_middleware(
 fn health_handler(req: wisp.Request) -> wisp.Response {
   use <- wisp.require_method(req, http.Get)
   json.object([#("status", json.string("ok"))])
-  |> json.to_string
-  |> wisp.json_response(200)
-}
-
-fn get_counter(req: wisp.Request, ctx: Context) -> wisp.Response {
-  use <- wisp.require_method(req, http.Get)
-  counter.get_count(ctx.counter) |> counter_response
-}
-
-fn counter_action(
-  req: wisp.Request,
-  ctx: Context,
-  action: String,
-) -> wisp.Response {
-  use <- wisp.require_method(req, http.Post)
-  case action {
-    "increment" -> counter.increment(ctx.counter) |> counter_response
-    "decrement" -> counter.decrement(ctx.counter) |> counter_response
-    "reset" -> counter.reset(ctx.counter) |> counter_response
-    _ -> wisp.not_found()
-  }
-}
-
-fn counter_response(count: Int) -> wisp.Response {
-  json.object([#("count", json.int(count))])
   |> json.to_string
   |> wisp.json_response(200)
 }

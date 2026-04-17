@@ -47,6 +47,14 @@ pub fn update(model: Model, msg: Msg) -> Model {
       }
     msg.PanEnd -> Model(..model, dragging: False)
     msg.WheelScroll(delta, cx, cy) -> handle_wheel(model, delta, cx, cy)
+    msg.OpportunitySelected(id) -> {
+      let next = case model.selected_opportunity {
+        Some(current) if current == id -> None
+        _ -> Some(id)
+      }
+      Model(..model, selected_opportunity: next)
+    }
+    msg.OpportunityCleared -> Model(..model, selected_opportunity: None)
   }
 }
 
@@ -88,6 +96,8 @@ pub fn active_graph(model: Model) -> atlas.Graph {
 
 const min_zoom: Float = 0.6
 
+const min_zoom_activities: Float = 0.45
+
 const max_zoom: Float = 2.5
 
 const max_zoom_activities: Float = 1.7
@@ -104,6 +114,13 @@ fn level_max_zoom(level: atlas.Level) -> Float {
   case level {
     Activities -> max_zoom_activities
     _ -> max_zoom
+  }
+}
+
+fn level_min_zoom(level: atlas.Level) -> Float {
+  case level {
+    Activities -> min_zoom_activities
+    _ -> min_zoom
   }
 }
 
@@ -137,7 +154,7 @@ fn wheel_zoom_in(model: Model, cx: Float, cy: Float) -> Model {
 
 fn wheel_zoom_out(model: Model, cx: Float, cy: Float) -> Model {
   let zoom = current_zoom_ratio(model)
-  case zoom -. zoom_epsilon <=. min_zoom {
+  case zoom -. zoom_epsilon <=. level_min_zoom(model.level) {
     True ->
       case model.stack {
         [] -> model
@@ -213,7 +230,7 @@ fn apply_zoom(
 ) -> Model {
   let clamped =
     float.max(
-      min_zoom,
+      level_min_zoom(model.level),
       float.min(level_max_zoom(model.level), target_zoom),
     )
   let base = base_viewbox(model)

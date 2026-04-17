@@ -1,5 +1,6 @@
 import atlas.{
-  type Atlas, type Motion, type NodeId, type StageId, type ViewBox, ViewBox,
+  type Atlas, type Motion, type NodeId, type OpportunityId, type StageId,
+  type ViewBox, ViewBox,
 }
 import atlas/seed
 import gleam/option.{type Option, None}
@@ -26,6 +27,7 @@ pub type Model {
     hovered: Option(NodeId),
     motions: Set(Motion),
     focused_stage: Option(StageId),
+    selected_opportunity: Option(OpportunityId),
     dragging: Bool,
     drag_moved: Bool,
   )
@@ -44,6 +46,7 @@ pub fn init() -> Model {
     hovered: None,
     motions: set.new(),
     focused_stage: None,
+    selected_opportunity: None,
     dragging: False,
     drag_moved: False,
   )

@@ -385,3 +385,133 @@ body {
   pointer-events: none;
   user-select: none;
 }
+
+/* ---------- opportunities panel ---------- */
+
+.opportunities-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.opportunity-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.opportunity-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.phase-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  padding: 4px 2px 2px;
+}
+
+.phase-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.phase-awareness .phase-dot { background: #4a70c8; }
+.phase-education .phase-dot { background: #5777cc; }
+.phase-selection .phase-dot { background: #6b7edb; }
+.phase-commitment .phase-dot { background: #a06bc8; }
+.phase-onboarding .phase-dot { background: #459684; }
+.phase-adoption .phase-dot { background: #3d8f72; }
+.phase-expansion .phase-dot { background: #368268; }
+
+.phase-name {
+  flex: 1;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--fg);
+}
+
+.phase-count {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--panel-2);
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.opportunity-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-left: 14px;
+}
+
+.opportunity-chip {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--fg);
+  padding: 5px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.opportunity-chip:hover {
+  background: var(--panel-2);
+  border-color: var(--border);
+}
+
+.opportunity-chip.selected {
+  background: rgba(242, 194, 102, 0.16);
+  border-color: #f2c266;
+  color: #f7dca2;
+  font-weight: 600;
+}
+
+/* ---------- opportunity path highlights ---------- */
+
+.node.on-path rect,
+.node.on-path polygon {
+  stroke: #f2c266;
+  stroke-width: 4;
+  filter: drop-shadow(0 0 10px rgba(242, 194, 102, 0.55));
+}
+
+.node.on-path.neighbor polygon {
+  stroke-dasharray: 0;
+}
+
+.edge.on-path path,
+.edge.on-path line {
+  filter: drop-shadow(0 0 6px rgba(242, 194, 102, 0.5));
+}
+
+.path-date-badge rect {
+  fill: #f2c266;
+  stroke: #0f1624;
+  stroke-width: 1.5;
+}
+
+.path-date-label {
+  fill: #0f1624;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Mono', Menlo, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  user-select: none;
+}

@@ -103,6 +103,24 @@ pub type Atlas {
     overview: Graph,
     activity_map: Graph,
     breakdowns: List(#(NodeId, Graph)),
+    opportunities: List(Opportunity),
+  )
+}
+
+pub type OpportunityId {
+  OpportunityId(String)
+}
+
+pub type OpportunityVisit {
+  OpportunityVisit(node_id: NodeId, date: String)
+}
+
+pub type Opportunity {
+  Opportunity(
+    id: OpportunityId,
+    name: String,
+    current_stage: StageId,
+    visits: List(OpportunityVisit),
   )
 }
 

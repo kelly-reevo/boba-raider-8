@@ -1,7 +1,9 @@
 import atlas.{
-  type Edge, type Graph, type Motion, type Node, type StageBand, Activity,
-  Breakdown, Feedback, Flow, Handoff, HighTouch, Inbound, Knot, LowTouch,
-  MediumTouch, Neighbor, NoTouch, Outbound, Overview, Stage, Task,
+  type Edge, type Graph, type Motion, type Node, type Opportunity,
+  type StageBand, type StageId, Activity, Awareness, Adoption, Breakdown,
+  Commitment, Education, Expansion, Feedback, Flow, Handoff, HighTouch, Inbound,
+  Knot, LowTouch, MediumTouch, Neighbor, NoTouch, Onboarding, Outbound,
+  Overview, Selection, Stage, Task,
 }
 import atlas/lookup
 import frontend/model.{type Model}
@@ -12,7 +14,7 @@ import gleam/dynamic/decode
 import gleam/float
 import gleam/int
 import gleam/list
-import gleam/option.{None, Some}
+import gleam/option.{type Option, None, Some}
 import gleam/string
 import lustre/attribute.{attribute, class}
 import lustre/element.{type Element}
@@ -37,6 +39,7 @@ fn sidebar(model: Model) -> Element(Msg) {
     breadcrumb(model),
     level_legend(model),
     motion_filters(model),
+    opportunities_panel(model),
     html.footer([class("sidebar-footer")], [
       html.button(
         [event.on_click(msg.ResetView), class("ghost-btn")],
@@ -143,6 +146,108 @@ fn motion_class(motion: Motion) -> String {
     LowTouch -> "motion-low"
     MediumTouch -> "motion-med"
     HighTouch -> "motion-high"
+  }
+}
+
+// -------- opportunities panel ----------
+
+fn opportunities_panel(model: Model) -> Element(Msg) {
+  let stages = [
+    Awareness,
+    Education,
+    Selection,
+    Commitment,
+    Onboarding,
+    Adoption,
+    Expansion,
+  ]
+  let groups =
+    list.filter_map(stages, fn(s) {
+      let opps = lookup.opportunities_at_stage(model.atlas, s)
+      case opps {
+        [] -> Error(Nil)
+        _ -> Ok(opportunity_group(model, s, opps))
+      }
+    })
+  let clear_btn = case model.selected_opportunity {
+    Some(_) ->
+      html.button(
+        [event.on_click(msg.OpportunityCleared), class("ghost-btn small")],
+        [element.text("Clear selection")],
+      )
+    None -> element.none()
+  }
+  html.section([class("opportunities-section")], [
+    html.h2([class("section-title")], [element.text("Opportunities by phase")]),
+    html.p([class("section-hint")], [
+      element.text("Select to trace its path through the atlas."),
+    ]),
+    html.div([class("opportunity-groups")], groups),
+    clear_btn,
+  ])
+}
+
+fn opportunity_group(
+  model: Model,
+  stage: StageId,
+  opps: List(Opportunity),
+) -> Element(Msg) {
+  let count_str = int.to_string(list.length(opps))
+  let stage_class = "phase-header phase-" <> stage_slug(stage)
+  html.div([class("opportunity-group")], [
+    html.div([class(stage_class)], [
+      html.span([class("phase-dot")], []),
+      html.span([class("phase-name")], [element.text(atlas.stage_label(stage))]),
+      html.span([class("phase-count")], [element.text(count_str)]),
+    ]),
+    html.ul([class("opportunity-list")],
+      list.map(opps, fn(o) { opportunity_chip(model, o) }),
+    ),
+  ])
+}
+
+fn opportunity_chip(model: Model, opp: Opportunity) -> Element(Msg) {
+  let selected = case model.selected_opportunity {
+    Some(id) -> id == opp.id
+    None -> False
+  }
+  let cls = case selected {
+    True -> "opportunity-chip selected"
+    False -> "opportunity-chip"
+  }
+  html.li([], [
+    html.button(
+      [event.on_click(msg.OpportunitySelected(opp.id)), class(cls)],
+      [element.text(opp.name)],
+    ),
+  ])
+}
+
+fn stage_slug(stage: StageId) -> String {
+  string.lowercase(atlas.stage_label(stage))
+}
+
+// -------- opportunity path helpers ----------
+
+fn selected_opp(model: Model) -> Option(Opportunity) {
+  case model.selected_opportunity {
+    None -> None
+    Some(id) -> lookup.find_opportunity(model.atlas, id)
+  }
+}
+
+fn node_path_date(model: Model, opp: Opportunity, node: Node) -> Option(String) {
+  case node.kind {
+    Stage(s) -> lookup.stage_date(model.atlas, opp, s)
+    Knot(s) -> lookup.stage_date(model.atlas, opp, s)
+    _ -> lookup.visit_date(opp, node.id)
+  }
+}
+
+fn node_on_path(model: Model, opp: Opportunity, node: Node) -> Bool {
+  case node_path_date(model, opp, node) {
+    Some(_) -> True
+    None -> False
   }
 }
 
@@ -389,14 +494,31 @@ fn draw_edge(
 ) -> Element(Msg) {
   let #(x1, y1) = endpoint(from, to)
   let #(x2, y2) = endpoint(to, from)
-  let opacity = case model.motion_match(model, edge.motions) {
-    True -> "1"
-    False -> "0.12"
+  let opp_selected = selected_opp(model)
+  let on_path = case opp_selected {
+    Some(opp) -> node_on_path(model, opp, from) && node_on_path(model, opp, to)
+    None -> False
   }
-  let #(stroke, dash, marker) = case edge.kind {
+  let motion_ok = model.motion_match(model, edge.motions)
+  let opacity = case opp_selected, on_path, motion_ok {
+    Some(_), False, _ -> "0.08"
+    _, _, False -> "0.12"
+    _, _, _ -> "1"
+  }
+  let #(default_stroke, dash, marker) = case edge.kind {
     Flow -> #("#7e8da3", "", "url(#arrow)")
     Handoff -> #("#a06bc8", "8 6", "url(#arrow-dashed)")
     Feedback -> #("#c78f4a", "4 4", "url(#arrow)")
+  }
+  let stroke = case on_path {
+    True -> "#f2c266"
+    False -> default_stroke
+  }
+  let stroke_width = case on_path, level {
+    True, Overview -> "5"
+    True, _ -> "3.5"
+    False, Overview -> "3"
+    False, _ -> "2"
   }
   let label_el = case edge.label {
     "" -> element.none()
@@ -412,16 +534,20 @@ fn draw_edge(
         lbl,
       )
   }
+  let edge_class = case on_path {
+    True -> "edge on-path"
+    False -> "edge"
+  }
   case level {
     Overview ->
-      svg.g([], [
+      svg.g([class(edge_class)], [
         svg.line([
           fattr("x1", x1),
           fattr("y1", y1),
           fattr("x2", x2),
           fattr("y2", y2),
           attribute("stroke", stroke),
-          attribute("stroke-width", "3"),
+          attribute("stroke-width", stroke_width),
           attribute("stroke-dasharray", dash),
           attribute("marker-end", marker),
           attribute("opacity", opacity),
@@ -429,12 +555,12 @@ fn draw_edge(
         label_el,
       ])
     _ ->
-      svg.g([], [
+      svg.g([class(edge_class)], [
         svg.path([
           attribute("d", bezier_path(x1, y1, x2, y2)),
           attribute("fill", "none"),
           attribute("stroke", stroke),
-          attribute("stroke-width", "2"),
+          attribute("stroke-width", stroke_width),
           attribute("stroke-dasharray", dash),
           attribute("marker-end", marker),
           attribute("opacity", opacity),
@@ -489,9 +615,20 @@ fn endpoint(a: Node, b: Node) -> #(Float, Float) {
 // -------- nodes ----------
 
 fn render_node(model: Model, node: Node) -> Element(Msg) {
-  let opacity = case model.motion_match(model, node.motions) {
-    True -> "1"
-    False -> "0.18"
+  let opp_selected = selected_opp(model)
+  let path_date = case opp_selected {
+    Some(opp) -> node_path_date(model, opp, node)
+    None -> None
+  }
+  let on_path = case path_date {
+    Some(_) -> True
+    None -> False
+  }
+  let motion_ok = model.motion_match(model, node.motions)
+  let opacity = case opp_selected, on_path, motion_ok {
+    Some(_), False, _ -> "0.14"
+    _, _, False -> "0.18"
+    _, _, _ -> "1"
   }
   let drillable = case node.children_level {
     Some(_) -> True
@@ -513,6 +650,10 @@ fn render_node(model: Model, node: Node) -> Element(Msg) {
       True -> " drillable"
       False -> ""
     }
+    <> case on_path {
+      True -> " on-path"
+      False -> ""
+    }
   let shape = case node.kind {
     Knot(_) -> knot_shape(node, opacity)
     Stage(_) -> rect_shape(node, opacity, 16.0)
@@ -525,6 +666,10 @@ fn render_node(model: Model, node: Node) -> Element(Msg) {
     _ -> []
   }
   let label = label_element(node, opacity)
+  let date_label = case path_date {
+    Some(d) -> [date_badge(node, d)]
+    None -> []
+  }
   svg.g(
     [
       class(class_name),
@@ -533,8 +678,37 @@ fn render_node(model: Model, node: Node) -> Element(Msg) {
       event.on_mouse_enter(msg.NodeHovered(node.id)),
       event.on_mouse_leave(msg.NodeUnhovered),
     ],
-    list.flatten([[shape, label], extras]),
+    list.flatten([[shape, label], extras, date_label]),
   )
+}
+
+fn date_badge(node: Node, date: String) -> Element(msg) {
+  let half_h = node.size.height /. 2.0
+  let y = node.position.y +. half_h +. 20.0
+  let char_w = 7.5
+  let pad = 12.0
+  let badge_h = 20.0
+  let badge_w = char_w *. int.to_float(string.length(date)) +. pad *. 2.0
+  let x = node.position.x -. badge_w /. 2.0
+  svg.g([class("path-date-badge"), attribute("pointer-events", "none")], [
+    svg.rect([
+      fattr("x", x),
+      fattr("y", y -. badge_h /. 2.0),
+      fattr("width", badge_w),
+      fattr("height", badge_h),
+      fattr("rx", badge_h /. 2.0),
+      fattr("ry", badge_h /. 2.0),
+    ]),
+    svg.text(
+      [
+        fattr("x", node.position.x),
+        fattr("y", y +. 4.0),
+        attribute("text-anchor", "middle"),
+        attribute("class", "path-date-label"),
+      ],
+      date,
+    ),
+  ])
 }
 
 fn node_kind_class(kind: atlas.NodeKind) -> String {

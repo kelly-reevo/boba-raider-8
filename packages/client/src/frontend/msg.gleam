@@ -1,12 +1,15 @@
-pub type HttpError {
-  NetworkError
-  DecodeError
-  ServerError(Int)
-}
+import atlas.{type Motion, type NodeId}
 
 pub type Msg {
-  Increment
-  Decrement
-  Reset
-  GotCounter(Result(Int, HttpError))
+  NodeHovered(NodeId)
+  NodeUnhovered
+  NodeClicked(NodeId)
+  BackClicked
+  BreadcrumbClicked(Int)
+  MotionToggled(Motion)
+  ClearMotions
+  ResetView
+  PanStart
+  PanMove(dx: Int, dy: Int, svg_width: Int, svg_height: Int)
+  PanEnd
 }

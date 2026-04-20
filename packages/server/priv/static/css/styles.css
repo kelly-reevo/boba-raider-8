@@ -4,61 +4,565 @@
   padding: 0;
 }
 
+:root {
+  --bg: #0f1624;
+  --panel: #19223a;
+  --panel-2: #222d4a;
+  --fg: #e6ecf7;
+  --muted: #8a9ab8;
+  --accent: #6b8ae0;
+  --accent-2: #4ca082;
+  --knot: #a06bc8;
+  --stage: #4a60a6;
+  --stage-post: #3d8a72;
+  --activity: #5b6fb8;
+  --step: #3e4d7a;
+  --actor: #2a3655;
+  --system: #2a3655;
+  --border: #2a3655;
+}
+
+html, body, #app {
+  height: 100%;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-  background: #f5f5f5;
-  color: #333;
-  min-height: 100vh;
+  background: var(--bg);
+  color: var(--fg);
+  overflow: hidden;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  height: 100vh;
+}
+
+/* ---------- sidebar ---------- */
+
+.sidebar {
+  background: var(--panel);
+  border-right: 1px solid var(--border);
   display: flex;
-  justify-content: center;
-  align-items: center;
+  flex-direction: column;
+  padding: 24px 20px;
+  gap: 20px;
+  overflow-y: auto;
 }
 
-.app {
-  text-align: center;
-  padding: 2rem;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+.sidebar-header h1 {
+  font-size: 1.35rem;
+  letter-spacing: 0.02em;
+  margin-bottom: 4px;
 }
 
-h1 {
-  margin-bottom: 2rem;
-  color: #5e35b1;
+.subtitle {
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
-.counter {
+.level-indicator {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border-radius: 6px;
 }
 
-.count {
-  font-size: 1.5rem;
-  min-width: 120px;
+.level-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
 }
 
-button {
-  padding: 0.5rem 1.5rem;
-  font-size: 1.25rem;
-  border: none;
+.level-value {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.breadcrumb {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.back-btn {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 6px 10px;
   border-radius: 4px;
   cursor: pointer;
-  background: #5e35b1;
-  color: white;
-  transition: background 0.2s;
+  font-size: 0.8rem;
 }
 
-button:hover {
-  background: #4527a0;
+.back-btn:hover {
+  background: var(--panel-2);
 }
 
-.reset {
-  background: #757575;
+.crumb-trail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
 }
 
-.reset:hover {
-  background: #616161;
+.crumb-btn {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 0.85rem;
+}
+
+.crumb-btn:hover {
+  background: var(--panel-2);
+}
+
+.crumb-sep {
+  color: var(--muted);
+}
+
+.crumb-current {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+/* ---------- strategy picker ---------- */
+
+.motion-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.section-title {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.section-hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.motion-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.chip {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--fg);
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.chip .chip-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.chip .chip-subtitle {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.chip:hover {
+  border-color: var(--accent);
+}
+
+.chip.active {
+  border-width: 2px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+}
+
+.chip.active .chip-subtitle {
+  color: var(--fg);
+}
+
+.chip.active.motion-low { background: rgba(107, 198, 169, 0.22); border-color: #6bc6a9; }
+.chip.active.motion-med { background: rgba(219, 177, 100, 0.22); border-color: #dbb164; }
+.chip.active.motion-high { background: rgba(229, 127, 145, 0.22); border-color: #e57f91; }
+
+.ghost-btn {
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.ghost-btn:hover {
+  background: var(--panel-2);
+}
+
+.ghost-btn.small {
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  align-self: flex-start;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+}
+
+/* ---------- canvas ---------- */
+
+.canvas-wrap {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 30% 40%, rgba(75, 120, 200, 0.12), transparent 50%),
+    radial-gradient(circle at 70% 60%, rgba(76, 160, 130, 0.1), transparent 50%),
+    var(--bg);
+}
+
+.canvas-wrap.pannable {
+  cursor: grab;
+}
+
+.canvas-wrap.pannable.dragging {
+  cursor: grabbing;
+}
+
+.atlas-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.layer {
+  transition: transform 420ms cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 220ms ease-out;
+  transform-origin: 0 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.layer.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.layer.no-transition {
+  transition: none;
+}
+
+/* ---------- node styling ---------- */
+
+.node rect,
+.node polygon {
+  stroke: var(--border);
+  stroke-width: 2;
+  transition: filter 0.15s, stroke 0.15s, stroke-width 0.15s;
+}
+
+.node.drillable {
+  cursor: pointer;
+}
+
+.node .node-label {
+  fill: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  pointer-events: none;
+  user-select: none;
+}
+
+.node.task .node-label {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.node.stage rect {
+  fill: var(--stage);
+}
+
+.node.stage-onboarding rect,
+.node.stage-adoption rect,
+.node.stage-expansion rect {
+  fill: var(--stage-post);
+}
+
+.node.knot polygon {
+  fill: var(--knot);
+  stroke: #d0a3e8;
+  stroke-width: 3;
+}
+
+.node.activity rect {
+  fill: var(--activity);
+}
+
+.node.activity-awareness rect { fill: #4a70c8; }
+.node.activity-education rect { fill: #5777cc; }
+.node.activity-selection rect { fill: #6b7edb; }
+.node.activity-commitment rect { fill: #9160c8; }
+.node.activity-onboarding rect { fill: #459684; }
+.node.activity-adoption rect { fill: #3d8f72; }
+.node.activity-expansion rect { fill: #368268; }
+
+.node.task rect {
+  fill: var(--step);
+  stroke: #4e5f8a;
+}
+
+.node.neighbor polygon {
+  fill: rgba(26, 36, 60, 0.78);
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+.node.neighbor.neighbor-in polygon {
+  stroke: #89b0ff;
+}
+
+.node.neighbor.neighbor-out polygon {
+  stroke: #6bc6a9;
+}
+
+.node.neighbor .node-label {
+  fill: var(--muted);
+  font-size: 15px;
+  font-weight: 600;
+  font-style: italic;
+}
+
+/* ---------- alias (elided cross-stage link) ---------- */
+
+.node.alias rect {
+  fill: rgba(26, 36, 60, 0.72);
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+.node.alias .node-label {
+  fill: var(--fg);
+  font-size: 15px;
+  font-weight: 600;
+  font-style: italic;
+  pointer-events: none;
+  user-select: none;
+}
+
+.node.alias.alias-awareness rect { stroke: #6b8ae0; fill: rgba(74, 112, 200, 0.18); }
+.node.alias.alias-education rect { stroke: #7793e0; fill: rgba(87, 119, 204, 0.18); }
+.node.alias.alias-selection rect { stroke: #8594e6; fill: rgba(107, 126, 219, 0.18); }
+.node.alias.alias-commitment rect { stroke: #c28adb; fill: rgba(160, 107, 200, 0.2); }
+.node.alias.alias-onboarding rect { stroke: #5fb097; fill: rgba(69, 150, 132, 0.18); }
+.node.alias.alias-adoption rect { stroke: #5aa98d; fill: rgba(61, 143, 114, 0.18); }
+.node.alias.alias-expansion rect { stroke: #4f9c80; fill: rgba(54, 130, 104, 0.18); }
+
+.node.alias.hovered rect {
+  stroke: #f2c266;
+  filter: drop-shadow(0 0 8px rgba(242, 194, 102, 0.45));
+}
+
+.owner-pill rect {
+  fill: #6b8ae0;
+  stroke: #0f1624;
+  stroke-width: 2;
+}
+
+.owner-pill-label {
+  fill: #0f1624;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  pointer-events: none;
+  user-select: none;
+}
+
+.node.hovered rect,
+.node.hovered polygon {
+  stroke: var(--fg);
+  stroke-width: 3;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.35));
+}
+
+/* ---------- edge labels ---------- */
+
+.edge-label {
+  fill: var(--muted);
+  font-size: 13px;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ---------- bowtie silhouette ---------- */
+
+.bowtie-bg polygon {
+  pointer-events: none;
+}
+
+/* ---------- stage bands (L2) ---------- */
+
+.stage-bands rect {
+  pointer-events: none;
+}
+
+.band-label {
+  fill: rgba(255, 255, 255, 0.45);
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ---------- opportunities panel ---------- */
+
+.opportunities-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.opportunity-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.opportunity-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.phase-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  padding: 4px 2px 2px;
+}
+
+.phase-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.phase-awareness .phase-dot { background: #4a70c8; }
+.phase-education .phase-dot { background: #5777cc; }
+.phase-selection .phase-dot { background: #6b7edb; }
+.phase-commitment .phase-dot { background: #a06bc8; }
+.phase-onboarding .phase-dot { background: #459684; }
+.phase-adoption .phase-dot { background: #3d8f72; }
+.phase-expansion .phase-dot { background: #368268; }
+
+.phase-name {
+  flex: 1;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--fg);
+}
+
+.phase-count {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--panel-2);
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.opportunity-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-left: 14px;
+}
+
+.opportunity-chip {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--fg);
+  padding: 5px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.opportunity-chip:hover {
+  background: var(--panel-2);
+  border-color: var(--border);
+}
+
+.opportunity-chip.selected {
+  background: rgba(242, 194, 102, 0.16);
+  border-color: #f2c266;
+  color: #f7dca2;
+  font-weight: 600;
+}
+
+/* ---------- opportunity path highlights ---------- */
+
+.node.on-path rect,
+.node.on-path polygon {
+  stroke: #f2c266;
+  stroke-width: 4;
+  filter: drop-shadow(0 0 10px rgba(242, 194, 102, 0.55));
+}
+
+.node.on-path.neighbor polygon {
+  stroke-dasharray: 0;
+}
+
+.edge.on-path path,
+.edge.on-path line {
+  filter: drop-shadow(0 0 6px rgba(242, 194, 102, 0.5));
+}
+
+.path-date-badge rect {
+  fill: #f2c266;
+  stroke: #0f1624;
+  stroke-width: 1.5;
+}
+
+.path-date-label {
+  fill: #0f1624;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Mono', Menlo, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  user-select: none;
 }

@@ -1,12 +1,17 @@
-pub type HttpError {
-  NetworkError
-  DecodeError
-  ServerError(Int)
-}
+import atlas.{type Motion, type NodeId, type OpportunityId}
 
 pub type Msg {
-  Increment
-  Decrement
-  Reset
-  GotCounter(Result(Int, HttpError))
+  NodeHovered(NodeId)
+  NodeUnhovered
+  NodeClicked(NodeId)
+  BackClicked
+  BreadcrumbClicked(Int)
+  MotionSelected(Motion)
+  ResetView
+  PanStart
+  PanMove(dx: Int, dy: Int, svg_width: Int, svg_height: Int)
+  PanEnd
+  WheelScroll(delta_y: Float, canvas_x: Float, canvas_y: Float)
+  OpportunitySelected(OpportunityId)
+  OpportunityCleared
 }

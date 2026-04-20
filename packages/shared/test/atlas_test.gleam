@@ -1,4 +1,7 @@
-import atlas.{type Graph, type Node, Activities, Breakdown, NodeId}
+import atlas.{
+  type Graph, type Node, Activities, Breakdown, HighTouch, LowTouch,
+  MediumTouch,
+}
 import atlas/lookup
 import atlas/seed
 import gleam/list
@@ -15,7 +18,15 @@ pub fn overview_has_seven_stages_test() {
   list.length(a.overview.nodes) |> should.equal(7)
 }
 
-pub fn activity_map_has_all_stages_represented_test() {
+pub fn every_motion_has_an_atlas_test() {
+  let a = seed.atlas()
+  list.each([HighTouch, MediumTouch, LowTouch], fn(m) {
+    let ma = lookup.motion_atlas(a, m)
+    should.be_true(list.length(ma.activity_map.nodes) >= 10)
+  })
+}
+
+pub fn each_motion_atlas_has_all_stages_represented_test() {
   let a = seed.atlas()
   let stages = [
     atlas.Awareness,
@@ -26,48 +37,62 @@ pub fn activity_map_has_all_stages_represented_test() {
     atlas.Adoption,
     atlas.Expansion,
   ]
-  list.each(stages, fn(s) {
-    let matching =
-      list.filter(a.activity_map.nodes, fn(n: Node) {
-        case n.kind {
-          atlas.Activity(stage) -> stage == s
-          _ -> False
-        }
-      })
-    should.be_true(list.length(matching) >= 1)
+  list.each([HighTouch, MediumTouch, LowTouch], fn(m) {
+    let ma = lookup.motion_atlas(a, m)
+    list.each(stages, fn(s) {
+      let matching =
+        list.filter(ma.activity_map.nodes, fn(n: Node) {
+          case n.kind {
+            atlas.Activity(stage) -> stage == s
+            _ -> False
+          }
+        })
+      should.be_true(list.length(matching) >= 1)
+    })
   })
 }
 
 pub fn cross_stage_edges_exist_test() {
   let a = seed.atlas()
-  let cross =
-    list.filter(a.activity_map.edges, fn(e) {
-      let from_stage = node_stage(a.activity_map, e.from)
-      let to_stage = node_stage(a.activity_map, e.to)
-      from_stage != to_stage
-    })
-  should.be_true(list.length(cross) >= 10)
+  list.each([HighTouch, MediumTouch, LowTouch], fn(m) {
+    let ma = lookup.motion_atlas(a, m)
+    let cross =
+      list.filter(ma.activity_map.edges, fn(e) {
+        let from_stage = node_stage(ma.activity_map, e.from)
+        let to_stage = node_stage(ma.activity_map, e.to)
+        from_stage != to_stage
+      })
+    should.be_true(list.length(cross) >= 5)
+  })
 }
 
 pub fn every_drillable_activity_has_breakdown_test() {
   let a = seed.atlas()
-  list.each(a.activity_map.nodes, fn(n: Node) {
-    case n.children_level {
-      Some(Breakdown) ->
-        case lookup.find_breakdown_graph(a, n.id) {
-          Some(g) -> g.level |> should.equal(Breakdown)
-          None -> should.fail()
-        }
-      _ -> Nil
-    }
+  list.each([HighTouch, MediumTouch, LowTouch], fn(m) {
+    let ma = lookup.motion_atlas(a, m)
+    list.each(ma.activity_map.nodes, fn(n: Node) {
+      case n.children_level {
+        Some(Breakdown) ->
+          case lookup.find_breakdown_graph(a, m, n.id) {
+            Some(g) -> g.level |> should.equal(Breakdown)
+            None -> should.fail()
+          }
+        _ -> Nil
+      }
+    })
   })
 }
 
 pub fn no_dangling_edges_test() {
   let a = seed.atlas()
   check_graph_edges(a.overview)
-  check_graph_edges(a.activity_map)
-  list.each(a.breakdowns, fn(p) { check_graph_edges(p.1) })
+  list.each([HighTouch, MediumTouch, LowTouch], fn(m) {
+    let ma = lookup.motion_atlas(a, m)
+    check_graph_edges(ma.activity_map)
+    list.each(ma.breakdowns, fn(pair: #(atlas.NodeId, Graph)) {
+      check_graph_edges(pair.1)
+    })
+  })
 }
 
 fn check_graph_edges(graph: Graph) -> Nil {
@@ -94,7 +119,7 @@ fn node_stage(
 
 pub fn lookup_overview_test() {
   let a = seed.atlas()
-  case lookup.find_graph(a, atlas.Overview, None) {
+  case lookup.find_graph(a, HighTouch, atlas.Overview, None) {
     Some(_) -> Nil
     None -> should.fail()
   }
@@ -102,8 +127,18 @@ pub fn lookup_overview_test() {
 
 pub fn lookup_activities_returns_map_test() {
   let a = seed.atlas()
-  case lookup.find_graph(a, Activities, None) {
+  case lookup.find_graph(a, HighTouch, Activities, None) {
     Some(g) -> g.level |> should.equal(Activities)
     None -> should.fail()
   }
+}
+
+pub fn opportunities_tagged_with_matching_motion_test() {
+  let a = seed.atlas()
+  list.each([HighTouch, MediumTouch, LowTouch], fn(m) {
+    let ma = lookup.motion_atlas(a, m)
+    list.each(ma.opportunities, fn(o: atlas.Opportunity) {
+      o.motion |> should.equal(m)
+    })
+  })
 }

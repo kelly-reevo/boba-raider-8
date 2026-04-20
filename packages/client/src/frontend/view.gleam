@@ -2,8 +2,8 @@ import atlas.{
   type Edge, type Graph, type Motion, type Node, type Opportunity,
   type StageBand, type StageId, Activity, Awareness, Adoption, Breakdown,
   Commitment, Education, Expansion, Feedback, Flow, Handoff, HighTouch, Inbound,
-  Knot, LowTouch, MediumTouch, Neighbor, NoTouch, Onboarding, Outbound,
-  Overview, Selection, Stage, Task,
+  Knot, LowTouch, MediumTouch, Neighbor, Onboarding, Outbound, Overview,
+  Selection, Stage, Task,
 }
 import atlas/lookup
 import frontend/model.{type Model}
@@ -36,9 +36,9 @@ fn sidebar(model: Model) -> Element(Msg) {
         element.text("Bowtie model · zoom to drill down"),
       ]),
     ]),
+    strategy_picker(model),
     breadcrumb(model),
     level_legend(model),
-    motion_filters(model),
     opportunities_panel(model),
     html.footer([class("sidebar-footer")], [
       html.button(
@@ -92,11 +92,13 @@ fn current_label(model: Model) -> String {
 
 fn breakdown_label(model: Model) -> String {
   case model.active_breakdown {
-    Some(id) ->
-      case lookup.find_node(model.atlas.activity_map, id) {
+    Some(id) -> {
+      let ma = model.active_motion_atlas(model)
+      case lookup.find_node(ma.activity_map, id) {
         Some(n) -> n.label
         None -> "Breakdown"
       }
+    }
     None -> "Breakdown"
   }
 }
@@ -110,39 +112,36 @@ fn level_legend(model: Model) -> Element(Msg) {
   ])
 }
 
-fn motion_filters(model: Model) -> Element(Msg) {
-  html.section([class("motion-section")], [
-    html.h2([class("section-title")], [element.text("GTM motion filter")]),
+fn strategy_picker(model: Model) -> Element(Msg) {
+  html.section([class("motion-section strategy-picker")], [
+    html.h2([class("section-title")], [element.text("Strategy")]),
     html.p([class("section-hint")], [
-      element.text("Toggle to dim non-matching nodes."),
+      element.text("Each strategy is its own atlas."),
     ]),
     html.div([class("motion-grid")], [
-      motion_chip(model, NoTouch),
-      motion_chip(model, LowTouch),
-      motion_chip(model, MediumTouch),
       motion_chip(model, HighTouch),
+      motion_chip(model, MediumTouch),
+      motion_chip(model, LowTouch),
     ]),
-    html.button(
-      [event.on_click(msg.ClearMotions), class("ghost-btn small")],
-      [element.text("Show all")],
-    ),
   ])
 }
 
 fn motion_chip(model: Model, motion: Motion) -> Element(Msg) {
-  let active = model.motion_active(model, motion)
+  let active = model.motion == motion
   let cls = case active {
     True -> "chip active " <> motion_class(motion)
     False -> "chip " <> motion_class(motion)
   }
-  html.button([event.on_click(msg.MotionToggled(motion)), class(cls)], [
-    element.text(atlas.motion_label(motion)),
+  html.button([event.on_click(msg.MotionSelected(motion)), class(cls)], [
+    html.span([class("chip-label")], [element.text(atlas.motion_label(motion))]),
+    html.span([class("chip-subtitle")], [
+      element.text(atlas.motion_subtitle(motion)),
+    ]),
   ])
 }
 
 fn motion_class(motion: Motion) -> String {
   case motion {
-    NoTouch -> "motion-no"
     LowTouch -> "motion-low"
     MediumTouch -> "motion-med"
     HighTouch -> "motion-high"
@@ -163,7 +162,7 @@ fn opportunities_panel(model: Model) -> Element(Msg) {
   ]
   let groups =
     list.filter_map(stages, fn(s) {
-      let opps = lookup.opportunities_at_stage(model.atlas, s)
+      let opps = lookup.opportunities_at_stage(model.atlas, model.motion, s)
       case opps {
         [] -> Error(Nil)
         _ -> Ok(opportunity_group(model, s, opps))
@@ -232,14 +231,14 @@ fn stage_slug(stage: StageId) -> String {
 fn selected_opp(model: Model) -> Option(Opportunity) {
   case model.selected_opportunity {
     None -> None
-    Some(id) -> lookup.find_opportunity(model.atlas, id)
+    Some(id) -> lookup.find_opportunity(model.atlas, model.motion, id)
   }
 }
 
 fn node_path_date(model: Model, opp: Opportunity, node: Node) -> Option(String) {
   case node.kind {
-    Stage(s) -> lookup.stage_date(model.atlas, opp, s)
-    Knot(s) -> lookup.stage_date(model.atlas, opp, s)
+    Stage(s) -> lookup.stage_date(model.atlas, model.motion, opp, s)
+    Knot(s) -> lookup.stage_date(model.atlas, model.motion, opp, s)
     _ -> lookup.visit_date(opp, node.id)
   }
 }
@@ -305,7 +304,8 @@ fn render_overview_layer(model: Model) -> Element(Msg) {
 }
 
 fn render_activities_layer(model: Model) -> Element(Msg) {
-  let graph = model.atlas.activity_map
+  let ma = model.active_motion_atlas(model)
+  let graph = ma.activity_map
   svg.g(
     [
       class(layer_classes(model, atlas.Activities)),
@@ -318,7 +318,7 @@ fn render_activities_layer(model: Model) -> Element(Msg) {
 fn render_breakdown_layer(model: Model) -> Element(Msg) {
   case model.active_breakdown {
     Some(id) ->
-      case lookup.find_breakdown_graph(model.atlas, id) {
+      case lookup.find_breakdown_graph(model.atlas, model.motion, id) {
         Some(graph) ->
           svg.g(
             [
@@ -492,18 +492,22 @@ fn draw_edge(
   from: Node,
   to: Node,
 ) -> Element(Msg) {
-  let #(x1, y1) = endpoint(from, to)
-  let #(x2, y2) = endpoint(to, from)
+  let #(x1, y1) = case edge.kind {
+    Feedback -> top_center(from)
+    _ -> endpoint(from, to)
+  }
+  let #(x2, y2) = case edge.kind {
+    Feedback -> top_center(to)
+    _ -> endpoint(to, from)
+  }
   let opp_selected = selected_opp(model)
   let on_path = case opp_selected {
     Some(opp) -> node_on_path(model, opp, from) && node_on_path(model, opp, to)
     None -> False
   }
-  let motion_ok = model.motion_match(model, edge.motions)
-  let opacity = case opp_selected, on_path, motion_ok {
-    Some(_), False, _ -> "0.08"
-    _, _, False -> "0.12"
-    _, _, _ -> "1"
+  let opacity = case opp_selected, on_path {
+    Some(_), False -> "0.15"
+    _, _ -> "1"
   }
   let #(default_stroke, dash, marker) = case edge.kind {
     Flow -> #("#7e8da3", "", "url(#arrow)")
@@ -572,10 +576,50 @@ fn draw_edge(
 
 fn bezier_path(x1: Float, y1: Float, x2: Float, y2: Float) -> String {
   let dx = x2 -. x1
-  let abs_dx = case dx <. 0.0 {
-    True -> 0.0 -. dx
-    False -> dx
+  let dy = y2 -. y1
+  let abs_dx = float.absolute_value(dx)
+  let abs_dy = float.absolute_value(dy)
+  case dx <. -40.0, abs_dx <. 40.0 && abs_dy >. 40.0 {
+    True, _ -> backward_bezier(x1, y1, x2, y2, abs_dx)
+    _, True -> vertical_bezier(x1, y1, x2, y2, dy)
+    _, _ -> horizontal_bezier(x1, y1, x2, y2, abs_dx)
   }
+}
+
+fn backward_bezier(
+  x1: Float,
+  y1: Float,
+  x2: Float,
+  y2: Float,
+  abs_dx: Float,
+) -> String {
+  let arc = float.max(abs_dx *. 0.7, 1000.0)
+  let x_offset = abs_dx *. 0.75
+  "M "
+  <> float.to_string(x1)
+  <> " "
+  <> float.to_string(y1)
+  <> " C "
+  <> float.to_string(x1 -. x_offset)
+  <> " "
+  <> float.to_string(y1 -. arc)
+  <> ", "
+  <> float.to_string(x2 +. x_offset)
+  <> " "
+  <> float.to_string(y2 -. arc)
+  <> ", "
+  <> float.to_string(x2)
+  <> " "
+  <> float.to_string(y2)
+}
+
+fn horizontal_bezier(
+  x1: Float,
+  y1: Float,
+  x2: Float,
+  y2: Float,
+  abs_dx: Float,
+) -> String {
   let offset = case abs_dx <. 120.0 {
     True -> 80.0
     False -> abs_dx /. 2.0
@@ -598,17 +642,54 @@ fn bezier_path(x1: Float, y1: Float, x2: Float, y2: Float) -> String {
   <> float.to_string(y2)
 }
 
+fn vertical_bezier(
+  x1: Float,
+  y1: Float,
+  x2: Float,
+  y2: Float,
+  dy: Float,
+) -> String {
+  let signed = case dy >. 0.0 {
+    True -> float.absolute_value(dy) /. 3.0
+    False -> 0.0 -. float.absolute_value(dy) /. 3.0
+  }
+  "M "
+  <> float.to_string(x1)
+  <> " "
+  <> float.to_string(y1)
+  <> " C "
+  <> float.to_string(x1)
+  <> " "
+  <> float.to_string(y1 +. signed)
+  <> ", "
+  <> float.to_string(x2)
+  <> " "
+  <> float.to_string(y2 -. signed)
+  <> ", "
+  <> float.to_string(x2)
+  <> " "
+  <> float.to_string(y2)
+}
+
+fn top_center(n: Node) -> #(Float, Float) {
+  #(n.position.x, n.position.y -. n.size.height /. 2.0)
+}
+
 fn endpoint(a: Node, b: Node) -> #(Float, Float) {
   let ax = a.position.x
   let ay = a.position.y
   let bx = b.position.x
-  let _by = b.position.y
+  let by = b.position.y
   let half_w = a.size.width /. 2.0
   let half_h = a.size.height /. 2.0
   case bx >. ax, bx <. ax {
     True, _ -> #(ax +. half_w, ay)
     _, True -> #(ax -. half_w, ay)
-    _, _ -> #(ax, ay +. half_h)
+    _, _ ->
+      case by >. ay {
+        True -> #(ax, ay +. half_h)
+        False -> #(ax, ay -. half_h)
+      }
   }
 }
 
@@ -624,11 +705,9 @@ fn render_node(model: Model, node: Node) -> Element(Msg) {
     Some(_) -> True
     None -> False
   }
-  let motion_ok = model.motion_match(model, node.motions)
-  let opacity = case opp_selected, on_path, motion_ok {
-    Some(_), False, _ -> "0.14"
-    _, _, False -> "0.18"
-    _, _, _ -> "1"
+  let opacity = case opp_selected, on_path {
+    Some(_), False -> "0.22"
+    _, _ -> "1"
   }
   let drillable = case node.children_level {
     Some(_) -> True

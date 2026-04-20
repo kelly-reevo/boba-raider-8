@@ -3,14 +3,12 @@ import atlas.{
   Overview, Stage, ViewBox,
 }
 import atlas/lookup
-import atlas/seed
 import frontend/model.{type Crumb, type Model, Crumb, Model}
 import frontend/msg.{type Msg}
 import gleam/float
 import gleam/int
 import gleam/list
 import gleam/option.{None, Some}
-import gleam/set
 
 pub fn update(model: Model, msg: Msg) -> Model {
   case msg {
@@ -23,20 +21,20 @@ pub fn update(model: Model, msg: Msg) -> Model {
       }
     msg.BackClicked -> pop_stack(model)
     msg.BreadcrumbClicked(idx) -> jump_to_crumb(model, idx)
-    msg.MotionToggled(m) -> {
-      let motions = case set.contains(model.motions, m) {
-        True -> set.delete(model.motions, m)
-        False -> set.insert(model.motions, m)
+    msg.MotionSelected(m) ->
+      case m == model.motion {
+        True -> model
+        False -> switch_motion(model, m)
       }
-      Model(..model, motions: motions)
-    }
-    msg.ClearMotions -> Model(..model, motions: set.new())
     msg.ResetView -> {
+      let motion = model.motion
       let fresh = model.init()
+      let ma = lookup.motion_atlas(model.atlas, motion)
       Model(
         ..fresh,
         atlas: model.atlas,
-        motions: model.motions,
+        motion: motion,
+        activities_viewbox: ma.activity_map.viewbox,
       )
     }
     msg.PanStart -> Model(..model, dragging: True, drag_moved: False)
@@ -58,6 +56,23 @@ pub fn update(model: Model, msg: Msg) -> Model {
   }
 }
 
+fn switch_motion(model: Model, motion: atlas.Motion) -> Model {
+  let ma = lookup.motion_atlas(model.atlas, motion)
+  Model(
+    ..model,
+    motion: motion,
+    level: Overview,
+    overview_viewbox: model.atlas.overview.viewbox,
+    activities_viewbox: ma.activity_map.viewbox,
+    breakdown_viewbox: ViewBox(-300.0, 0.0, 1800.0, 720.0),
+    active_breakdown: None,
+    focused_stage: None,
+    stack: [],
+    hovered: None,
+    selected_opportunity: None,
+  )
+}
+
 // -------- active-layer accessors ----------
 
 pub fn active_viewbox(model: Model) -> ViewBox {
@@ -77,13 +92,14 @@ fn set_active_viewbox(model: Model, vb: ViewBox) -> Model {
 }
 
 pub fn active_graph(model: Model) -> atlas.Graph {
+  let ma = model.active_motion_atlas(model)
   case model.level {
     Overview -> model.atlas.overview
-    Activities -> model.atlas.activity_map
+    Activities -> ma.activity_map
     Breakdown ->
       case model.active_breakdown {
         Some(id) ->
-          case lookup.find_breakdown_graph(model.atlas, id) {
+          case lookup.find_breakdown_graph(model.atlas, model.motion, id) {
             Some(g) -> g
             None -> model.atlas.overview
           }
@@ -126,7 +142,8 @@ fn level_min_zoom(level: atlas.Level) -> Float {
 
 fn base_viewbox(model: Model) -> atlas.ViewBox {
   case model.level, model.focused_stage {
-    Activities, Some(stage) -> seed.focus_viewbox(stage)
+    Activities, Some(stage) ->
+      lookup.focus_viewbox(model.active_motion_atlas(model), stage)
     _, _ -> active_graph(model).viewbox
   }
 }
@@ -313,10 +330,11 @@ fn drill_to_stage(
   stage_id: atlas.StageId,
 ) -> Model {
   let crumb = make_crumb(model)
+  let ma = model.active_motion_atlas(model)
   Model(
     ..model,
     level: Activities,
-    activities_viewbox: seed.focus_viewbox(stage_id),
+    activities_viewbox: lookup.focus_viewbox(ma, stage_id),
     focused_stage: Some(stage_id),
     stack: [crumb, ..model.stack],
     hovered: None,
@@ -324,19 +342,24 @@ fn drill_to_stage(
 }
 
 fn drill_to_breakdown(model: Model, node: atlas.Node) -> Model {
-  case lookup.find_breakdown_graph(model.atlas, node.id) {
+  case lookup.find_breakdown_graph(model.atlas, model.motion, node.id) {
     Some(graph) -> {
       let stage = stage_for_node(model, node)
+      let ma = model.active_motion_atlas(model)
       let #(stack, activities_vb, focused) = case model.level {
         Breakdown -> #(
           [
             activities_crumb_for(stage),
             ..list.drop(model.stack, 1)
           ],
-          seed.focus_viewbox(stage),
+          lookup.focus_viewbox(ma, stage),
           Some(stage),
         )
-        _ -> #([make_crumb(model), ..model.stack], model.activities_viewbox, model.focused_stage)
+        _ -> #(
+          [make_crumb(model), ..model.stack],
+          model.activities_viewbox,
+          model.focused_stage,
+        )
       }
       Model(
         ..model,
@@ -363,7 +386,8 @@ fn activities_crumb_for(stage: atlas.StageId) -> Crumb {
 }
 
 fn stage_for_node(model: Model, node: atlas.Node) -> atlas.StageId {
-  case lookup.find_node(model.atlas.activity_map, node.id) {
+  let ma = model.active_motion_atlas(model)
+  case lookup.find_node(ma.activity_map, node.id) {
     Some(act) ->
       case act.kind {
         Activity(s) -> s
@@ -403,11 +427,13 @@ fn crumb_label(model: Model) -> String {
 
 fn breakdown_label(model: Model) -> String {
   case model.active_breakdown {
-    Some(parent_id) ->
-      case lookup.find_node(model.atlas.activity_map, parent_id) {
+    Some(parent_id) -> {
+      let ma = model.active_motion_atlas(model)
+      case lookup.find_node(ma.activity_map, parent_id) {
         Some(n) -> n.label
         None -> "Breakdown"
       }
+    }
     None -> "Breakdown"
   }
 }

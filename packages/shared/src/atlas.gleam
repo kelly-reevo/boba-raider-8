@@ -1,7 +1,6 @@
 import gleam/option.{type Option}
 
 pub type Motion {
-  NoTouch
   LowTouch
   MediumTouch
   HighTouch
@@ -63,7 +62,6 @@ pub type Node {
     kind: NodeKind,
     position: Point,
     size: Size,
-    motions: List(Motion),
     parent: Option(NodeId),
     children_level: Option(Level),
     notes: String,
@@ -77,14 +75,7 @@ pub type EdgeKind {
 }
 
 pub type Edge {
-  Edge(
-    id: String,
-    from: NodeId,
-    to: NodeId,
-    label: String,
-    kind: EdgeKind,
-    motions: List(Motion),
-  )
+  Edge(id: String, from: NodeId, to: NodeId, label: String, kind: EdgeKind)
 }
 
 pub type Graph {
@@ -95,15 +86,6 @@ pub type Graph {
     edges: List(Edge),
     viewbox: ViewBox,
     bands: List(StageBand),
-  )
-}
-
-pub type Atlas {
-  Atlas(
-    overview: Graph,
-    activity_map: Graph,
-    breakdowns: List(#(NodeId, Graph)),
-    opportunities: List(Opportunity),
   )
 }
 
@@ -119,17 +101,37 @@ pub type Opportunity {
   Opportunity(
     id: OpportunityId,
     name: String,
+    motion: Motion,
     current_stage: StageId,
     visits: List(OpportunityVisit),
   )
 }
 
+pub type MotionAtlas {
+  MotionAtlas(
+    activity_map: Graph,
+    breakdowns: List(#(NodeId, Graph)),
+    opportunities: List(Opportunity),
+  )
+}
+
+pub type Atlas {
+  Atlas(overview: Graph, motion_atlases: List(#(Motion, MotionAtlas)))
+}
+
 pub fn motion_label(motion: Motion) -> String {
   case motion {
-    NoTouch -> "No Touch"
     LowTouch -> "Low Touch"
     MediumTouch -> "Medium Touch"
     HighTouch -> "High Touch"
+  }
+}
+
+pub fn motion_subtitle(motion: Motion) -> String {
+  case motion {
+    HighTouch -> "Human-led growth · enterprise"
+    MediumTouch -> "AI-led growth · mid-market"
+    LowTouch -> "Product-led growth · self-serve"
   }
 }
 

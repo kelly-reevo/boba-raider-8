@@ -6,8 +6,7 @@ pub type Msg {
   NodeClicked(NodeId)
   BackClicked
   BreadcrumbClicked(Int)
-  MotionToggled(Motion)
-  ClearMotions
+  MotionSelected(Motion)
   ResetView
   PanStart
   PanMove(dx: Int, dy: Int, svg_width: Int, svg_height: Int)

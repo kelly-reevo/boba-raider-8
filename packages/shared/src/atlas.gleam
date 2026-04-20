@@ -53,6 +53,7 @@ pub type NodeKind {
   Activity(StageId)
   Task(owner: String)
   Neighbor(stage: StageId, direction: Direction)
+  Alias(target: NodeId, stage: StageId, direction: Direction)
 }
 
 pub type Node {

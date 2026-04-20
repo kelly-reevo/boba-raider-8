@@ -1,6 +1,6 @@
 import atlas.{
   type Edge, type Graph, type Motion, type Node, type Opportunity,
-  type StageBand, type StageId, Activity, Awareness, Adoption, Breakdown,
+  type StageBand, type StageId, Activity, Alias, Awareness, Adoption, Breakdown,
   Commitment, Education, Expansion, Feedback, Flow, Handoff, HighTouch, Inbound,
   Knot, LowTouch, MediumTouch, Neighbor, Onboarding, Outbound, Overview,
   Selection, Stage, Task,
@@ -492,13 +492,14 @@ fn draw_edge(
   from: Node,
   to: Node,
 ) -> Element(Msg) {
-  let #(x1, y1) = case edge.kind {
-    Feedback -> top_center(from)
-    _ -> endpoint(from, to)
+  let elided = is_alias(from) || is_alias(to)
+  let #(x1, y1) = case edge.kind, elided {
+    Feedback, False -> top_center(from)
+    _, _ -> endpoint(from, to)
   }
-  let #(x2, y2) = case edge.kind {
-    Feedback -> top_center(to)
-    _ -> endpoint(to, from)
+  let #(x2, y2) = case edge.kind, elided {
+    Feedback, False -> top_center(to)
+    _, _ -> endpoint(to, from)
   }
   let opp_selected = selected_opp(model)
   let on_path = case opp_selected {
@@ -675,6 +676,13 @@ fn top_center(n: Node) -> #(Float, Float) {
   #(n.position.x, n.position.y -. n.size.height /. 2.0)
 }
 
+fn is_alias(n: Node) -> Bool {
+  case n.kind {
+    Alias(_, _, _) -> True
+    _ -> False
+  }
+}
+
 fn endpoint(a: Node, b: Node) -> #(Float, Float) {
   let ax = a.position.x
   let ay = a.position.y
@@ -709,9 +717,10 @@ fn render_node(model: Model, node: Node) -> Element(Msg) {
     Some(_), False -> "0.22"
     _, _ -> "1"
   }
-  let drillable = case node.children_level {
-    Some(_) -> True
-    None -> False
+  let drillable = case node.children_level, node.kind {
+    _, Alias(_, _, _) -> True
+    Some(_), _ -> True
+    None, _ -> False
   }
   let cursor = case drillable {
     True -> "pointer"
@@ -739,6 +748,7 @@ fn render_node(model: Model, node: Node) -> Element(Msg) {
     Activity(_) -> rect_shape(node, opacity, 12.0)
     Task(_) -> rect_shape(node, opacity, 10.0)
     Neighbor(_, _) -> hex_shape(node, opacity)
+    Alias(_, _, _) -> rect_shape(node, opacity, 10.0)
   }
   let extras = case node.kind {
     Task(owner) -> [owner_pill(node, owner, opacity)]
@@ -804,6 +814,16 @@ fn node_kind_class(kind: atlas.NodeKind) -> String {
       "neighbor "
       <> dir_cls
       <> " neighbor-"
+      <> string.lowercase(atlas.stage_label(s))
+    }
+    Alias(_, s, dir) -> {
+      let dir_cls = case dir {
+        Inbound -> "alias-in"
+        Outbound -> "alias-out"
+      }
+      "alias "
+      <> dir_cls
+      <> " alias-"
       <> string.lowercase(atlas.stage_label(s))
     }
   }

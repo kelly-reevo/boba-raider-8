@@ -1,7 +1,7 @@
 import atlas.{
   type Atlas, type Edge, type Graph, type MotionAtlas, type Node, type NodeId,
   type Opportunity, type OpportunityVisit, type StageBand, type StageId,
-  Activities, Activity, Atlas, Awareness, Adoption, Breakdown, Commitment,
+  Activities, Activity, Alias, Atlas, Awareness, Adoption, Breakdown, Commitment,
   Edge, Education, Expansion, Feedback, Flow, Graph, Handoff, HighTouch,
   Inbound, Knot, LowTouch, MediumTouch, MotionAtlas, Neighbor, Node, NodeId,
   Onboarding, Opportunity, OpportunityId, OpportunityVisit, Outbound, Overview,
@@ -147,6 +147,25 @@ fn high_touch_nodes() -> List(Node) {
     activity("h_exp_am", "AM-led expansion", Expansion, 3500.0, 440.0),
     activity("h_exp_crosssell", "Cross-sell new BU", Expansion, 3500.0, 720.0),
     activity("h_exp_resell", "Champion reselling", Expansion, 3500.0, 1000.0),
+    // Alias pair for the champion-moves feedback loop
+    alias_node(
+      "h_alias_out__resell_to_exec_refs",
+      "Executive referrals",
+      "h_aw_exec_refs",
+      Awareness,
+      Outbound,
+      3500.0,
+      1200.0,
+    ),
+    alias_node(
+      "h_alias_in__resell_to_exec_refs",
+      "Champion reselling",
+      "h_exp_resell",
+      Expansion,
+      Inbound,
+      560.0,
+      280.0,
+    ),
   ]
 }
 
@@ -191,13 +210,20 @@ fn high_touch_edges() -> List(Edge) {
     flow("h_adp_health", "h_exp_resell", ""),
     flow("h_exp_am", "h_exp_crosssell", ""),
     flow("h_exp_crosssell", "h_exp_resell", ""),
-    // Feedback loops (closed-loop growth)
-    Edge(
-      id: "h_feedback_resell",
-      from: NodeId("h_exp_resell"),
-      to: NodeId("h_aw_exec_refs"),
-      label: "champion moves",
-      kind: Feedback,
+    // Feedback loop — elided via alias pair (champion moves)
+    edge(
+      "h_feedback_resell__out",
+      "h_exp_resell",
+      "h_alias_out__resell_to_exec_refs",
+      "champion moves",
+      Feedback,
+    ),
+    edge(
+      "h_feedback_resell__in",
+      "h_alias_in__resell_to_exec_refs",
+      "h_aw_exec_refs",
+      "champion moves",
+      Feedback,
     ),
   ]
 }
@@ -479,6 +505,25 @@ fn medium_touch_nodes() -> List(Node) {
     // Expansion — single column, two rows
     activity("m_exp_renewal", "Renewal", Expansion, 2910.0, 440.0),
     activity("m_exp_upsell", "Tier upsell", Expansion, 2910.0, 720.0),
+    // Alias pair for the ICP-refinement feedback loop
+    alias_node(
+      "m_alias_out__playbooks_to_webinars",
+      "Webinars",
+      "m_ed_webinars",
+      Education,
+      Outbound,
+      2470.0,
+      920.0,
+    ),
+    alias_node(
+      "m_alias_in__playbooks_to_webinars",
+      "Adoption playbooks",
+      "m_adp_playbooks",
+      Adoption,
+      Inbound,
+      710.0,
+      280.0,
+    ),
   ]
 }
 
@@ -512,13 +557,20 @@ fn medium_touch_edges() -> List(Edge) {
     flow("m_adp_health", "m_exp_renewal", ""),
     flow("m_adp_playbooks", "m_exp_upsell", ""),
     flow("m_exp_upsell", "m_exp_renewal", ""),
-    // Feedback loops
-    Edge(
-      id: "m_feedback_playbooks",
-      from: NodeId("m_adp_playbooks"),
-      to: NodeId("m_ed_webinars"),
-      label: "ICP refinement",
-      kind: Feedback,
+    // Feedback loop — elided via alias pair (ICP refinement)
+    edge(
+      "m_feedback_playbooks__out",
+      "m_adp_playbooks",
+      "m_alias_out__playbooks_to_webinars",
+      "ICP refinement",
+      Feedback,
+    ),
+    edge(
+      "m_feedback_playbooks__in",
+      "m_alias_in__playbooks_to_webinars",
+      "m_ed_webinars",
+      "ICP refinement",
+      Feedback,
     ),
   ]
 }
@@ -776,6 +828,25 @@ fn low_touch_nodes() -> List(Node) {
     // Expansion — single column, two rows
     activity("l_exp_usage", "Usage-based upsell", Expansion, 2910.0, 440.0),
     activity("l_exp_invite", "Invite peers", Expansion, 2910.0, 720.0),
+    // Alias pair for the advocacy feedback loop
+    alias_node(
+      "l_alias_out__adp_community_to_aw_community",
+      "Community buzz",
+      "l_aw_community",
+      Awareness,
+      Outbound,
+      2470.0,
+      920.0,
+    ),
+    alias_node(
+      "l_alias_in__adp_community_to_aw_community",
+      "Community & advocacy",
+      "l_adp_community",
+      Adoption,
+      Inbound,
+      270.0,
+      280.0,
+    ),
   ]
 }
 
@@ -810,13 +881,20 @@ fn low_touch_edges() -> List(Edge) {
     flow("l_adp_inapp", "l_exp_usage", ""),
     flow("l_adp_community", "l_exp_invite", ""),
     flow("l_exp_usage", "l_exp_invite", ""),
-    // Feedback loop (PLG closed loop — advocacy drives awareness)
-    Edge(
-      id: "l_feedback_community",
-      from: NodeId("l_adp_community"),
-      to: NodeId("l_aw_community"),
-      label: "advocacy",
-      kind: Feedback,
+    // Feedback loop — elided via alias pair (advocacy drives awareness)
+    edge(
+      "l_feedback_community__out",
+      "l_adp_community",
+      "l_alias_out__adp_community_to_aw_community",
+      "advocacy",
+      Feedback,
+    ),
+    edge(
+      "l_feedback_community__in",
+      "l_alias_in__adp_community_to_aw_community",
+      "l_aw_community",
+      "advocacy",
+      Feedback,
     ),
   ]
 }
@@ -1148,6 +1226,31 @@ fn neighbor_column(
 // ==========================================================================
 // Shared node / edge helpers
 // ==========================================================================
+
+fn alias_node(
+  id: String,
+  label: String,
+  target_id: String,
+  target_stage: StageId,
+  direction: atlas.Direction,
+  x: Float,
+  y: Float,
+) -> Node {
+  Node(
+    id: NodeId(id),
+    label: label,
+    kind: Alias(
+      target: NodeId(target_id),
+      stage: target_stage,
+      direction: direction,
+    ),
+    position: Point(x, y),
+    size: Size(240.0, 70.0),
+    parent: None,
+    children_level: None,
+    notes: "",
+  )
+}
 
 fn activity(
   id: String,

@@ -1,6 +1,6 @@
 import atlas.{
-  type ViewBox, Activities, Activity, Awareness, Breakdown, Knot, Neighbor,
-  Overview, Stage, ViewBox,
+  type ViewBox, Activities, Activity, Alias, Awareness, Breakdown, Knot,
+  Neighbor, Overview, Stage, ViewBox,
 }
 import atlas/lookup
 import frontend/model.{type Crumb, type Model, Crumb, Model}
@@ -317,11 +317,27 @@ fn handle_click(model: Model, id: atlas.NodeId) -> Model {
 
 fn drill_into(model: Model, node: atlas.Node) -> Model {
   case node.children_level, node.kind {
+    _, Alias(target_id, target_stage, _) ->
+      navigate_to_alias(model, target_id, target_stage)
     Some(Activities), Stage(stage_id) -> drill_to_stage(model, node, stage_id)
     Some(Activities), Knot(stage_id) -> drill_to_stage(model, node, stage_id)
     Some(Breakdown), _ -> drill_to_breakdown(model, node)
     _, _ -> model
   }
+}
+
+fn navigate_to_alias(
+  model: Model,
+  _target_id: atlas.NodeId,
+  target_stage: atlas.StageId,
+) -> Model {
+  let ma = model.active_motion_atlas(model)
+  Model(
+    ..model,
+    activities_viewbox: lookup.focus_viewbox(ma, target_stage),
+    focused_stage: Some(target_stage),
+    hovered: None,
+  )
 }
 
 fn drill_to_stage(
@@ -400,6 +416,7 @@ fn stage_for_node(model: Model, node: atlas.Node) -> atlas.StageId {
 fn stage_from_kind(kind: atlas.NodeKind) -> atlas.StageId {
   case kind {
     Neighbor(stage: s, ..) -> s
+    Alias(stage: s, ..) -> s
     Activity(s) -> s
     Stage(s) -> s
     Knot(s) -> s

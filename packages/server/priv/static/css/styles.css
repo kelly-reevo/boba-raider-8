@@ -350,6 +350,37 @@ body {
   font-style: italic;
 }
 
+/* ---------- alias (elided cross-stage link) ---------- */
+
+.node.alias rect {
+  fill: rgba(26, 36, 60, 0.72);
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+.node.alias .node-label {
+  fill: var(--fg);
+  font-size: 15px;
+  font-weight: 600;
+  font-style: italic;
+  pointer-events: none;
+  user-select: none;
+}
+
+.node.alias.alias-awareness rect { stroke: #6b8ae0; fill: rgba(74, 112, 200, 0.18); }
+.node.alias.alias-education rect { stroke: #7793e0; fill: rgba(87, 119, 204, 0.18); }
+.node.alias.alias-selection rect { stroke: #8594e6; fill: rgba(107, 126, 219, 0.18); }
+.node.alias.alias-commitment rect { stroke: #c28adb; fill: rgba(160, 107, 200, 0.2); }
+.node.alias.alias-onboarding rect { stroke: #5fb097; fill: rgba(69, 150, 132, 0.18); }
+.node.alias.alias-adoption rect { stroke: #5aa98d; fill: rgba(61, 143, 114, 0.18); }
+.node.alias.alias-expansion rect { stroke: #4f9c80; fill: rgba(54, 130, 104, 0.18); }
+
+.node.alias.hovered rect {
+  stroke: #f2c266;
+  filter: drop-shadow(0 0 8px rgba(242, 194, 102, 0.45));
+}
+
 .owner-pill rect {
   fill: #6b8ae0;
   stroke: #0f1624;
